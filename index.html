@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>수급의 정석: Money Fact</title>
+    <title>Money Fact</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -48,30 +48,21 @@
             box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
         }
 
-        header {
-            padding: 20px 24px;
-            background: #fff;
+        .banner-box {
+            width: 100%;
+            height: 60px;
+            background: url('./assets/banner.png') center/cover no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
 
-        .logo {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--theme-color);
-            letter-spacing: -0.8px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .logo span {
-            color: var(--text-main);
-            font-weight: 400;
-            font-size: 16px;
-            opacity: 0.3;
+        .banner-text {
+            font-size: 22px;
+            font-weight: 900;
+            color: var(--accent-buy);
+            letter-spacing: -1px;
         }
 
         .mode-tabs {
@@ -166,11 +157,6 @@
             gap: 6px;
         }
 
-        .btn-magic:active {
-            transform: scale(0.96);
-            opacity: 0.9;
-        }
-
         .filter-section {
             padding: 0 20px 20px;
         }
@@ -221,7 +207,6 @@
             height: 8px;
             border-radius: 50%;
             background: var(--theme-color);
-            animation: pulse 2s infinite;
         }
 
         .stock-list {
@@ -241,6 +226,7 @@
             transition: 0.2s;
             border: 2.5px solid transparent;
             cursor: pointer;
+            shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         }
 
         .card.checked {
@@ -299,16 +285,6 @@
             cursor: pointer;
             transition: 0.2s;
             pointer-events: auto;
-        }
-
-        .btn-main:active {
-            transform: scale(0.98);
-        }
-
-        .btn-main:disabled {
-            background: #E5E8EB;
-            color: #B9BFC6;
-            cursor: not-allowed;
         }
 
         .overlay {
@@ -385,38 +361,14 @@
             display: block;
             margin-top: 6px;
         }
-
-        .buyable-badge {
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 900;
-            color: var(--theme-color);
-            background: #fff;
-            border: 1.5px solid var(--theme-color);
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.4;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
     </style>
 </head>
 
 <body class="buy-mode">
     <div id="app-container">
-        <header>
-            <div class="logo">수급의 정석 <span>Money Fact</span></div>
-        </header>
+        <div class="banner-box">
+            <div class="banner-text">Money Fact</div>
+        </div>
 
         <div class="mode-tabs">
             <button class="mode-tab active buy" onclick="setMode('buy', this)">🍀 수급 기회 (BUY)</button>
@@ -453,11 +405,8 @@
         <div class="status-bar">
             <div class="dot"></div><span id="statusMsg">시장 정밀 분석 중...</span>
         </div>
-
         <ul id="stockList" class="stock-list"></ul>
-
-        <div class="nav">
-            <button id="mainBtn" class="btn-main" disabled onclick="analyze()">선택 종목 심층 리서치 (0)</button>
+        <div class="nav"><button id="mainBtn" class="btn-main" disabled onclick="analyze()">선택 종목 심층 리서치 (0)</button>
         </div>
     </div>
 
@@ -470,7 +419,6 @@
 
     <script>
         let mode = 'buy', curP = '5', curI = '0', stocks = [], selected = new Set();
-
         function formatNumber(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
         function unformatNumber(s) { return s.replace(/,/g, ''); }
         function handleMoneyInput(el) {
@@ -489,7 +437,7 @@
                 stocks = data.output || [];
                 document.getElementById('statusMsg').innerText = "✅ 실시간 수급 데이터 수집 완료";
                 render();
-            } catch (e) { list.innerHTML = '<div style="text-align:center; padding:100px 0; color:#999;">연결 실패</div>'; }
+            } catch (e) { list.innerHTML = '연결 실패'; }
         }
 
         function render() {
@@ -521,32 +469,27 @@
             document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
             el.classList.add('active');
             document.getElementById('walletCard').style.display = mode === 'sell' ? 'none' : 'block';
-            selected.clear();
-            fetchData();
+            selected.clear(); fetchData();
         }
 
         function setFilter(el, type, val) {
             if (type === 'inv') curI = val; else curP = val;
             el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            el.classList.add('active');
-            fetchData();
+            el.classList.add('active'); fetchData();
         }
 
         async function autoRecommend() {
             const budget = parseInt(unformatNumber(document.getElementById('seedMoney').value)) || 0;
             const affordable = stocks.filter(s => parseInt(s.price) <= budget);
-            if (affordable.length === 0) { alert('현재 자산으로 매수 가능한 종목이 없습니다.'); return; }
-
-            const magicBtn = document.getElementById('magicBtn'); magicBtn.disabled = true;
+            if (affordable.length === 0) { alert('매수 가능한 종목이 없습니다.'); return; }
             const top3 = [...affordable].sort((a, b) => b.streak - a.streak).slice(0, 3);
             selected.clear(); top3.forEach(s => selected.add(s.code)); render();
             await analyze("✨ 자산 최적화 AI 추천 리포트", false);
-            magicBtn.disabled = false;
         }
 
         async function analyze(customTitle, isPure = true) {
             const btn = document.getElementById('mainBtn');
-            const oldText = btn.innerText; btn.innerText = "분석 리포트 생성 중..."; btn.disabled = true;
+            btn.disabled = true;
             try {
                 const rawAmount = unformatNumber(document.getElementById('seedMoney').value);
                 const targets = stocks.filter(s => selected.has(s.code));
@@ -562,19 +505,15 @@
                 <div class="report-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h3 style="margin:0; font-size:19px; font-weight:800;">${p.name} <small style="font-weight:400; color:#999; font-size:11px;">${p.code}</small></h3>
-                        ${!isPure ? `<span class="buyable-badge">${p.shares}주 추천</span>` : ''}
                     </div>
                     <div class="grid">
-                        <div class="grid-item"><span class="grid-label">PER (수익성)</span><span class="grid-val">${p.finance.per}배</span><span class="grid-eval">👉 ${p.perText}</span></div>
-                        <div class="grid-item"><span class="grid-label">PBR (자산가치)</span><span class="grid-val">${p.finance.pbr}배</span><span class="grid-eval">👉 ${p.pbrText}</span></div>
+                        <div class="grid-item">PER ${p.finance.per}배<br><small>${p.perText}</small></div>
+                        <div class="grid-item">PBR ${p.finance.pbr}배<br><small>${p.pbrText}</small></div>
                     </div>
-                    <div style="background:#fff; padding:16px; border-radius:18px;">
-                        <span style="font-size:12px; font-weight:900; color:var(--theme-color); display:block; margin-bottom:8px;">💡 AI 리서치 인사이트</span>
-                        <p style="font-size:13px; line-height:1.6; color:var(--text-main); margin:0;">${p.insight}</p>
-                    </div>
+                    <p style="font-size:13px; line-height:1.6;">${p.insight}</p>
                 </div>
             `).join('');
-            } catch (e) { alert('분석 실패'); } finally { btn.innerText = oldText; btn.disabled = false; }
+            } catch (e) { alert('분석 실패'); } finally { btn.disabled = false; }
         }
         function closeSheet() { document.getElementById('overlay').style.display = 'none'; document.getElementById('recSheet').classList.remove('active'); }
         fetchData();

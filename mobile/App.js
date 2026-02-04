@@ -11,7 +11,7 @@ import {
 import axios from 'axios';
 
 const { width } = Dimensions.get('window');
-const API_BASE = 'http://192.168.45.7:3000'; // 대표님의 서버 로컬 IP
+const API_BASE = 'https://money-fact-server.onrender.com'; // 실 운영 서버 주소 적용
 
 export default function App() {
   const [mode, setMode] = useState('buy');
