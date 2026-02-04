@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>수급의 정석: Money Fact</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #F4F7FB;
+            --bg-card: #FFFFFF;
+            --accent-buy: #3182F6;
+            --accent-sell: #F04452;
+            --accent-ai: linear-gradient(135deg, #6227FF 0%, #3182F6 100%);
+            --text-main: #191F28;
+            --text-sub: #4E5968;
+            --border: #E5E8EB;
+            --theme-color: var(--accent-buy);
+        }
+
+        body.sell-mode {
+            --theme-color: var(--accent-sell);
+            --bg-main: #FFF1F2;
+            --accent-ai: linear-gradient(135deg, #FF4B2B 0%, #FF416C 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Pretendard', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-main);
+            color: var(--text-main);
+            transition: 0.3s;
+            overflow-x: hidden;
+        }
+
+        #app-container {
+            max-width: 480px;
+            min-height: 100vh;
+            margin: 0 auto;
+            background: var(--bg-main);
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
+        }
+
+        header {
+            padding: 20px 24px;
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--theme-color);
+            letter-spacing: -0.8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .logo span {
+            color: var(--text-main);
+            font-weight: 400;
+            font-size: 16px;
+            opacity: 0.3;
+        }
+
+        .mode-tabs {
+            display: flex;
+            background: #EEE;
+            border-radius: 14px;
+            padding: 4px;
+            margin: 15px 20px 20px;
+        }
+
+        .mode-tab {
+            flex: 1;
+            padding: 12px;
+            border-radius: 11px;
+            font-size: 14px;
+            font-weight: 800;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            color: #888;
+            background: none;
+            transition: 0.2s;
+        }
+
+        .mode-tab.active.buy {
+            background: var(--accent-buy);
+            color: #fff;
+        }
+
+        .mode-tab.active.sell {
+            background: var(--accent-sell);
+            color: #fff;
+        }
+
+        .wallet-card {
+            padding: 24px;
+            background: #fff;
+            margin: 0 20px 15px;
+            border-radius: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .wallet-label {
+            font-size: 13px;
+            color: var(--text-sub);
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 800;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: stretch;
+            background: #F4F7FB;
+            border-radius: 16px;
+            border: 2px solid #F4F7FB;
+            transition: 0.2s;
+            overflow: hidden;
+        }
+
+        .input-group:focus-within {
+            background: #fff;
+            border-color: var(--theme-color);
+        }
+
+        .input-group input {
+            flex: 1;
+            min-width: 0;
+            padding: 16px;
+            border: none;
+            background: transparent;
+            font-size: 20px;
+            font-weight: 800;
+            text-align: right;
+            outline: none;
+            color: var(--text-main);
+        }
+
+        .btn-magic {
+            padding: 0 20px;
+            background: var(--accent-ai);
+            color: #fff;
+            border: none;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-magic:active {
+            transform: scale(0.96);
+            opacity: 0.9;
+        }
+
+        .filter-section {
+            padding: 0 20px 20px;
+        }
+
+        .chip-scroll {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            margin-bottom: 10px;
+            scrollbar-width: none;
+        }
+
+        .chip-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .chip {
+            padding: 10px 18px;
+            border-radius: 12px;
+            background: #fff;
+            border: 1px solid var(--border);
+            color: var(--text-sub);
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+
+        .chip.active {
+            background: var(--theme-color);
+            color: #fff;
+            border-color: var(--theme-color);
+        }
+
+        .status-bar {
+            padding: 0 24px 15px;
+            font-size: 12px;
+            color: var(--text-sub);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--theme-color);
+            animation: pulse 2s infinite;
+        }
+
+        .stock-list {
+            list-style: none;
+            padding: 0 16px 140px;
+            margin: 0;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: 0.2s;
+            border: 2.5px solid transparent;
+            cursor: pointer;
+        }
+
+        .card.checked {
+            border-color: var(--theme-color);
+            background: #F0F7FF;
+        }
+
+        body.sell-mode .card.checked {
+            background: #FFF5F5;
+        }
+
+        .check-box {
+            width: 22px;
+            height: 22px;
+            border-radius: 7px;
+            border: 2.5px solid #EEE;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card.checked .check-box {
+            background: var(--theme-color);
+            border-color: var(--theme-color);
+        }
+
+        .card.checked .check-box::after {
+            content: '✔';
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            padding: 20px 24px 34px;
+            background: linear-gradient(to top, var(--bg-main) 80%, transparent);
+            pointer-events: none;
+        }
+
+        .btn-main {
+            width: 100%;
+            padding: 18px;
+            border-radius: 18px;
+            background: var(--theme-color);
+            color: #fff;
+            border: none;
+            font-size: 16px;
+            font-weight: 900;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            cursor: pointer;
+            transition: 0.2s;
+            pointer-events: auto;
+        }
+
+        .btn-main:active {
+            transform: scale(0.98);
+        }
+
+        .btn-main:disabled {
+            background: #E5E8EB;
+            color: #B9BFC6;
+            cursor: not-allowed;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .sheet {
+            position: fixed;
+            bottom: -100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            background: #fff;
+            border-radius: 30px 30px 0 0;
+            padding: 32px 24px;
+            z-index: 1001;
+            transition: 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .sheet.active {
+            bottom: 0;
+        }
+
+        .report-card {
+            background: #F9FAFB;
+            padding: 24px;
+            border-radius: 24px;
+            margin-bottom: 20px;
+            border-left: 6px solid var(--theme-color);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .grid-item {
+            background: #fff;
+            padding: 14px;
+            border-radius: 16px;
+        }
+
+        .grid-label {
+            font-size: 11px;
+            color: var(--text-sub);
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 800;
+        }
+
+        .grid-val {
+            font-size: 16px;
+            font-weight: 900;
+            color: var(--text-main);
+        }
+
+        .grid-eval {
+            font-size: 11px;
+            color: var(--theme-color);
+            font-weight: 800;
+            display: block;
+            margin-top: 6px;
+        }
+
+        .buyable-badge {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--theme-color);
+            background: #fff;
+            border: 1.5px solid var(--theme-color);
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body class="buy-mode">
+    <div id="app-container">
+        <header>
+            <div class="logo">수급의 정석 <span>Money Fact</span></div>
+        </header>
+
+        <div class="mode-tabs">
+            <button class="mode-tab active buy" onclick="setMode('buy', this)">🍀 수급 기회 (BUY)</button>
+            <button class="mode-tab sell" onclick="setMode('sell', this)">🚨 위험 감지 (SELL)</button>
+        </div>
+
+        <div class="wallet-card" id="walletCard">
+            <div class="wallet-label">
+                <span>내 투자 운용 자산 스케일 (₩)</span>
+                <span style="color:var(--accent-buy); font-weight:900; font-size:11px;">무제한 분석 모드</span>
+            </div>
+            <div class="input-group">
+                <input type="text" id="seedMoney" value="10,000,000" onfocus="this.value=''"
+                    oninput="handleMoneyInput(this)" onblur="checkEmpty(this)">
+                <button class="btn-magic" id="magicBtn" onclick="autoRecommend()">🪄 AI 추천</button>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="chip-scroll">
+                <button class="chip active" onclick="setFilter(this, 'inv', '0')">전체 주체</button>
+                <button class="chip" onclick="setFilter(this, 'inv', '4')">연기금</button>
+                <button class="chip" onclick="setFilter(this, 'inv', '2')">외국인</button>
+                <button class="chip" onclick="setFilter(this, 'inv', '1')">기관 합계</button>
+            </div>
+            <div class="chip-scroll">
+                <button class="chip active" onclick="setFilter(this, 'period', '5')">5일</button>
+                <button class="chip" onclick="setFilter(this, 'period', '10')">10일</button>
+                <button class="chip" onclick="setFilter(this, 'period', '20')">20일</button>
+                <button class="chip" onclick="setFilter(this, 'period', '30')">30일 한정</button>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="dot"></div><span id="statusMsg">시장 정밀 분석 중...</span>
+        </div>
+
+        <ul id="stockList" class="stock-list"></ul>
+
+        <div class="nav">
+            <button id="mainBtn" class="btn-main" disabled onclick="analyze()">선택 종목 심층 리서치 (0)</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeSheet()"></div>
+    <div class="sheet" id="recSheet">
+        <h2 id="sheetTitle" style="font-size: 20px; font-weight: 800; margin-bottom: 24px;">📊 심층 리서치 보고서</h2>
+        <div id="recResults"></div>
+        <button class="btn-main" onclick="closeSheet()" style="margin-top: 10px;">분석 리포트 닫기</button>
+    </div>
+
+    <script>
+        let mode = 'buy', curP = '5', curI = '0', stocks = [], selected = new Set();
+
+        function formatNumber(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+        function unformatNumber(s) { return s.replace(/,/g, ''); }
+        function handleMoneyInput(el) {
+            let val = unformatNumber(el.value).replace(/[^0-9]/g, '');
+            if (val === '') { el.value = ''; return; }
+            el.value = formatNumber(val);
+        }
+        function checkEmpty(el) { if (el.value.trim() === '') el.value = '1,000,000'; }
+
+        async function fetchData() {
+            const list = document.getElementById('stockList');
+            list.innerHTML = '<div style="text-align:center; padding:100px 0; color:#999; font-size:14px; font-weight:600;">데이터 스캔 중...</div>';
+            try {
+                const res = await fetch(`/api/analysis/supply/${curP}/${curI}?mode=${mode}`);
+                const data = await res.json();
+                stocks = data.output || [];
+                document.getElementById('statusMsg').innerText = "✅ 실시간 수급 데이터 수집 완료";
+                render();
+            } catch (e) { list.innerHTML = '<div style="text-align:center; padding:100px 0; color:#999;">연결 실패</div>'; }
+        }
+
+        function render() {
+            document.getElementById('stockList').innerHTML = stocks.map(s => `
+            <li class="card ${selected.has(s.code) ? 'checked' : ''}" onclick="toggle('${s.code}')">
+                <div class="check-box"></div>
+                <div style="flex:1;">
+                    <span style="font-size:16px; font-weight:800; display:block; margin-bottom:4px;">${s.name}</span>
+                    <span style="font-size:11px; color:var(--theme-color); font-weight:900;">${s.streak}일 연속 ${mode === 'buy' ? '매집' : '이탈'}</span>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:16px; font-weight:800;">${parseInt(s.price).toLocaleString()}원</div>
+                    <span style="font-size:12px; font-weight:700; color:${parseFloat(s.rate) > 0 ? 'var(--accent-sell)' : 'var(--accent-buy)'}">${s.rate}%</span>
+                </div>
+            </li>
+        `).join('');
+        }
+
+        function toggle(c) {
+            if (selected.has(c)) selected.delete(c); else selected.add(c);
+            render();
+            const btn = document.getElementById('mainBtn');
+            btn.innerText = (mode === 'buy' ? '선택 종목 심층 리서치 (' : '위험 종목 정밀 진단 (') + selected.size + ')';
+            btn.disabled = selected.size === 0;
+        }
+
+        function setMode(m, el) {
+            mode = m; document.body.className = m + '-mode';
+            document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('walletCard').style.display = mode === 'sell' ? 'none' : 'block';
+            selected.clear();
+            fetchData();
+        }
+
+        function setFilter(el, type, val) {
+            if (type === 'inv') curI = val; else curP = val;
+            el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            fetchData();
+        }
+
+        async function autoRecommend() {
+            const budget = parseInt(unformatNumber(document.getElementById('seedMoney').value)) || 0;
+            const affordable = stocks.filter(s => parseInt(s.price) <= budget);
+            if (affordable.length === 0) { alert('현재 자산으로 매수 가능한 종목이 없습니다.'); return; }
+
+            const magicBtn = document.getElementById('magicBtn'); magicBtn.disabled = true;
+            const top3 = [...affordable].sort((a, b) => b.streak - a.streak).slice(0, 3);
+            selected.clear(); top3.forEach(s => selected.add(s.code)); render();
+            await analyze("✨ 자산 최적화 AI 추천 리포트", false);
+            magicBtn.disabled = false;
+        }
+
+        async function analyze(customTitle, isPure = true) {
+            const btn = document.getElementById('mainBtn');
+            const oldText = btn.innerText; btn.innerText = "분석 리포트 생성 중..."; btn.disabled = true;
+            try {
+                const rawAmount = unformatNumber(document.getElementById('seedMoney').value);
+                const targets = stocks.filter(s => selected.has(s.code));
+                const res = await fetch('/api/portfolio/recommend', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stocks: targets, amount: rawAmount, mode, ignoreBudget: isPure })
+                });
+                const data = await res.json();
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('recSheet').classList.add('active');
+                document.getElementById('sheetTitle').innerHTML = customTitle || "📊 전문가 심층 리서치 보고서";
+                document.getElementById('recResults').innerHTML = data.portfolio.map(p => `
+                <div class="report-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3 style="margin:0; font-size:19px; font-weight:800;">${p.name} <small style="font-weight:400; color:#999; font-size:11px;">${p.code}</small></h3>
+                        ${!isPure ? `<span class="buyable-badge">${p.shares}주 추천</span>` : ''}
+                    </div>
+                    <div class="grid">
+                        <div class="grid-item"><span class="grid-label">PER (수익성)</span><span class="grid-val">${p.finance.per}배</span><span class="grid-eval">👉 ${p.perText}</span></div>
+                        <div class="grid-item"><span class="grid-label">PBR (자산가치)</span><span class="grid-val">${p.finance.pbr}배</span><span class="grid-eval">👉 ${p.pbrText}</span></div>
+                    </div>
+                    <div style="background:#fff; padding:16px; border-radius:18px;">
+                        <span style="font-size:12px; font-weight:900; color:var(--theme-color); display:block; margin-bottom:8px;">💡 AI 리서치 인사이트</span>
+                        <p style="font-size:13px; line-height:1.6; color:var(--text-main); margin:0;">${p.insight}</p>
+                    </div>
+                </div>
+            `).join('');
+            } catch (e) { alert('분석 실패'); } finally { btn.innerText = oldText; btn.disabled = false; }
+        }
+        function closeSheet() { document.getElementById('overlay').style.display = 'none'; document.getElementById('recSheet').classList.remove('active'); }
+        fetchData();
+    </script>
+</body>
+
+</html>

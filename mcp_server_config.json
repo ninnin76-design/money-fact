@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "notebooklm-mcp": {
+            "command": "notebooklm-mcp",
+            "args": [
+                "server"
+            ],
+            "disabled": false,
+            "autoApprove": []
+        }
+    }
+}

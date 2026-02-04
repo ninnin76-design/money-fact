@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+.expo/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files (중요: API KEY 보호)
+.env
+server/.env
+mobile/.env
+
+# snapshots
+market_report_snapshot.json
+temp_response.json
+
+# local profile
+chrome_profile_notebooklm/
