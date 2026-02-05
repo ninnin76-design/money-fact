@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
-  TextInput, Modal, SafeAreaView, StatusBar,
+  TextInput, Modal, StatusBar,
   ActivityIndicator, Dimensions, Alert, ImageBackground, Platform
 } from 'react-native';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets
+} from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Wand2,
   CheckCircle2, X, ClipboardList
@@ -11,9 +16,10 @@ import {
 import axios from 'axios';
 
 const { width } = Dimensions.get('window');
-const API_BASE = 'https://money-fact-server.onrender.com'; // 실 운영 서버 주소 적용
+const API_BASE = 'https://money-fact-server.onrender.com';
 
-export default function App() {
+function MainApp() {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState('buy');
   const [period, setPeriod] = useState('5');
   const [investor, setInvestor] = useState('0');
@@ -35,7 +41,7 @@ export default function App() {
       setStocks(res.data.output || []);
     } catch (e) {
       console.error(e);
-      Alert.alert('연결 오류', '서버가 켜져 있는지 확인해 주세요.');
+      // Don't alert on initial load to avoid freezing if network is slow
     } finally {
       setLoading(false);
     }
@@ -88,20 +94,21 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Set status bar to translucent to handle notch better on Android */}
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* 1. Slim Branding Banner (Fixed Top with Safe Area Padding) */}
+      {/* 1. Slim Branding Banner */}
       <ImageBackground
         source={require('./assets/banner.png')}
         style={styles.bannerContainer}
         resizeMode="cover"
       >
-        <Text style={styles.bannerBrandText}>Money Fact</Text>
+        <View style={styles.bannerOverlay}>
+          <Text style={styles.bannerBrandText}>Money Fact</Text>
+        </View>
       </ImageBackground>
 
-      {/* 2. Mode Tabs (Side by Side) */}
+      {/* 2. Mode Tabs */}
       <View style={styles.modeTabs}>
         <TouchableOpacity
           style={[styles.modeTab, mode === 'buy' && styles.modeTabActiveBuy]}
@@ -120,7 +127,6 @@ export default function App() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Filters & Wallet */}
         <View style={styles.stickySection}>
           {mode === 'buy' && (
             <View style={styles.walletCard}>
@@ -146,15 +152,15 @@ export default function App() {
           )}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {['0', '4', '2', '1'].map((v, i) => {
-              const labels = ['전체 주체', '연기금', '외국인', '기관 합계'];
+            {['0', '4', '2', '1', '5'].map((v, i) => {
+              const labels = ['전체 주체', '연기금', '외국인', '기관 합계', '투신'];
               return (
                 <TouchableOpacity
                   key={v}
                   style={[styles.chip, investor === v && styles.chipActive]}
                   onPress={() => setInvestor(v)}
                 >
-                  <Text style={[styles.chipText, investor === v && styles.chipTextActive]}>{labels[i]}</Text>
+                  <Text style={[styles.chipText, investor === v && styles.chipTextActive]}>{labels[i] || '주체'}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -173,7 +179,6 @@ export default function App() {
           </ScrollView>
         </View>
 
-        {/* Stock List */}
         <View style={styles.listContainer}>
           <View style={styles.statusBar}>
             <View style={styles.dot} />
@@ -208,7 +213,6 @@ export default function App() {
         </View>
       </ScrollView>
 
-      {/* Bottom FAB */}
       {selected.size > 0 && (
         <View style={styles.fabContainer}>
           <TouchableOpacity style={styles.fab} onPress={() => runAnalysis()}>
@@ -218,7 +222,6 @@ export default function App() {
         </View>
       )}
 
-      {/* Report Modal */}
       <Modal visible={reportVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -249,38 +252,29 @@ export default function App() {
       </Modal>
 
       {loading && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#3182F6" /></View>}
-    </SafeAreaView>
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <MainApp />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-
-  bannerContainer: {
-    width: '100%',
-    height: Platform.OS === 'android' ? 60 + (StatusBar.currentHeight || 0) : 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E8EB',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0
-  },
-  bannerBrandText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#3182F6',
-    letterSpacing: -1,
-    marginTop: Platform.OS === 'android' ? 5 : 0
-  },
-
+  bannerContainer: { width: '100%', height: 60, justifyContent: 'center', alignItems: 'center' },
+  bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  bannerBrandText: { fontSize: 22, fontWeight: '900', color: '#3182F6', letterSpacing: -1 },
   modeTabs: { flexDirection: 'row', backgroundColor: '#EEE', marginHorizontal: 15, marginVertical: 10, borderRadius: 12, padding: 4 },
   modeTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 9, gap: 8 },
   modeTabActiveBuy: { backgroundColor: '#3182F6' },
   modeTabActiveSell: { backgroundColor: '#F04452' },
   modeTabText: { fontSize: 13, fontWeight: '900', color: '#888' },
   modeTextActive: { color: '#fff' },
-
   stickySection: { backgroundColor: '#F4F7FB', paddingBottom: 10 },
   walletCard: { backgroundColor: '#fff', marginHorizontal: 15, padding: 18, borderRadius: 20, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10 },
   walletLabel: { fontSize: 12, fontWeight: '800', color: '#4E5968', marginBottom: 10 },
@@ -288,18 +282,15 @@ const styles = StyleSheet.create({
   moneyInput: { flex: 1, padding: 14, fontSize: 18, fontWeight: '900', textAlign: 'right', color: '#191F28' },
   btnMagic: { backgroundColor: '#6227FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 6 },
   btnMagicText: { color: '#fff', fontWeight: '900', fontSize: 12 },
-
   chipScroll: { paddingHorizontal: 15, marginBottom: 10 },
   chip: { paddingHorizontal: 16, paddingVertical: 11, backgroundColor: '#fff', borderRadius: 12, marginRight: 8, borderWidth: 1, borderColor: '#E5E8EB' },
   chipActive: { backgroundColor: '#3182F6', borderColor: '#3182F6' },
   chipText: { fontSize: 12, fontWeight: '700', color: '#4E5968' },
   chipTextActive: { color: '#fff' },
-
   listContainer: { paddingHorizontal: 15, paddingTop: 10, backgroundColor: '#F4F7FB' },
   statusBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 15 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3182F6' },
   statusText: { fontSize: 11, fontWeight: '800', color: '#4E5968' },
-
   stockCard: { backgroundColor: '#fff', padding: 18, borderRadius: 22, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 14 },
   stockCardSelected: { borderColor: '#3182F6', borderWidth: 2, backgroundColor: '#F0F7FF' },
   checkBox: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: '#EEE', alignItems: 'center', justifyContent: 'center' },
@@ -308,11 +299,9 @@ const styles = StyleSheet.create({
   stockStreak: { fontSize: 11, fontWeight: '900', color: '#3182F6', marginTop: 3 },
   stockPrice: { fontSize: 16, fontWeight: '800', color: '#191F28' },
   stockRate: { fontSize: 12, fontWeight: '900' },
-
   fabContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center', paddingHorizontal: 20 },
   fab: { backgroundColor: '#3182F6', flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 20, width: '100%', justifyContent: 'center', gap: 10, elevation: 10, shadowColor: '#3182F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15 },
   fabText: { color: '#fff', fontSize: 16, fontWeight: '900' },
-
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, maxHeight: '88%' },
