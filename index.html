@@ -3,88 +3,100 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Money Fact</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Money Fact - 프리미엄 수급 분석</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-main: #F4F7FB;
-            --bg-card: #FFFFFF;
+            --bg-main: #FFFFFF;
+            --bg-secondary: #F4F7FB;
             --accent-buy: #3182F6;
             --accent-sell: #F04452;
-            --accent-ai: linear-gradient(135deg, #6227FF 0%, #3182F6 100%);
             --text-main: #191F28;
             --text-sub: #4E5968;
             --border: #E5E8EB;
             --theme-color: var(--accent-buy);
         }
 
-        body.sell-mode {
-            --theme-color: var(--accent-sell);
-            --bg-main: #FFF1F2;
-            --accent-ai: linear-gradient(135deg, #FF4B2B 0%, #FF416C 100%);
-        }
-
         * {
             box-sizing: border-box;
-            font-family: 'Pretendard', sans-serif;
+            font-family: 'Pretendard', -apple-system, sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
 
         body {
             margin: 0;
-            background: var(--bg-main);
+            background: var(--bg-secondary);
             color: var(--text-main);
-            transition: 0.3s;
-            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
         }
 
         #app-container {
+            width: 100%;
             max-width: 480px;
             min-height: 100vh;
-            margin: 0 auto;
             background: var(--bg-main);
+            display: flex;
+            flex-direction: column;
             position: relative;
-            box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
         }
 
-        .banner-box {
+        /* Hero Banner */
+        .hero-banner {
             width: 100%;
-            height: 60px;
-            background: url('./assets/banner.png') center/cover no-repeat;
+            height: 120px;
+            background: linear-gradient(135deg, #1A212E 0%, #2D3A4F 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
         }
 
-        .banner-text {
-            font-size: 22px;
-            font-weight: 900;
-            color: var(--accent-buy);
+        .hero-banner::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+            opacity: 0.1;
+        }
+
+        .hero-text {
+            color: #FFFFFF;
+            font-size: 28px;
+            font-weight: 800;
+            z-index: 1;
             letter-spacing: -1px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
 
+        /* Mode Tabs */
         .mode-tabs {
             display: flex;
-            background: #EEE;
-            border-radius: 14px;
-            padding: 4px;
-            margin: 15px 20px 20px;
+            padding: 20px;
+            gap: 12px;
         }
 
         .mode-tab {
             flex: 1;
-            padding: 12px;
-            border-radius: 11px;
-            font-size: 14px;
-            font-weight: 800;
-            text-align: center;
+            padding: 16px;
+            border-radius: 16px;
             border: none;
+            font-size: 15px;
+            font-weight: 700;
             cursor: pointer;
-            color: #888;
-            background: none;
-            transition: 0.2s;
+            transition: 0.25s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #F2F4F6;
+            color: #8B95A1;
         }
 
         .mode-tab.active.buy {
@@ -97,209 +109,100 @@
             color: #fff;
         }
 
-        .wallet-card {
-            padding: 24px;
-            background: #fff;
-            margin: 0 20px 15px;
-            border-radius: 24px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-        }
-
-        .wallet-label {
-            font-size: 13px;
-            color: var(--text-sub);
-            display: block;
-            margin-bottom: 12px;
-            font-weight: 800;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .input-group {
-            display: flex;
-            align-items: stretch;
-            background: #F4F7FB;
-            border-radius: 16px;
-            border: 2px solid #F4F7FB;
-            transition: 0.2s;
-            overflow: hidden;
-        }
-
-        .input-group:focus-within {
-            background: #fff;
-            border-color: var(--theme-color);
-        }
-
-        .input-group input {
-            flex: 1;
-            min-width: 0;
-            padding: 16px;
-            border: none;
-            background: transparent;
-            font-size: 20px;
-            font-weight: 800;
-            text-align: right;
-            outline: none;
-            color: var(--text-main);
-        }
-
-        .btn-magic {
-            padding: 0 20px;
-            background: var(--accent-ai);
-            color: #fff;
-            border: none;
-            font-size: 14px;
-            font-weight: 800;
-            cursor: pointer;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .filter-section {
+        /* Chips */
+        .chip-container {
             padding: 0 20px 20px;
-        }
-
-        .chip-scroll {
             display: flex;
             gap: 8px;
             overflow-x: auto;
-            margin-bottom: 10px;
             scrollbar-width: none;
         }
 
-        .chip-scroll::-webkit-scrollbar {
+        .chip-container::-webkit-scrollbar {
             display: none;
         }
 
         .chip {
-            padding: 10px 18px;
-            border-radius: 12px;
-            background: #fff;
-            border: 1px solid var(--border);
-            color: var(--text-sub);
-            font-size: 13px;
-            font-weight: 700;
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: #F2F4F6;
+            color: #4E5968;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
             white-space: nowrap;
-            transition: 0.2s;
             cursor: pointer;
+            transition: 0.2s;
         }
 
         .chip.active {
-            background: var(--theme-color);
+            background: #191F28;
             color: #fff;
-            border-color: var(--theme-color);
         }
 
-        .status-bar {
-            padding: 0 24px 15px;
-            font-size: 12px;
-            color: var(--text-sub);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-        }
-
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--theme-color);
-        }
-
+        /* List */
         .stock-list {
-            list-style: none;
-            padding: 0 16px 140px;
-            margin: 0;
+            padding: 0 20px 100px;
+            flex: 1;
         }
 
-        .card {
+        .stock-card {
             background: #fff;
+            padding: 20px;
             border-radius: 20px;
-            padding: 18px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 15px;
-            transition: 0.2s;
-            border: 2.5px solid transparent;
-            cursor: pointer;
-            shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-        }
-
-        .card.checked {
-            border-color: var(--theme-color);
-            background: #F0F7FF;
-        }
-
-        body.sell-mode .card.checked {
-            background: #FFF5F5;
-        }
-
-        .check-box {
-            width: 22px;
-            height: 22px;
-            border-radius: 7px;
-            border: 2.5px solid #EEE;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .card.checked .check-box {
-            background: var(--theme-color);
-            border-color: var(--theme-color);
-        }
-
-        .card.checked .check-box::after {
-            content: '✔';
-            color: #fff;
-            font-size: 12px;
-            font-weight: 900;
-        }
-
-        .nav {
-            position: fixed;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100%;
-            max-width: 480px;
-            padding: 20px 24px 34px;
-            background: linear-gradient(to top, var(--bg-main) 80%, transparent);
-            pointer-events: none;
-        }
-
-        .btn-main {
-            width: 100%;
-            padding: 18px;
-            border-radius: 18px;
-            background: var(--theme-color);
-            color: #fff;
-            border: none;
-            font-size: 16px;
-            font-weight: 900;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            border: 1px solid #F2F4F6;
             cursor: pointer;
             transition: 0.2s;
-            pointer-events: auto;
         }
 
-        .overlay {
+        .stock-card:active {
+            transform: scale(0.98);
+            background: #F9FAFB;
+        }
+
+        .stock-info h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #191F28;
+            margin-bottom: 4px;
+        }
+
+        .stock-info p {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--theme-color);
+        }
+
+        .stock-price {
+            text-align: right;
+        }
+
+        .price-text {
+            font-size: 18px;
+            font-weight: 800;
+            color: #191F28;
+        }
+
+        /* Modal / Sheet */
+        .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
             display: none;
-            backdrop-filter: blur(4px);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
         }
 
-        .sheet {
+        .modal-sheet {
             position: fixed;
             bottom: -100%;
             left: 50%;
@@ -307,15 +210,15 @@
             width: 100%;
             max-width: 480px;
             background: #fff;
-            border-radius: 30px 30px 0 0;
+            border-radius: 32px 32px 0 0;
             padding: 32px 24px;
             z-index: 1001;
             transition: 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-            max-height: 90vh;
+            max-height: 85vh;
             overflow-y: auto;
         }
 
-        .sheet.active {
+        .modal-sheet.active {
             bottom: 0;
         }
 
@@ -323,200 +226,255 @@
             background: #F9FAFB;
             padding: 24px;
             border-radius: 24px;
-            margin-bottom: 20px;
-            border-left: 6px solid var(--theme-color);
+            margin-top: 20px;
+            border: 1px solid #E5E8EB;
         }
 
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 15px 0;
+            gap: 12px;
+            margin: 20px 0;
         }
 
         .grid-item {
             background: #fff;
-            padding: 14px;
+            padding: 16px;
             border-radius: 16px;
+            border: 1px solid #F2F4F6;
         }
 
         .grid-label {
-            font-size: 11px;
-            color: var(--text-sub);
+            font-size: 12px;
+            color: #8B95A1;
+            font-weight: 700;
+            margin-bottom: 4px;
             display: block;
-            margin-bottom: 6px;
-            font-weight: 800;
         }
 
-        .grid-val {
-            font-size: 16px;
-            font-weight: 900;
-            color: var(--text-main);
+        .grid-value {
+            font-size: 18px;
+            font-weight: 800;
+            color: #191F28;
         }
 
         .grid-eval {
-            font-size: 11px;
-            color: var(--theme-color);
-            font-weight: 800;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-buy);
+            margin-top: 4px;
             display: block;
-            margin-top: 6px;
+        }
+
+        .insight-box {
+            background: #EBF4FF;
+            padding: 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #3182F6;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            width: 100%;
+            padding: 18px;
+            border-radius: 18px;
+            background: #191F28;
+            color: #fff;
+            border: none;
+            font-size: 16px;
+            font-weight: 800;
+            margin-top: 24px;
+            cursor: pointer;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #F2F4F6;
+            border-top-color: #3182F6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
 
-<body class="buy-mode">
+<body>
     <div id="app-container">
-        <div class="banner-box">
-            <div class="banner-text">Money Fact</div>
+        <div class="hero-banner">
+            <div class="hero-text">Money Fact</div>
         </div>
 
         <div class="mode-tabs">
-            <button class="mode-tab active buy" onclick="setMode('buy', this)">🍀 수급 기회 (BUY)</button>
-            <button class="mode-tab sell" onclick="setMode('sell', this)">🚨 위험 감지 (SELL)</button>
+            <button class="mode-tab active buy" id="buyTab" onclick="setMode('buy')">📈 수급 기회</button>
+            <button class="mode-tab sell" id="sellTab" onclick="setMode('sell')">📉 위험 감지</button>
         </div>
 
-        <div class="wallet-card" id="walletCard">
-            <div class="wallet-label">
-                <span>내 투자 운용 자산 스케일 (₩)</span>
-                <span style="color:var(--accent-buy); font-weight:900; font-size:11px;">무제한 분석 모드</span>
-            </div>
-            <div class="input-group">
-                <input type="text" id="seedMoney" value="10,000,000" onfocus="this.value=''"
-                    oninput="handleMoneyInput(this)" onblur="checkEmpty(this)">
-                <button class="btn-magic" id="magicBtn" onclick="autoRecommend()">🪄 AI 추천</button>
-            </div>
+        <div class="chip-container">
+            <button class="chip active" data-inv="0" onclick="setInvestor('0', this)">전체 주체</button>
+            <button class="chip" data-inv="2" onclick="setInvestor('2', this)">외국인</button>
+            <button class="chip" data-inv="1" onclick="setInvestor('1', this)">기관 합계</button>
         </div>
 
-        <div class="filter-section">
-            <div class="chip-scroll">
-                <button class="chip active" onclick="setFilter(this, 'inv', '0')">전체 주체</button>
-                <button class="chip" onclick="setFilter(this, 'inv', '4')">연기금</button>
-                <button class="chip" onclick="setFilter(this, 'inv', '2')">외국인</button>
-                <button class="chip" onclick="setFilter(this, 'inv', '1')">기관 합계</button>
-            </div>
-            <div class="chip-scroll">
-                <button class="chip active" onclick="setFilter(this, 'period', '5')">5일</button>
-                <button class="chip" onclick="setFilter(this, 'period', '10')">10일</button>
-                <button class="chip" onclick="setFilter(this, 'period', '20')">20일</button>
-                <button class="chip" onclick="setFilter(this, 'period', '30')">30일 한정</button>
-            </div>
-        </div>
-
-        <div class="status-bar">
-            <div class="dot"></div><span id="statusMsg">시장 정밀 분석 중...</span>
-        </div>
-        <ul id="stockList" class="stock-list"></ul>
-        <div class="nav"><button id="mainBtn" class="btn-main" disabled onclick="analyze()">선택 종목 심층 리서치 (0)</button>
+        <div id="stock-list-container" class="stock-list">
+            <!-- 리스트가 여기 렌더링 됩니다 -->
         </div>
     </div>
 
-    <div class="overlay" id="overlay" onclick="closeSheet()"></div>
-    <div class="sheet" id="recSheet">
-        <h2 id="sheetTitle" style="font-size: 20px; font-weight: 800; margin-bottom: 24px;">📊 심층 리서치 보고서</h2>
-        <div id="recResults"></div>
-        <button class="btn-main" onclick="closeSheet()" style="margin-top: 10px;">분석 리포트 닫기</button>
+    <!-- 리서치 모달 -->
+    <div class="modal-overlay" id="overlay" onclick="closeModal()"></div>
+    <div class="modal-sheet" id="sheet">
+        <h2 id="modal-title" style="font-size: 22px; font-weight: 800; margin: 0; color: #191F28;">📊 리서치 보고서</h2>
+        <div id="modal-content"></div>
+        <button class="close-btn" onclick="closeModal()">확인</button>
+    </div>
+
+    <!-- 로딩바 -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 16px; font-weight: 700; color: #4E5968;">AI 분석 중...</p>
     </div>
 
     <script>
-        let mode = 'buy', curP = '5', curI = '0', stocks = [], selected = new Set();
-        function formatNumber(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
-        function unformatNumber(s) { return s.replace(/,/g, ''); }
-        function handleMoneyInput(el) {
-            let val = unformatNumber(el.value).replace(/[^0-9]/g, '');
-            if (val === '') { el.value = ''; return; }
-            el.value = formatNumber(val);
+        let mode = 'buy';
+        let investor = '0';
+        let stocks = [];
+
+        async function init() {
+            fetchData();
         }
-        function checkEmpty(el) { if (el.value.trim() === '') el.value = '1,000,000'; }
 
         async function fetchData() {
-            const list = document.getElementById('stockList');
-            list.innerHTML = '<div style="text-align:center; padding:100px 0; color:#999; font-size:14px; font-weight:600;">데이터 스캔 중...</div>';
+            const listEl = document.getElementById('stock-list-container');
+            listEl.innerHTML = '<p style="text-align:center; padding:40px; color:#8B95A1; font-weight:600;">데이터를 불러오는 중...</p>';
+
             try {
-                const res = await fetch(`/api/analysis/supply/${curP}/${curI}?mode=${mode}`);
+                // 상용 주소 대신 같은 서버의 API 호출
+                const res = await fetch(`/api/analysis/supply/5/${investor}?mode=${mode}`);
                 const data = await res.json();
                 stocks = data.output || [];
-                document.getElementById('statusMsg').innerText = "✅ 실시간 수급 데이터 수집 완료";
-                render();
-            } catch (e) { list.innerHTML = '연결 실패'; }
+                renderList();
+            } catch (e) {
+                listEl.innerHTML = '<p style="text-align:center; padding:40px; color:red;">데이터 연결 오류</p>';
+            }
         }
 
-        function render() {
-            document.getElementById('stockList').innerHTML = stocks.map(s => `
-            <li class="card ${selected.has(s.code) ? 'checked' : ''}" onclick="toggle('${s.code}')">
-                <div class="check-box"></div>
-                <div style="flex:1;">
-                    <span style="font-size:16px; font-weight:800; display:block; margin-bottom:4px;">${s.name}</span>
-                    <span style="font-size:11px; color:var(--theme-color); font-weight:900;">${s.streak}일 연속 ${mode === 'buy' ? '매집' : '이탈'}</span>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:16px; font-weight:800;">${parseInt(s.price).toLocaleString()}원</div>
-                    <span style="font-size:12px; font-weight:700; color:${parseFloat(s.rate) > 0 ? 'var(--accent-sell)' : 'var(--accent-buy)'}">${s.rate}%</span>
-                </div>
-            </li>
-        `).join('');
-        }
+        function renderList() {
+            const listEl = document.getElementById('stock-list-container');
+            if (stocks.length === 0) {
+                listEl.innerHTML = '<p style="text-align:center; padding:40px; color:#8B95A1;">포착된 종목이 없습니다.</p>';
+                return;
+            }
 
-        function toggle(c) {
-            if (selected.has(c)) selected.delete(c); else selected.add(c);
-            render();
-            const btn = document.getElementById('mainBtn');
-            btn.innerText = (mode === 'buy' ? '선택 종목 심층 리서치 (' : '위험 종목 정밀 진단 (') + selected.size + ')';
-            btn.disabled = selected.size === 0;
-        }
-
-        function setMode(m, el) {
-            mode = m; document.body.className = m + '-mode';
-            document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-            el.classList.add('active');
-            document.getElementById('walletCard').style.display = mode === 'sell' ? 'none' : 'block';
-            selected.clear(); fetchData();
-        }
-
-        function setFilter(el, type, val) {
-            if (type === 'inv') curI = val; else curP = val;
-            el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            el.classList.add('active'); fetchData();
-        }
-
-        async function autoRecommend() {
-            const budget = parseInt(unformatNumber(document.getElementById('seedMoney').value)) || 0;
-            const affordable = stocks.filter(s => parseInt(s.price) <= budget);
-            if (affordable.length === 0) { alert('매수 가능한 종목이 없습니다.'); return; }
-            const top3 = [...affordable].sort((a, b) => b.streak - a.streak).slice(0, 3);
-            selected.clear(); top3.forEach(s => selected.add(s.code)); render();
-            await analyze("✨ 자산 최적화 AI 추천 리포트", false);
-        }
-
-        async function analyze(customTitle, isPure = true) {
-            const btn = document.getElementById('mainBtn');
-            btn.disabled = true;
-            try {
-                const rawAmount = unformatNumber(document.getElementById('seedMoney').value);
-                const targets = stocks.filter(s => selected.has(s.code));
-                const res = await fetch('/api/portfolio/recommend', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stocks: targets, amount: rawAmount, mode, ignoreBudget: isPure })
-                });
-                const data = await res.json();
-                document.getElementById('overlay').style.display = 'block';
-                document.getElementById('recSheet').classList.add('active');
-                document.getElementById('sheetTitle').innerHTML = customTitle || "📊 전문가 심층 리서치 보고서";
-                document.getElementById('recResults').innerHTML = data.portfolio.map(p => `
-                <div class="report-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0; font-size:19px; font-weight:800;">${p.name} <small style="font-weight:400; color:#999; font-size:11px;">${p.code}</small></h3>
+            listEl.innerHTML = stocks.map(s => `
+                <div class="stock-card" onclick="openAnalysis('${encodeURIComponent(JSON.stringify(s))}')">
+                    <div class="stock-info">
+                        <h3>${s.name}</h3>
+                        <p style="color: ${mode === 'buy' ? '#3182F6' : '#F04452'}">
+                            ${s.streak}일 연속 ${mode === 'buy' ? '매집 중' : '이탈 중'}
+                        </p>
                     </div>
-                    <div class="grid">
-                        <div class="grid-item">PER ${p.finance.per}배<br><small>${p.perText}</small></div>
-                        <div class="grid-item">PBR ${p.finance.pbr}배<br><small>${p.pbrText}</small></div>
+                    <div class="stock-price">
+                        <span class="price-text">${parseInt(s.price).toLocaleString()}원</span>
                     </div>
-                    <p style="font-size:13px; line-height:1.6;">${p.insight}</p>
                 </div>
             `).join('');
-            } catch (e) { alert('분석 실패'); } finally { btn.disabled = false; }
         }
-        function closeSheet() { document.getElementById('overlay').style.display = 'none'; document.getElementById('recSheet').classList.remove('active'); }
-        fetchData();
+
+        async function openAnalysis(jsonStr) {
+            const stk = JSON.parse(decodeURIComponent(jsonStr));
+            const loader = document.getElementById('loading-overlay');
+            loader.style.display = 'flex';
+
+            try {
+                const res = await fetch('/api/portfolio/recommend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stocks: [stk],
+                        amount: '10000000',
+                        mode,
+                        ignoreBudget: true
+                    })
+                });
+                const data = await res.json();
+                const p = data.portfolio[0];
+
+                document.getElementById('modal-title').innerText = `📊 ${stk.name} 분석 보고서`;
+                document.getElementById('modal-content').innerHTML = `
+                    <div class="report-card">
+                        <div class="grid">
+                            <div class="grid-item">
+                                <span class="grid-label">PER (수익성)</span>
+                                <span class="grid-value">${p.finance.per}배</span>
+                                <span class="grid-eval">👉 ${p.perText}</span>
+                            </div>
+                            <div class="grid-item">
+                                <span class="grid-label">PBR (자산가치)</span>
+                                <span class="grid-value">${p.finance.pbr}배</span>
+                                <span class="grid-eval">👉 ${p.pbrText}</span>
+                            </div>
+                        </div>
+                        <div class="insight-box">
+                            💡 AI 인사이트<br/>
+                            <span style="font-weight: 500; font-size: 13px; color: #4E5968;">${p.insight}</span>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('overlay').style.display = 'block';
+                setTimeout(() => document.getElementById('sheet').classList.add('active'), 10);
+            } catch (e) {
+                alert('분석 리포트를 가져오지 못했습니다.');
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        function setMode(m) {
+            mode = m;
+            document.getElementById('buyTab').className = `mode-tab ${m === 'buy' ? 'active buy' : ''}`;
+            document.getElementById('sellTab').className = `mode-tab ${m === 'sell' ? 'active sell' : ''}`;
+            // 테마 컬러 변경
+            document.documentElement.style.setProperty('--theme-color', m === 'buy' ? 'var(--accent-buy)' : 'var(--accent-sell)');
+            fetchData();
+        }
+
+        function setInvestor(inv, el) {
+            investor = inv;
+            document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            fetchData();
+        }
+
+        function closeModal() {
+            document.getElementById('sheet').classList.remove('active');
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 300);
+        }
+
+        init();
     </script>
 </body>
 
