@@ -23,7 +23,7 @@ async function checkRealFact() {
         console.log(`Testing History for First Candidate: ${candidates[0].hts_kor_isnm} (${testCode})`);
 
         const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-            headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012200', custtype: 'P' },
+            headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
             params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: testCode }
         });
 

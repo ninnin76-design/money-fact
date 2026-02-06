@@ -16,12 +16,12 @@ import {
 import axios from 'axios';
 
 const { width } = Dimensions.get('window');
-const API_BASE = 'https://money-fact-server.onrender.com';
+const API_BASE = 'http://192.168.45.7:3000';
 
 function MainApp() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState('buy');
-  const [period, setPeriod] = useState('5');
+  const period = '5'; // Simplified Logic
   const [investor, setInvestor] = useState('0');
   const [stocks, setStocks] = useState([]);
   const [selected, setSelected] = useState(new Set());
@@ -30,63 +30,52 @@ function MainApp() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportData, setReportData] = useState([]);
   const [reportTitle, setReportTitle] = useState('');
+  const [refreshing, setRefreshing] = useState(false); // Added from snippet
+  const [lastUpdate, setLastUpdate] = useState('-'); // Added from snippet
 
   const formatNumber = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const unformatNumber = (s) => s.replace(/,/g, '');
 
-  const fetchData = useCallback(async () => {
+  const fetchMarketData = useCallback(async () => { // Renamed from fetchData
+    console.log('[App] fetchMarketData started');
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/api/analysis/supply/${period}/${investor}?mode=${mode}`);
+      console.log(`[App] Requesting: ${API_BASE}/api/analysis/supply/${period}/${investor}?mode=${mode}`);
+      const res = await axios.get(`${API_BASE}/api/analysis/supply/${period}/${investor}?mode=${mode}`, {
+        timeout: 10000 // 10초 타임아웃
+      });
+      console.log('[App] Response received:', res.data?.output?.length);
       setStocks(res.data.output || []);
+      setLastUpdate(res.data.updateTime ? new Date(res.data.updateTime).toLocaleTimeString() : '-'); // Added from snippet
     } catch (e) {
-      console.error(e);
-      // Don't alert on initial load to avoid freezing if network is slow
+      console.error('[App] Fetch error:', e);
+      Alert.alert('통신 오류', `데이터를 불러오지 못했습니다.\n${e.message}`);
     } finally {
       setLoading(false);
+      setRefreshing(false); // Added from snippet
     }
-  }, [mode, period, investor]);
+  }, [mode, investor]); // Removed period dependency
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchMarketData();
+    const interval = setInterval(fetchMarketData, 5 * 60 * 1000); // 5 min
+    return () => clearInterval(interval);
+  }, [mode, investor]); // Removed period dependency
 
-  const toggleStock = (code) => {
-    const next = new Set(selected);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    setSelected(next);
-  };
-
-  const handleRecommend = async () => {
-    const budget = parseInt(unformatNumber(seedMoney)) || 0;
-    const affordable = stocks.filter(s => parseInt(s.price) <= budget);
-    if (affordable.length === 0) {
-      Alert.alert('알림', '현재 자산으로 매수 가능한 종목이 없습니다.');
-      return;
-    }
-    const top3 = [...affordable].sort((a, b) => b.streak - a.streak).slice(0, 3);
-    const codes = new Set(top3.map(s => s.code));
-    setSelected(codes);
-    runAnalysis("✨ 자산 최적화 AI 추천 리포트", false, top3);
-  };
-
-  const runAnalysis = async (title, isPure = true, targetStocks = null) => {
-    const finalTargets = targetStocks || stocks.filter(s => selected.has(s.code));
-    if (finalTargets.length === 0) return;
-
+  const runAnalysis = async (stk) => {
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/api/portfolio/recommend`, {
-        stocks: finalTargets,
-        amount: unformatNumber(seedMoney),
+        stocks: [stk],
+        amount: '10000000', // Default internally
         mode,
-        ignoreBudget: isPure
-      });
+        ignoreBudget: true
+      }, { timeout: 15000 });
       setReportData(res.data.portfolio);
-      setReportTitle(title || "📊 전문가 심층 리서치 보고서");
+      setReportTitle(`📊 ${stk.name} 심층 분석 보고서`);
       setReportVisible(true);
     } catch (e) {
+      console.error('[App] Analysis error:', e);
       Alert.alert('분석 실패', '서버 통신 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -128,32 +117,10 @@ function MainApp() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.stickySection}>
-          {mode === 'buy' && (
-            <View style={styles.walletCard}>
-              <Text style={styles.walletLabel}>운용 자산 규모 (₩)</Text>
-              <View style={styles.inputGroup}>
-                <TextInput
-                  style={styles.moneyInput}
-                  value={seedMoney}
-                  keyboardType="numeric"
-                  onFocus={() => setSeedMoney('')}
-                  onChangeText={(t) => {
-                    const clean = t.replace(/[^0-9]/g, '');
-                    setSeedMoney(clean === '' ? '' : formatNumber(clean));
-                  }}
-                  onBlur={() => { if (seedMoney === '') setSeedMoney('1,000,000') }}
-                />
-                <TouchableOpacity style={styles.btnMagic} onPress={handleRecommend}>
-                  <Wand2 size={16} color="#fff" />
-                  <Text style={styles.btnMagicText}>AI 추천</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {['0', '4', '2', '1', '5'].map((v, i) => {
-              const labels = ['전체 주체', '연기금', '외국인', '기관 합계', '투신'];
+            {['0', '2', '1'].map((v, i) => {
+              const labels = ['전체 주체', '외국인', '기관 합계'];
               return (
                 <TouchableOpacity
                   key={v}
@@ -166,17 +133,7 @@ function MainApp() {
             })}
           </ScrollView>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {['5', '10', '20', '30'].map((v) => (
-              <TouchableOpacity
-                key={v}
-                style={[styles.chip, period === v && styles.chipActive]}
-                onPress={() => setPeriod(v)}
-              >
-                <Text style={[styles.chipText, period === v && styles.chipTextActive]}>{v}일 연속</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+
         </View>
 
         <View style={styles.listContainer}>
@@ -185,26 +142,27 @@ function MainApp() {
             <Text style={styles.statusText}>{loading ? '데이터 스캔 중...' : '✅ 실시간 수급 데이터 동기화 완료'}</Text>
           </View>
 
+          {!loading && stocks.length === 0 && (
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ fontSize: 14, color: '#888' }}>해당 조건의 종목이 없습니다.</Text>
+            </View>
+          )}
+
           {stocks.map((item) => {
-            const isSelected = selected.has(item.code);
             return (
               <TouchableOpacity
                 key={item.code}
-                style={[styles.stockCard, isSelected && styles.stockCardSelected]}
-                onPress={() => toggleStock(item.code)}
+                style={styles.stockCard}
+                onPress={() => runAnalysis(item)}
               >
-                <View style={[styles.checkBox, isSelected && styles.checkBoxActive]}>
-                  {isSelected && <CheckCircle2 size={14} color="#fff" />}
-                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.stockName}>{item.name}</Text>
-                  <Text style={styles.stockStreak}>{item.streak}일 연속 {mode === 'buy' ? '매집' : '이탈'}</Text>
+                  <Text style={styles.stockStreak}>
+                    {item.streak}일 연속 {mode === 'buy' ? '매집' : '이탈'}
+                  </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.stockPrice}>{parseInt(item.price).toLocaleString()}원</Text>
-                  <Text style={[styles.stockRate, { color: parseFloat(item.rate) > 0 ? '#F04452' : '#3182F6' }]}>
-                    {item.rate}%
-                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -213,14 +171,7 @@ function MainApp() {
         </View>
       </ScrollView>
 
-      {selected.size > 0 && (
-        <View style={styles.fabContainer}>
-          <TouchableOpacity style={styles.fab} onPress={() => runAnalysis()}>
-            <ClipboardList size={20} color="#fff" />
-            <Text style={styles.fabText}>심층 리서치 보고서 ({selected.size})</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
 
       <Modal visible={reportVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -251,7 +202,12 @@ function MainApp() {
         </View>
       </Modal>
 
-      {loading && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#3182F6" /></View>}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#3182F6" />
+          <Text style={{ marginTop: 10, fontWeight: 'bold', color: '#555' }}>데이터 분석 중...</Text>
+        </View>
+      )}
     </View>
   );
 }
