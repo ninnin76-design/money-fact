@@ -248,5 +248,7 @@ app.post('/api/portfolio/recommend', async (req, res) => {
     res.json({ portfolio: detailedPortfolio });
 });
 
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../index.html')));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Deep Scan Server Online on port ${PORT}`));
