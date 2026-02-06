@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../')));
+app.use(express.static(path.join(__dirname, './')));
 
 const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443';
 const APP_KEY = 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
@@ -248,8 +248,8 @@ app.post('/api/portfolio/recommend', async (req, res) => {
     res.json({ portfolio: detailedPortfolio });
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../index.html')));
-app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, '../money_fact_manual.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
+app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Deep Scan Server Online on port ${PORT}`));

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Fact - 사용 설명서</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3182F6;
+            --secondary: #1A212E;
+            --buy: #3182F6;
+            --sell: #F04452;
+            --text-dark: #191F28;
+            --text-gray: #4E5968;
+            --bg-light: #F9FAFB;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', sans-serif;
+            word-break: keep-all;
+        }
+
+        body {
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            line-height: 1.6;
+            padding-bottom: 100px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+        }
+
+        header {
+            background: var(--secondary);
+            color: #fff;
+            padding: 60px 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 42px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            letter-spacing: -1.5px;
+        }
+
+        header p {
+            font-size: 18px;
+            opacity: 0.8;
+            font-weight: 500;
+        }
+
+        .hero-img {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+            display: block;
+        }
+
+        section {
+            padding: 50px 40px;
+            border-bottom: 1px solid #F2F4F6;
+        }
+
+        h2 {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 30px;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 26px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: #F9FAFB;
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid #E5E8EB;
+        }
+
+        .feature-card h3 {
+            font-size: 19px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .accent-buy {
+            color: var(--buy);
+        }
+
+        .accent-sell {
+            color: var(--sell);
+        }
+
+        .desc-list {
+            list-style: none;
+        }
+
+        .desc-list li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 12px;
+            font-size: 15px;
+            color: var(--text-gray);
+            font-weight: 500;
+        }
+
+        .desc-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .ai-box {
+            background: linear-gradient(135deg, #EBF4FF 0%, #F0F7FF 100%);
+            padding: 30px;
+            border-radius: 24px;
+            border: 1px solid #D1E5FF;
+        }
+
+        .tip-box {
+            background: #FFF9E6;
+            padding: 20px;
+            border-radius: 16px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #856404;
+            font-weight: 600;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 600px) {
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 32px;
+            }
+
+            section {
+                padding: 40px 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Money Fact</h1>
+            <p>프리미엄 AI 수급 분석 솔루션</p>
+        </header>
+
+        <img src="money_fact_manual_hero.png" alt="Money Fact Hero" class="hero-img">
+
+        <section>
+            <h2>화면 구성 가이드</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3 class="accent-buy">📈 수급 기회 (BUY)</h3>
+                    <p class="desc-list">
+                        <li>큰 손들이 연속 매수 중인 상승 유망주 포착</li>
+                        <li>기관과 외국인의 수급이 동시에 몰리는 종목 선별</li>
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <h3 class="accent-sell">📉 위험 감지 (SELL)</h3>
+                    <p class="desc-list">
+                        <li>큰 손들이 이탈을 시작한 위험 종목 감지</li>
+                        <li>단기 급락 가능성이 높은 수급 약화 종목 선별</li>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>종목 리스트 읽는 법</h2>
+            <div class="feature-card" style="width: 100%;">
+                <ul class="desc-list">
+                    <li><strong>연속 일수:</strong> 3일 이상 수급량이 몰린 일수 (전략적 중요도 높음)</li>
+                    <li><strong>매집 주체:</strong> 외국인, 기관 합계로 필터링하여 특정 주체의 의도 파악
+                        <div
+                            style="font-size: 13px; color: #8B95A1; margin-top: 8px; background: #f1f3f5; padding: 10px; border-radius: 8px;">
+                            <strong>※ 기관 합계 구성:</strong> 금융투자(증권), 투신(운용사), 보험, 은행, 연기금, 사모펀드 등 모든 국내 기관 투자자의 합산 데이터입니다.
+                        </div>
+                    </li>
+                    <li><strong>현재가:</strong> 장중 실시간 가격 정보 제공</li>
+                </ul>
+                <div class="tip-box">
+                    💡 팁: 연속 매집 일수가 5일 이상인 종목은 강력한 추세 전환 신호일 확률이 높습니다!
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>AI 심층 리서치 활용</h2>
+            <div class="ai-box">
+                <h3 style="font-size: 20px; color: var(--primary); margin-bottom: 15px;">🔍 종목 상세 터치 한 번으로 분석 완료!</h3>
+                <p style="margin-bottom: 20px; font-weight: 500; color: #334B6E;">리스트에서 종목을 클릭하면 즉시 AI 전문가가 작성한 보고서가
+                    나타납니다.</p>
+                <div class="feature-grid">
+                    <div>
+                        <strong style="font-size: 14px; color: var(--text-dark);">📊 재무 건전성 분석</strong>
+                        <p style="font-size: 13px; color: var(--text-gray); margin-top: 5px;">PER, PBR 등 핵심 지표를 바탕으로
+                            현재가가 싼지 비싼지 즉시 판단합니다.</p>
+                    </div>
+                    <div>
+                        <strong style="font-size: 14px; color: var(--text-dark);">💡 AI 리서치 인사이트</strong>
+                        <p style="font-size: 13px; color: var(--text-gray); margin-top: 5px;">수급의 질과 재무 상태를 결합하여 전문적인 투자
+                            의견을 제시합니다.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px dashed #D1E5FF;">
+                    <strong style="font-size: 15px; color: var(--secondary); display: block; margin-bottom: 10px;">🛡️
+                        투자 용어 쉽게 이해하기</strong>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="font-size: 13px; color: var(--text-gray); line-height: 1.5;">
+                            <strong>• PER (주가수익비율):</strong> "회사가 <strong>버는 돈</strong>에 비해 주가가 싼가?"를 보여줍니다. 낮을수록 저평가된
+                            것입니다.
+                        </div>
+                        <div style="font-size: 13px; color: var(--text-gray); line-height: 1.5;">
+                            <strong>• PBR (주가순자산비율):</strong> "회사가 <strong>가진 재산</strong>에 비해 주가가 싼가?"를 보여줍니다. 1보다 작으면
+                            재산보다 주가가 싼 알짜 회사입니다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>데이터 동기화 안내</h2>
+            <ul class="desc-list">
+                <li><strong>장중 실시간:</strong> 평일 오전 8시 ~ 오후 8시 사이 15분 단위 자동 갱신</li>
+                <li><strong>장 마감 이후:</strong> 오후 8시 최종 데이터를 다음 날 아침까지 유지</li>
+                <li><strong>주말/휴일:</strong> 최근 거래일의 마감 데이터를 바탕으로 정밀 리서치 가능</li>
+            </ul>
+        </section>
+
+        <div class="footer">
+            &copy; 2026 Money Fact - AI Financial Lab. All rights reserved.
+        </div>
+    </div>
+
+</body>
+
+</html>
