@@ -47,7 +47,7 @@ async function getAccessToken() {
     } catch (e) { return cachedToken; }
 }
 
-async function runDeepMarketScan() {
+async function runDeepMarketScan(force = false) {
     const now = new Date();
     const hour = now.getHours();
     const day = now.getDay(); // 0=Sun, 6=Sat
@@ -56,10 +56,10 @@ async function runDeepMarketScan() {
     const isWeekend = (day === 0 || day === 6);
     const isMarketOpen = (hour >= 8 && hour < 20) && !isWeekend;
 
-    if (!isMarketOpen) {
+    if (!isMarketOpen && !force) {
         console.log(`[Worker] Market Closed (${now.toLocaleTimeString()}). Serving cached data.`);
         marketAnalysisReport.dataType = 'MARKET_CLOSE';
-        return; // Skip fetching, just serve cached snapshot
+        return; // Skip fetching, unless forced
     }
 
     const currentType = 'LIVE';
@@ -198,7 +198,7 @@ async function runDeepMarketScan() {
     } catch (e) { console.error("Worker Error", e.message); }
 }
 
-runDeepMarketScan();
+runDeepMarketScan(true);
 setInterval(runDeepMarketScan, 15 * 60 * 1000);
 
 app.get('/api/analysis/supply/:period/:investor', (req, res) => {
