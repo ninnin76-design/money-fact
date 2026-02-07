@@ -107,13 +107,18 @@ async function runDeepMarketScan(force = false) {
         const candidates = Array.from(candidateMap.values());
         console.log(`[Worker] Deep Scan Targets: ${candidates.length} unique from (Rank:${raw1.length}, KOSPI:${raw2.length}, KOSDAQ:${raw3.length})`);
 
-        if (candidates.length === 0) return;
+        if (candidates.length === 0) {
+            console.log("[Worker] No candidates found from initial ranking.");
+            return;
+        }
 
         const historyData = new Map();
         let hits = 0;
 
         // Scan ALL candidates (Increased up to 200)
         const fullList = candidates.slice(0, 200);
+        console.log(`[Worker] Starting detail scan for ${fullList.length} items...`);
+
         for (let i = 0; i < fullList.length; i += 10) {
             const chunk = fullList.slice(i, i + 10);
             await Promise.all(chunk.map(async (stk) => {
@@ -123,7 +128,7 @@ async function runDeepMarketScan(force = false) {
                         params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
                     });
                     const daily = invRes.data.output || [];
-                    if (daily.length > 5) {
+                    if (daily.length > 0) { // Changed > 5 to > 0 to see any data
                         hits++;
                         const currentPrice = daily[0].stck_clpr;
                         const currentRate = daily[0].prdy_ctrt;
@@ -137,7 +142,12 @@ async function runDeepMarketScan(force = false) {
             if (i % 50 === 0) console.log(`[Worker] Progress: ${i}/${fullList.length}`);
         }
 
-        if (hits === 0) return;
+        console.log(`[Worker] Detail scan complete. Success hits: ${hits}`);
+
+        if (hits === 0) {
+            console.log("[Worker] No detail data retrieved. Using cache if available.");
+            return;
+        }
 
         const newBuyData = {}, newSellData = {};
         const investors = ['0', '2', '1'];
