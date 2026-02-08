@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
   TextInput, Modal, StatusBar,
-  ActivityIndicator, Dimensions, Alert, ImageBackground, Platform, Switch, LogBox
+  ActivityIndicator, Dimensions, Alert, ImageBackground, Platform, Switch, LogBox,
+  KeyboardAvoidingView
 } from 'react-native';
 
 // Ignore specific Expo Go warnings
@@ -496,47 +497,52 @@ function MainApp() {
 
       {/* Search Modal */}
       <Modal visible={searchVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.searchSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>종목 검색</Text>
-              <TouchableOpacity onPress={() => { setSearchVisible(false); setSearchKeyword(''); setSearchResults([]); }}>
-                <X size={24} color="#191F28" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.searchInputContainer}>
-              <Search size={18} color="#888" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="종목명 또는 코드 입력"
-                placeholderTextColor="#aaa"
-                value={searchKeyword}
-                onChangeText={searchStock}
-                autoFocus={true}
-              />
-            </View>
-            <ScrollView style={{ maxHeight: 400 }} keyboardShouldPersistTaps="handled">
-              {searchResults.map((item) => (
-                <View key={item.code} style={styles.searchResultItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.searchResultName}>{item.name}</Text>
-                    <Text style={styles.searchResultCode}>{item.code}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.searchSheet}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>종목 검색</Text>
+                <TouchableOpacity onPress={() => { setSearchVisible(false); setSearchKeyword(''); setSearchResults([]); }}>
+                  <X size={24} color="#191F28" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.searchInputContainer}>
+                <Search size={18} color="#888" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="종목명 또는 코드 입력"
+                  placeholderTextColor="#aaa"
+                  value={searchKeyword}
+                  onChangeText={searchStock}
+                  autoFocus={true}
+                />
+              </View>
+              <ScrollView style={{ maxHeight: 400 }} keyboardShouldPersistTaps="handled">
+                {searchResults.map((item) => (
+                  <View key={item.code} style={styles.searchResultItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.searchResultName}>{item.name}</Text>
+                      <Text style={styles.searchResultCode}>{item.code}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => addStock(item)}
+                      style={{ padding: 10 }}
+                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                    >
+                      <Plus size={20} color="#3182F6" />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => addStock(item)}
-                    style={{ padding: 10 }}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  >
-                    <Plus size={20} color="#3182F6" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {searchKeyword.length > 0 && searchResults.length === 0 && (
-                <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>검색 결과가 없습니다.</Text>
-              )}
-            </ScrollView>
+                ))}
+                {searchKeyword.length > 0 && searchResults.length === 0 && (
+                  <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>검색 결과가 없습니다.</Text>
+                )}
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Report Modal */}
