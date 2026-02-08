@@ -218,7 +218,92 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
     res.json({ output: data || [], updateTime: marketAnalysisReport.updateTime, dataType: marketAnalysisReport.dataType });
 });
 
+const POPULAR_STOCKS = require('./popular_stocks');
+
+// Helper: Calculate Streak
+function analyzeStreak(daily, inv) {
+    let buyStreak = 0, sellStreak = 0;
+    for (let j = 0; j < daily.length; j++) {
+        const d = daily[j];
+        let net = 0;
+        if (inv === '0') net = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
+        else if (inv === '2') net = parseInt(d.frgn_ntby_qty);
+        else if (inv === '1') net = parseInt(d.orgn_ntby_qty);
+
+        if (net > 0) {
+            buyStreak++;
+            if (sellStreak > 0) break;
+        } else if (net < 0) {
+            sellStreak++;
+            if (buyStreak > 0) break;
+        } else {
+            break;
+        }
+    }
+    return { buyStreak, sellStreak };
+}
+
+app.get('/api/search', (req, res) => {
+    const keyword = req.query.keyword || '';
+    if (!keyword || keyword.length < 1) return res.json({ result: [] });
+
+    // Simple Hangul Search
+    const results = POPULAR_STOCKS.filter(s => s.name.includes(keyword) || s.code.includes(keyword));
+    res.json({ result: results.slice(0, 20) }); // Limit 20
+});
+
+app.post('/api/my-portfolio/analyze', async (req, res) => {
+    const { codes } = req.body; // Array of codes
+    if (!codes || !Array.isArray(codes) || codes.length === 0) return res.json({ result: [] });
+
+    const token = await getAccessToken();
+    const analyzed = await Promise.all(codes.map(async (code) => {
+        try {
+            // Find name from popular list or use code
+            const meta = POPULAR_STOCKS.find(s => s.code === code) || { name: code, code };
+
+            const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+                params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: code }
+            });
+            const daily = invRes.data.output || [];
+
+            if (daily.length === 0) return null;
+
+            const currentPrice = daily[0].stck_clpr;
+            const currentRate = daily[0].prdy_ctrt;
+
+            // Analyse Streaks for Foreigner(2) and Inst(1)
+            const foreign = analyzeStreak(daily, '2');
+            const inst = analyzeStreak(daily, '1');
+            const total = analyzeStreak(daily, '0'); // Sum
+
+            // Check Warning Condition: 3+ days SELL by Foreign or Inst or Total
+            const isDanger = (foreign.sellStreak >= 3 || inst.sellStreak >= 3 || total.sellStreak >= 3);
+            const isOpportunity = (foreign.buyStreak >= 3 || inst.buyStreak >= 3 || total.buyStreak >= 3);
+
+            return {
+                code,
+                name: meta.name,
+                price: currentPrice,
+                rate: currentRate,
+                analysis: {
+                    foreigner: { buy: foreign.buyStreak, sell: foreign.sellStreak },
+                    institution: { buy: inst.buyStreak, sell: inst.sellStreak },
+                    total: { buy: total.buyStreak, sell: total.sellStreak }
+                },
+                isDanger,
+                isOpportunity
+            };
+        } catch (e) { return null; }
+    }));
+
+    res.json({ result: analyzed.filter(x => x !== null) });
+});
+
+// Reuse existing Portfolio Recommend Endpoint
 app.post('/api/portfolio/recommend', async (req, res) => {
+    // ... existing content ...
     const { stocks, amount, mode, ignoreBudget } = req.body;
     const token = await getAccessToken();
     const isBuy = mode === 'buy';
