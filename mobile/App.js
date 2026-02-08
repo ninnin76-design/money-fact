@@ -2,8 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
   TextInput, Modal, StatusBar,
-  ActivityIndicator, Dimensions, Alert, ImageBackground, Platform
+  ActivityIndicator, Dimensions, Alert, ImageBackground, Platform, Switch, LogBox
 } from 'react-native';
+
+// Ignore specific Expo Go warnings
+LogBox.ignoreLogs(['expo-notifications', 'New Architecture', 'AxiosError', 'Network Error']);
 import {
   SafeAreaProvider,
   SafeAreaView,
@@ -11,14 +14,78 @@ import {
 } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Wand2,
-  CheckCircle2, X, ClipboardList, Search, Plus, Trash2, Star, AlertTriangle
+  CheckCircle2, X, ClipboardList, Search, Plus, Trash2, Star, AlertTriangle, Bell, BellOff
 } from 'lucide-react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+import * as Notifications from 'expo-notifications';
 
 const { width } = Dimensions.get('window');
 const API_BASE = 'https://money-fact-server.onrender.com';
 const MY_STOCKS_KEY = '@my_stocks';
+const BACKGROUND_TASK_NAME = 'BACKGROUND_STOCK_CHECK';
+
+// 1. Notification Configuration
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+const NOTIF_HISTORY_KEY = '@notif_history';
+
+// 2. Background Task Definition
+TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
+  try {
+    const saved = await AsyncStorage.getItem(MY_STOCKS_KEY);
+    if (!saved) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+    const myStocks = JSON.parse(saved);
+    if (myStocks.length === 0) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+    const codes = myStocks.map(s => s.code);
+    const res = await axios.post(`${API_BASE}/api/my-portfolio/analyze`, { codes }, { timeout: 20000 });
+    const result = res.data.result || [];
+
+    const dangerStocks = result.filter(s => s.isDanger);
+    if (dangerStocks.length === 0) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+    // --- Daily Notification Throttling Logic ---
+    const today = new Date().toISOString().split('T')[0]; // "2024-05-20"
+    const historyRaw = await AsyncStorage.getItem(NOTIF_HISTORY_KEY);
+    let history = historyRaw ? JSON.parse(historyRaw) : {};
+
+    // Notify only if not notified today
+    const stocksToNotify = dangerStocks.filter(s => history[s.code] !== today);
+
+    if (stocksToNotify.length > 0) {
+      const names = stocksToNotify.map(s => s.name).join(', ');
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "⚠️ Money Fact 위험 감지!",
+          body: `${names} 종목에서 외인/기관의 강한 이탈이 포착되었습니다! 내용을 확인하세요.`,
+          data: { screen: 'my' },
+        },
+        trigger: null,
+      });
+
+      // Update history
+      stocksToNotify.forEach(s => { history[s.code] = today; });
+      await AsyncStorage.setItem(NOTIF_HISTORY_KEY, JSON.stringify(history));
+
+      return BackgroundFetch.BackgroundFetchResult.NewData;
+    }
+
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  } catch (error) {
+    console.error("[Background] Task Error:", error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
 
 function MainApp() {
   const insets = useSafeAreaInsets();
@@ -39,12 +106,58 @@ function MainApp() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [dangerAlert, setDangerAlert] = useState(null); // 위험 알림
+  const [dangerAlert, setDangerAlert] = useState(null); // 위험 알림 정의 복구
 
-  // Load MyStocks from AsyncStorage on mount
+  // Notifications state
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(true);
+  const NOTIF_STORAGE_KEY = '@notif_enabled';
+
+  // Load Everything on mount
   useEffect(() => {
-    loadMyStocks();
+    const init = async () => {
+      await loadMyStocks();
+      const savedNotif = await AsyncStorage.getItem(NOTIF_STORAGE_KEY);
+      const enabled = savedNotif !== null ? JSON.parse(savedNotif) : true;
+      setIsNotificationEnabled(enabled);
+      setupBackgroundTasks(enabled);
+    };
+    init();
   }, []);
+
+  const toggleNotification = async (val) => {
+    setIsNotificationEnabled(val);
+    await AsyncStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(val));
+    setupBackgroundTasks(val);
+  };
+
+  const setupBackgroundTasks = async (enabled) => {
+    if (!enabled) {
+      try {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TASK_NAME);
+        console.log("[App] Background task UNREGISTERED");
+      } catch (e) { }
+      return;
+    }
+
+    // Permission for notifications
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Notification permission NOT granted');
+      return;
+    }
+
+    // Register Background Fetch
+    try {
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
+        minimumInterval: 15 * 60, // 15 minutes
+        stopOnTerminate: false, // Continue after app closes
+        startOnBoot: true, // Auto start on phone boot
+      });
+      console.log("[App] Background task registered successfully");
+    } catch (err) {
+      console.log("[App] Background registration failed:", err);
+    }
+  };
 
   // Analyze MyStocks when mode is 'my' or on initial load
   useEffect(() => {
@@ -110,10 +223,15 @@ function MainApp() {
       const result = res.data.result || [];
       setMyAnalysis(result);
 
-      // Check for danger stocks and set alert
-      const dangerStocks = result.filter(s => s.isDanger);
-      if (dangerStocks.length > 0) {
-        setDangerAlert(`⚠️ ${dangerStocks.map(s => s.name).join(', ')} 종목에서 기관/외인 이탈이 감지되었습니다!`);
+      // Check for danger stocks and set detailed alert
+      const alerts = [];
+      result.forEach(s => {
+        const a = s.analysis;
+        if (a.foreigner.sell >= 3) alerts.push(`${s.name} 외인 이탈 ${a.foreigner.sell}일`);
+        if (a.institution.sell >= 3) alerts.push(`${s.name} 기관 이탈 ${a.institution.sell}일`);
+      });
+      if (alerts.length > 0) {
+        setDangerAlert(`⚠️ ${alerts.join(', ')}`);
       } else {
         setDangerAlert(null);
       }
@@ -252,6 +370,27 @@ function MainApp() {
             </Text>
           </View>
 
+          {/* MY Mode: Notification Settings Toggle */}
+          {mode === 'my' && (
+            <View style={styles.notifSettingCard}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {isNotificationEnabled ? <Bell size={20} color="#6227FF" /> : <BellOff size={20} color="#888" />}
+                <View>
+                  <Text style={styles.notifLabel}>실시간 위험 감지 알림</Text>
+                  <Text style={styles.notifSubLabel}>
+                    {isNotificationEnabled ? '15분마다 수급 이탈을 감시합니다' : '알림이 꺼져 있습니다'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isNotificationEnabled}
+                onValueChange={toggleNotification}
+                trackColor={{ false: '#D1D1D6', true: '#6227FF' }}
+                thumbColor={Platform.OS === 'ios' ? '#fff' : isNotificationEnabled ? '#fff' : '#f4f3f4'}
+              />
+            </View>
+          )}
+
           {/* MY Mode: Add Stock Button */}
           {mode === 'my' && (
             <TouchableOpacity style={styles.addStockBtn} onPress={() => setSearchVisible(true)}>
@@ -295,36 +434,57 @@ function MainApp() {
           {/* MY Mode Stock List */}
           {mode === 'my' && myStocks.map((item) => {
             const analysis = getAnalysisForStock(item.code);
+            const a = analysis?.analysis; // { foreigner: {buy, sell}, institution: {buy, sell} }
             return (
               <TouchableOpacity
                 key={item.code}
-                style={[styles.stockCard, analysis?.isDanger && styles.stockCardDanger]}
+                style={[styles.stockCard, styles.stockCardMy, analysis?.isDanger && styles.stockCardDanger]}
                 onPress={() => runAnalysis({ ...item, price: analysis?.price || '0' })}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stockName}>{item.name}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.stockName}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => removeStock(item.code)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Trash2 size={16} color="#F04452" />
+                    </TouchableOpacity>
+                  </View>
                   {analysis && (
-                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                      {analysis.isDanger && (
-                        <View style={styles.dangerBadge}>
-                          <Text style={styles.dangerBadgeText}>⚠️ 기관/외인 이탈</Text>
+                    <Text style={styles.stockPriceMy}>{parseInt(analysis.price).toLocaleString()}원</Text>
+                  )}
+                  {a && (
+                    <View style={styles.badgeGrid}>
+                      {/* 외국인 수급 */}
+                      {a.foreigner.buy >= 3 && (
+                        <View style={styles.badgeBuy}>
+                          <Text style={styles.badgeBuyText}>💰 외인 수급 {a.foreigner.buy}일</Text>
                         </View>
                       )}
-                      {analysis.isOpportunity && !analysis.isDanger && (
-                        <View style={styles.opportunityBadge}>
-                          <Text style={styles.opportunityBadgeText}>💰 수급 유입</Text>
+                      {/* 외국인 이탈 */}
+                      {a.foreigner.sell >= 3 && (
+                        <View style={styles.badgeSell}>
+                          <Text style={styles.badgeSellText}>⚠️ 외인 이탈 {a.foreigner.sell}일</Text>
+                        </View>
+                      )}
+                      {/* 기관 수급 */}
+                      {a.institution.buy >= 3 && (
+                        <View style={styles.badgeBuy}>
+                          <Text style={styles.badgeBuyText}>💰 기관 수급 {a.institution.buy}일</Text>
+                        </View>
+                      )}
+                      {/* 기관 이탈 */}
+                      {a.institution.sell >= 3 && (
+                        <View style={styles.badgeSell}>
+                          <Text style={styles.badgeSellText}>⚠️ 기관 이탈 {a.institution.sell}일</Text>
+                        </View>
+                      )}
+                      {/* 아무 신호도 없을 때 */}
+                      {a.foreigner.buy < 3 && a.foreigner.sell < 3 && a.institution.buy < 3 && a.institution.sell < 3 && (
+                        <View style={styles.badgeNeutral}>
+                          <Text style={styles.badgeNeutralText}>특이 신호 없음</Text>
                         </View>
                       )}
                     </View>
                   )}
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  {analysis && (
-                    <Text style={styles.stockPrice}>{parseInt(analysis.price).toLocaleString()}원</Text>
-                  )}
-                  <TouchableOpacity onPress={() => removeStock(item.code)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Trash2 size={18} color="#F04452" />
-                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
@@ -476,5 +636,19 @@ const styles = StyleSheet.create({
   insightLabel: { fontSize: 11, fontWeight: '900', color: '#3182F6', marginBottom: 6 },
   insightText: { fontSize: 13, color: '#313131', lineHeight: 19 },
   modalCloseBtn: { backgroundColor: '#3182F6', padding: 20, borderRadius: 20, marginTop: 10, alignItems: 'center' },
-  modalCloseBtnText: { color: '#fff', fontWeight: '900', fontSize: 17 }
+  modalCloseBtnText: { color: '#fff', fontWeight: '900', fontSize: 17 },
+  // MY Tab Styles
+  stockCardMy: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
+  stockPriceMy: { fontSize: 14, fontWeight: '700', color: '#4E5968', marginTop: 4 },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  badgeBuy: { backgroundColor: '#EBF4FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  badgeBuyText: { fontSize: 11, fontWeight: '800', color: '#3182F6' },
+  badgeSell: { backgroundColor: '#FFF0F0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  badgeSellText: { fontSize: 11, fontWeight: '800', color: '#F04452' },
+  badgeNeutral: { backgroundColor: '#F2F4F6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  badgeNeutralText: { fontSize: 11, fontWeight: '700', color: '#888' },
+  // Notification Toggle Styles
+  notifSettingCard: { backgroundColor: '#fff', padding: 16, borderRadius: 20, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F2F4F6' },
+  notifLabel: { fontSize: 14, fontWeight: '800', color: '#191F28' },
+  notifSubLabel: { fontSize: 11, fontWeight: '600', color: '#888', marginTop: 2 }
 });
