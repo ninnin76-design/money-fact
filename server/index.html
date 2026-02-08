@@ -50,8 +50,10 @@
         /* Hero Banner */
         .hero-banner {
             width: 100%;
-            height: 60px;
-            background: linear-gradient(135deg, #3182F6 0%, #6227FF 100%);
+            height: 120px;
+            background-image: url('/banner.png');
+            background-size: cover;
+            background-position: center;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -59,10 +61,7 @@
         }
 
         .hero-text {
-            color: #FFFFFF;
-            font-size: 22px;
-            font-weight: 900;
-            letter-spacing: -1px;
+            display: none;
         }
 
         /* Mode Tabs */
@@ -470,9 +469,7 @@
 
 <body>
     <div id="app-container">
-        <div class="hero-banner">
-            <div class="hero-text">💰 Money Fact</div>
-        </div>
+        <div class="hero-banner"></div>
 
         <div class="mode-tabs">
             <button class="mode-tab active buy" id="buyTab" onclick="setMode('buy')">📈 수급 기회</button>
