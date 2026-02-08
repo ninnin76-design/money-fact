@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.eunhee.moneyfact"
+      "package": "com.eunhee.moneyfact",
+      "kotlinVersion": "2.0.21"
     },
     "web": {
       "favicon": "./assets/favicon.png"
