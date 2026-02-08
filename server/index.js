@@ -218,7 +218,10 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
     res.json({ output: data || [], updateTime: marketAnalysisReport.updateTime, dataType: marketAnalysisReport.dataType });
 });
 
-const POPULAR_STOCKS = require('./popular_stocks');
+const ALL_STOCKS = require('./popular_stocks');
+// Deduplicate stocks by code
+const POPULAR_STOCKS = Array.from(new Map(ALL_STOCKS.map(s => [s.code, s])).values());
+console.log(`[Server] Loaded ${POPULAR_STOCKS.length} unique stocks (Deduplicated from ${ALL_STOCKS.length})`);
 
 // Helper: Calculate Streak
 function analyzeStreak(daily, inv) {
@@ -245,10 +248,15 @@ function analyzeStreak(daily, inv) {
 
 app.get('/api/search', (req, res) => {
     const keyword = req.query.keyword || '';
+    console.log(`[Server] Search Request: "${keyword}"`);
     if (!keyword || keyword.length < 1) return res.json({ result: [] });
 
-    // Simple Hangul Search
-    const results = POPULAR_STOCKS.filter(s => s.name.includes(keyword) || s.code.includes(keyword));
+    // Case-insensitive search
+    const k = keyword.toLowerCase();
+    const results = POPULAR_STOCKS.filter(s =>
+        s.name.toLowerCase().includes(k) || s.code.includes(k)
+    );
+    console.log(`[Server] Search Found: ${results.length} items`);
     res.json({ result: results.slice(0, 20) }); // Limit 20
 });
 

@@ -515,12 +515,21 @@ function MainApp() {
                 autoFocus={true}
               />
             </View>
-            <ScrollView style={{ maxHeight: 400 }}>
+            <ScrollView style={{ maxHeight: 400 }} keyboardShouldPersistTaps="handled">
               {searchResults.map((item) => (
-                <TouchableOpacity key={item.code} style={styles.searchResultItem} onPress={() => addStock(item)}>
-                  <Text style={styles.searchResultName}>{item.name}</Text>
-                  <Text style={styles.searchResultCode}>{item.code}</Text>
-                </TouchableOpacity>
+                <View key={item.code} style={styles.searchResultItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.searchResultName}>{item.name}</Text>
+                    <Text style={styles.searchResultCode}>{item.code}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => addStock(item)}
+                    style={{ padding: 10 }}
+                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                  >
+                    <Plus size={20} color="#3182F6" />
+                  </TouchableOpacity>
+                </View>
               ))}
               {searchKeyword.length > 0 && searchResults.length === 0 && (
                 <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>검색 결과가 없습니다.</Text>
