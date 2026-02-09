@@ -49,17 +49,22 @@ async function getAccessToken() {
 
 async function runDeepMarketScan(force = false) {
     const now = new Date();
-    const hour = now.getHours();
-    const day = now.getDay(); // 0=Sun, 6=Sat
+    // KST calculation (UTC + 9 hours)
+    const kstOffset = 9 * 60 * 60 * 1000;
+    const kstDate = new Date(now.getTime() + kstOffset);
+    const hour = kstDate.getUTCHours();
+    const day = kstDate.getUTCDay(); // 0=Sun, 6=Sat
 
-    // Market Hours: 8 AM - 8 PM, Weekdays only
+    console.log(`[Worker] Server(UTC): ${now.toISOString()}, Target(KST): ${kstDate.toISOString()}, Hour: ${hour}, Day: ${day}`);
+
+    // Market Hours: 8 AM - 8 PM KST, Weekdays only
     const isWeekend = (day === 0 || day === 6);
     const isMarketOpen = (hour >= 8 && hour < 20) && !isWeekend;
 
     if (!isMarketOpen && !force) {
-        console.log(`[Worker] Market Closed (${now.toLocaleTimeString()}). Serving cached data.`);
+        console.log(`[Worker] Market Closed (KST ${hour}:xx). Serving cached data.`);
         marketAnalysisReport.dataType = 'MARKET_CLOSE';
-        return; // Skip fetching, unless forced
+        return;
     }
 
     const currentType = 'LIVE';
