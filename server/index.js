@@ -277,6 +277,41 @@ function analyzeStreak(daily, inv) {
     return { buyStreak, sellStreak };
 }
 
+// --- Cloud Sync for Mobile Data Persistence (File-based) ---
+const SYNC_FILE = './sync_data.json';
+let userStore = {};
+
+if (fs.existsSync(SYNC_FILE)) {
+    try { userStore = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch (e) { }
+}
+
+app.post('/api/sync/save', (req, res) => {
+    const { syncKey, stocks } = req.body;
+    if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
+    userStore[syncKey] = stocks;
+    try {
+        fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+        console.log(`[Sync] Saved data for key: ${syncKey}`);
+        res.json({ status: 'success' });
+    } catch (e) {
+        res.status(500).json({ error: 'File save error' });
+    }
+});
+
+app.get('/api/sync/check', (req, res) => {
+    const { syncKey } = req.query;
+    const exists = !!userStore[syncKey];
+    res.json({ exists });
+});
+
+app.get('/api/sync/load', (req, res) => {
+    const { syncKey } = req.query;
+    const stocks = userStore[syncKey];
+    if (!stocks) return res.status(404).json({ error: 'No data found' });
+    console.log(`[Sync] Loaded data for key: ${syncKey}`);
+    res.json({ stocks });
+});
+
 // Secret Admin Endpoint to Force Scan
 app.get('/api/admin/force-scan', async (req, res) => {
     console.log("[Admin] Force Scan Triggered!");
