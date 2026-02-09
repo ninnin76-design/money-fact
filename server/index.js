@@ -273,6 +273,13 @@ function analyzeStreak(daily, inv) {
     return { buyStreak, sellStreak };
 }
 
+// Secret Admin Endpoint to Force Scan
+app.get('/api/admin/force-scan', async (req, res) => {
+    console.log("[Admin] Force Scan Triggered!");
+    runDeepMarketScan(true); // Fire and forget
+    res.json({ status: 'Scan Started', time: new Date() });
+});
+
 app.get('/api/search', (req, res) => {
     const keyword = req.query.keyword || '';
     console.log(`[Server] Search Request: "${keyword}"`);
