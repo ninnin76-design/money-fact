@@ -35,16 +35,38 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
     } catch (e) { }
 }
 
+const TOKEN_FILE = './real_token_cache.json';
+
 async function getAccessToken() {
-    if (cachedToken && tokenExpiry && new Date() < tokenExpiry) return cachedToken;
+    // 1. Try to read from file first
+    if (fs.existsSync(TOKEN_FILE)) {
+        try {
+            const saved = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+            const expiry = new Date(saved.expiry);
+            if (new Date() < expiry) {
+                // console.log("[Token] Using cached token from file.");
+                return saved.token;
+            }
+        } catch (e) { }
+    }
+
+    // 2. If no valid file, request new token
     try {
+        console.log("[Token] Requesting NEW token from KIS...");
         const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
             grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
         });
-        cachedToken = res.data.access_token;
-        tokenExpiry = new Date(new Date().getTime() + (res.data.expires_in - 3600) * 1000);
-        return cachedToken;
-    } catch (e) { return cachedToken; }
+        const newToken = res.data.access_token;
+        const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 60) * 1000); // Buffer 60s
+
+        // 3. Save to file
+        fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
+        console.log("[Token] New token saved to file.");
+        return newToken;
+    } catch (e) {
+        console.error("[Token] Failed to get token:", e.response?.data || e.message);
+        return null;
+    }
 }
 
 async function runDeepMarketScan(force = false) {
