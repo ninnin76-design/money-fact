@@ -25,11 +25,12 @@ import * as Notifications from 'expo-notifications';
 
 const { width } = Dimensions.get('window');
 
+// --- Notifications Configuration ---
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
@@ -170,15 +171,6 @@ function analyzeStreak(dailyData, type) { // type: '0'=Total, '1'=Inst, '2'=Fore
   return buyStreak > 0 ? buyStreak : -sellStreak; // Positive=Buy, Negative=Sell
 }
 
-// 1. Notification Configuration
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
 const NOTIF_HISTORY_KEY = '@notif_history';
 
 // 2. Background Task Definition
@@ -288,10 +280,11 @@ function MainApp() {
   };
 
   const handleBackup = async () => {
-    if (!syncKey) { Alert.alert('알림', '사용할 키를 입력해주세요.'); return; }
+    const trimmedKey = syncKey.trim();
+    if (!trimmedKey) { Alert.alert('알림', '사용할 키를 입력해주세요.'); return; }
     setIsSyncing(true);
     try {
-      await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey: syncKey, stocks: myStocks });
+      await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey: trimmedKey, stocks: myStocks });
       Alert.alert('성공', '내 종목이 클라우드에 안전하게 보관되었습니다!');
     } catch (e) {
       Alert.alert('실패', '서버 통신 중 오류가 발생했습니다.');
@@ -299,10 +292,11 @@ function MainApp() {
   };
 
   const handleRestore = async () => {
-    if (!syncKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
+    const trimmedKey = syncKey.trim();
+    if (!trimmedKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
     setIsSyncing(true);
     try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
+      const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${trimmedKey}`);
       const restored = res.data.stocks || [];
       if (restored.length > 0) {
         setMyStocks(restored);
@@ -315,9 +309,10 @@ function MainApp() {
   };
 
   const checkSyncKey = async () => {
-    if (!syncKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
+    const trimmedKey = syncKey.trim();
+    if (!trimmedKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
     try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/check?syncKey=${syncKey}`);
+      const res = await axios.get(`${SERVER_URL}/api/sync/check?syncKey=${trimmedKey}`);
       if (res.data.exists) {
         Alert.alert('경고', '이미 사용 중인 키입니다. 키가 중복되니 다른 키를 입력해 주세요.');
       } else {
@@ -443,7 +438,8 @@ function MainApp() {
     setFoundCount(0);
 
     try {
-      // --- 2. SERVER MODE: Try analyzed data from Server first (only for BUY/SELL modes) ---
+      // --- 2. SERVER MODE ---
+      let serverDataSuccess = false;
       if (mode !== 'my' && !force) {
         try {
           console.log(`[App] Requesting Server Analysis (Mode: ${mode}, Inv: ${investor})`);
@@ -451,15 +447,14 @@ function MainApp() {
           if (res.data && res.data.output && res.data.output.length > 0) {
             console.log(`[App] Server data received: ${res.data.output.length} items`);
             setStocks(res.data.output);
-            setLoading(false);
-            return; // DONE!
+            serverDataSuccess = true;
           }
         } catch (serverErr) {
-          console.log('[App] Server not responding or data empty. Falling back to Direct Mode.');
+          console.log('[App] Server fallback to Direct Mode.');
         }
       }
 
-      // --- 3. DIRECT MODE: Manual scan (Fallback or MY mode) ---
+      // --- 3. DIRECT MODE ---
       const token = await getKisToken();
       if (!token) {
         setLoading(false);
@@ -469,7 +464,7 @@ function MainApp() {
       let candidates = [];
       if (mode === 'my') {
         candidates = myStocks;
-      } else {
+      } else if (!serverDataSuccess) {
         const candidateMap = new Map();
         const add = (arr) => arr?.forEach(c => {
           const code = c.stck_shrn_iscd || c.mksc_shrn_iscd;
@@ -478,7 +473,6 @@ function MainApp() {
         });
 
         const fetchRank = async (dateStr = '') => {
-          console.log(`[App] Fetching Rank with Date: ${dateStr || 'Real-time'}`);
           const endpoints = [
             { tid: 'FHPTJ04400000', p: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' } },
             { tid: 'FHPTJ04400000', p: { FID_COND_MRKT_DIV_CODE: 'W', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' } },
@@ -498,21 +492,13 @@ function MainApp() {
 
         const { today, yesterday } = getLatestBusinessDay();
         await fetchRank(today);
-        if (candidateMap.size < 30) {
-          console.log('[App] Today data insufficient, trying yesterday...');
-          await fetchRank(yesterday);
-        }
-        if (candidateMap.size < 10) {
-          console.log('[App] Historical data insufficient, trying real-time...');
-          await fetchRank('');
-        }
+        if (candidateMap.size < 30) await fetchRank(yesterday);
+        if (candidateMap.size < 10) await fetchRank('');
         candidates = Array.from(candidateMap.values()).slice(0, 450);
       }
 
-      if (candidates.length === 0) {
-        setStocks([]);
-        setLoading(false);
-        return;
+      if (mode !== 'my' && !serverDataSuccess && candidates.length === 0) {
+        setStocks([]); setLoading(false); return;
       }
 
       const nextDataMap = new Map();
@@ -520,7 +506,9 @@ function MainApp() {
       const analysisList = [];
       let found = 0;
 
-      const monitorList = mode === 'my' ? candidates : [...candidates, ...myStocks.filter(ms => !candidates.find(c => c.code === ms.code))];
+      const monitorList = (mode !== 'my' && serverDataSuccess)
+        ? myStocks
+        : (mode === 'my' ? candidates : [...candidates, ...myStocks.filter(ms => !candidates.find(c => c.code === ms.code))]);
 
       for (let i = 0; i < monitorList.length; i++) {
         const stock = monitorList[i];
@@ -546,13 +534,11 @@ function MainApp() {
               }
             });
           }
-
-          if (mode !== 'my') {
+          if (mode !== 'my' && !serverDataSuccess) {
             const streak = (investor === '2' ? fStreak : iStreak);
             const isMatch = (mode === 'buy' && streak >= 3) || (mode === 'sell' && streak <= -3);
             if (isMatch) {
-              found++;
-              setFoundCount(found);
+              found++; setFoundCount(found);
               results.push({ ...analyzedItem, streak: Math.abs(streak) });
             }
           }
@@ -560,7 +546,7 @@ function MainApp() {
         await new Promise(r => setTimeout(r, 70));
       }
 
-      // --- DANGER ALERT & DAILY NOTIFICATION ---
+      // --- ALERTS ---
       const dangerMsgs = [];
       const nowKst = new Date(new Date().getTime() + (9 * 60 * 60 * 1000) + (new Date().getTimezoneOffset() * 60000));
       const todayStr = nowKst.toISOString().split('T')[0];
@@ -570,41 +556,32 @@ function MainApp() {
         if (!s.isDanger) continue;
         const { foreigner, institution } = s.analysis;
         const stockSignals = [];
-
         const notifyIfNecessary = async (type, count) => {
-          const signalText = `${type} ${count}일 매도`;
-          stockSignals.push(signalText);
-
+          stockSignals.push(`${type} ${count}일 매도`);
           if (isNotificationEnabled && isMarketStarted) {
             const storageKey = `@notif_${s.code}_${type}`;
             const lastDate = await AsyncStorage.getItem(storageKey);
             if (lastDate !== todayStr) {
               Notifications.scheduleNotificationAsync({
-                content: { title: '⚠️ MY 종목 매도 포착!', body: `${s.name} ${signalText}`, sound: true },
+                content: { title: '⚠️ MY 종목 매도 포착!', body: `${s.name} ${type} ${count}일 매도`, sound: true },
                 trigger: null,
               });
               await AsyncStorage.setItem(storageKey, todayStr);
             }
           }
         };
-
         if (foreigner.sell >= 3) await notifyIfNecessary('외인', foreigner.sell);
         if (institution.sell >= 3) await notifyIfNecessary('기관', institution.sell);
-
-        if (stockSignals.length > 0) {
-          dangerMsgs.push(`${s.name} ${stockSignals.join('/')}`);
-        }
+        if (stockSignals.length > 0) dangerMsgs.push(`${s.name} ${stockSignals.join('/')}`);
       }
-
-      const fullMsg = dangerMsgs.length > 0 ? dangerMsgs.join('\n') : null;
-      setDangerAlert(fullMsg ? `⚠️ 위험 포착:\n${fullMsg}` : null);
+      setDangerAlert(dangerMsgs.length > 0 ? `⚠️ 위험 포착:\n${dangerMsgs.join('\n')}` : null);
 
       if (mode === 'my') {
         setMyAnalysis(analysisList);
         marketStore.current.lastMyScan = Date.now();
       } else {
         marketStore.current = { ...marketStore.current, data: nextDataMap, lastScan: Date.now() };
-        setStocks(results.sort((a, b) => b.streak - a.streak));
+        if (!serverDataSuccess) setStocks(results.sort((a, b) => b.streak - a.streak));
       }
     } catch (e) {
       console.error(e);
@@ -612,17 +589,12 @@ function MainApp() {
     } finally {
       setLoading(false);
     }
-  }, [mode, investor, myStocks]);
+  }, [mode, investor, myStocks, isNotificationEnabled]);
 
-  // Initial Fetch (Always run on mount/mode change)
+  // Initial Fetch & Refresh (Combined Logic)
   useEffect(() => {
     fetchDirectData();
   }, [mode, investor]);
-
-  // Trigger analysis when My Stocks change (add/remove) - Force refresh
-  useEffect(() => {
-    if (mode === 'my' && myStocks.length > 0) fetchDirectData(true);
-  }, [myStocks.length]);
 
   // Refresh interval (24/7 Scan)
   useEffect(() => {
@@ -631,11 +603,6 @@ function MainApp() {
     }, 60 * 1000 * 5); // 5 min
     return () => clearInterval(interval);
   }, [fetchDirectData]);
-
-  // Trigger analysis when My Stocks change (add/remove)
-  useEffect(() => {
-    if (mode === 'my' && myStocks.length > 0) fetchDirectData();
-  }, [myStocks.length]);
 
 
   return (
