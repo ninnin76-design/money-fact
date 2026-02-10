@@ -16,7 +16,7 @@ const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443';
 const APP_KEY = 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
 const APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
 
-const SNAPSHOT_FILE = './market_report_snapshot.json';
+const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
 
 let cachedToken = '';
 let tokenExpiry = null;
@@ -35,7 +35,7 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
     } catch (e) { }
 }
 
-const TOKEN_FILE = './real_token_cache.json';
+const TOKEN_FILE = path.join(__dirname, 'real_token_cache.json');
 
 async function getAccessToken() {
     // 1. Try to read from file first
@@ -85,9 +85,11 @@ async function runDeepMarketScan(force = false) {
 
     // Market Hours: 8 AM - 8 PM KST, Weekdays only
     const isWeekend = (day === 0 || day === 6);
+    // Modified: Even if market is closed, let it run if force is true OR if we have no data yet
     const isMarketOpen = (hour >= 8 && hour < 20) && !isWeekend;
+    const hasNoData = !marketAnalysisReport.updateTime;
 
-    if (!isMarketOpen && !force) {
+    if (!isMarketOpen && !force && !hasNoData) {
         console.log(`[Worker] Market Closed (KST ${hour}:xx). Serving cached data.`);
         marketAnalysisReport.dataType = 'MARKET_CLOSE';
         return;
@@ -278,7 +280,7 @@ function analyzeStreak(daily, inv) {
 }
 
 // --- Cloud Sync for Mobile Data Persistence (File-based) ---
-const SYNC_FILE = './sync_data.json';
+const SYNC_FILE = path.join(__dirname, '..', 'sync_data.json');
 let userStore = {};
 
 if (fs.existsSync(SYNC_FILE)) {
@@ -300,6 +302,7 @@ app.post('/api/sync/save', (req, res) => {
 
 app.get('/api/sync/check', (req, res) => {
     const { syncKey } = req.query;
+    if (!syncKey) return res.status(400).json({ error: 'Missing syncKey' });
     const exists = !!userStore[syncKey];
     res.json({ exists });
 });
