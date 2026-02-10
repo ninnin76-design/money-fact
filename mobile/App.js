@@ -25,6 +25,14 @@ import * as Notifications from 'expo-notifications';
 
 const { width } = Dimensions.get('window');
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 // --- CONSTANTS ---
 // const SERVER_URL = 'http://127.0.0.1:3000'; 
 const SERVER_URL = 'https://money-fact-server.onrender.com';
@@ -48,7 +56,10 @@ async function getKisToken() {
   if (memToken && memExpiry && new Date() < memExpiry) return memToken;
 
   // 2. If already requesting, wait for existing promise (Singleton)
-  if (tokenRequestPromise) return tokenRequestPromise;
+  if (tokenRequestPromise) {
+    console.log('[App] Waiting for existing token request...');
+    return tokenRequestPromise;
+  }
 
   tokenRequestPromise = (async () => {
     try {
@@ -71,7 +82,8 @@ async function getKisToken() {
         appkey: APP_KEY.trim(),
         appsecret: APP_SECRET.trim()
       }, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000 // 10s timeout
       });
 
       const newToken = res.data.access_token;
@@ -86,7 +98,7 @@ async function getKisToken() {
     } catch (e) {
       const msg = e.response?.data?.msg1 || e.message;
       console.error('[Token Error]', msg);
-      Alert.alert('인증 오류', `KIS 토큰 발급 실패: ${msg}`);
+      // Don't alert here to avoid spamming, getMarketData will handle null
       return null;
     } finally {
       tokenRequestPromise = null;
@@ -98,8 +110,14 @@ async function getKisToken() {
 
 // --- HELPER: Get Market Data (Direct) ---
 async function getMarketData(code) {
-  const token = await getKisToken();
-  if (!token) return null;
+  let token = memToken;
+  if (!token || !memExpiry || new Date() >= memExpiry) {
+    token = await getKisToken();
+  }
+  if (!token) {
+    console.error(`[Data Error ${code}] No valid token available.`);
+    return [];
+  }
 
   try {
     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
@@ -245,7 +263,7 @@ function MainApp() {
   const [searchTimer, setSearchTimer] = useState(null);
 
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(true);
-  const [syncNickname, setSyncNickname] = useState('');
+  const [syncKey, setSyncKey] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Load Init
@@ -257,23 +275,23 @@ function MainApp() {
       setIsNotificationEnabled(enabled);
 
       const savedSyncKey = await AsyncStorage.getItem(SYNC_KEY_STORAGE);
-      if (savedSyncKey) setSyncNickname(savedSyncKey);
+      if (savedSyncKey) setSyncKey(savedSyncKey);
 
       setupBackgroundTasks(enabled);
     };
     init();
   }, []);
 
-  const saveSyncNickname = async (val) => {
-    setSyncNickname(val);
+  const saveSyncKey = async (val) => {
+    setSyncKey(val);
     await AsyncStorage.setItem(SYNC_KEY_STORAGE, val);
   };
 
   const handleBackup = async () => {
-    if (!syncNickname) { Alert.alert('알림', '닉네임을 입력해주세요.'); return; }
+    if (!syncKey) { Alert.alert('알림', '사용할 키를 입력해주세요.'); return; }
     setIsSyncing(true);
     try {
-      await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey: syncNickname, stocks: myStocks });
+      await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey: syncKey, stocks: myStocks });
       Alert.alert('성공', '내 종목이 클라우드에 안전하게 보관되었습니다!');
     } catch (e) {
       Alert.alert('실패', '서버 통신 중 오류가 발생했습니다.');
@@ -281,10 +299,10 @@ function MainApp() {
   };
 
   const handleRestore = async () => {
-    if (!syncNickname) { Alert.alert('알림', '닉네임을 입력해주세요.'); return; }
+    if (!syncKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
     setIsSyncing(true);
     try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncNickname}`);
+      const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
       const restored = res.data.stocks || [];
       if (restored.length > 0) {
         setMyStocks(restored);
@@ -292,18 +310,18 @@ function MainApp() {
         Alert.alert('성공', `${restored.length}개의 종목을 복구했습니다!`);
       }
     } catch (e) {
-      Alert.alert('실패', '해당 닉네임으로 저장된 데이터를 찾을 수 없습니다.');
+      Alert.alert('실패', '해당 키로 저장된 데이터를 찾을 수 없습니다.');
     } finally { setIsSyncing(false); }
   };
 
   const checkSyncKey = async () => {
-    if (!syncNickname) { Alert.alert('알림', '닉네임을 입력해주세요.'); return; }
+    if (!syncKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
     try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/check?syncKey=${syncNickname}`);
+      const res = await axios.get(`${SERVER_URL}/api/sync/check?syncKey=${syncKey}`);
       if (res.data.exists) {
-        Alert.alert('알림', '이미 사용 중인 닉네임입니다. 복구하시겠습니까? 아니면 다른 이름을 써주세요.');
+        Alert.alert('경고', '이미 사용 중인 키입니다. 키가 중복되니 다른 키를 입력해 주세요.');
       } else {
-        Alert.alert('성공', '사용 가능한 닉네임입니다! 지금 바로 백업해보세요.');
+        Alert.alert('성공', '사용 가능한 키입니다! 지금 바로 백업해 보세요.');
       }
     } catch (e) { }
   };
@@ -375,7 +393,7 @@ function MainApp() {
   };
 
   // --- STORE: Memory Cache for Market Data ---
-  const marketStore = React.useRef({ data: new Map(), lastScan: 0 });
+  const marketStore = React.useRef({ data: new Map(), lastScan: 0, lastMyScan: 0 });
   const [scanProgress, setScanProgress] = useState(0);
   const [foundCount, setFoundCount] = useState(0);
 
@@ -410,14 +428,23 @@ function MainApp() {
     return { today: `${y}${m}${bday}`, yesterday: `${py}${pm}${pbday}` };
   };
 
-  const fetchDirectData = useCallback(async () => {
+  const fetchDirectData = useCallback(async (force = false) => {
+    // --- 1. MY Mode Cache Check ---
+    if (mode === 'my' && !force) {
+      const isRecentlyScanned = Date.now() - marketStore.current.lastMyScan < 5 * 60 * 1000;
+      if (isRecentlyScanned && myAnalysis.length > 0) {
+        console.log('[App] Using MY cache (last scanned < 5min)');
+        return;
+      }
+    }
+
     setLoading(true);
     setScanProgress(0);
     setFoundCount(0);
 
     try {
-      // --- SERVER MODE: Try analyzed data from Server first (only for BUY/SELL modes) ---
-      if (mode !== 'my') {
+      // --- 2. SERVER MODE: Try analyzed data from Server first (only for BUY/SELL modes) ---
+      if (mode !== 'my' && !force) {
         try {
           console.log(`[App] Requesting Server Analysis (Mode: ${mode}, Inv: ${investor})`);
           const res = await axios.get(`${SERVER_URL}/api/analysis/supply/5/${investor}?mode=${mode}`);
@@ -432,7 +459,7 @@ function MainApp() {
         }
       }
 
-      // --- DIRECT MODE: Manual scan (Fallback or MY mode) ---
+      // --- 3. DIRECT MODE: Manual scan (Fallback or MY mode) ---
       const token = await getKisToken();
       if (!token) {
         setLoading(false);
@@ -533,13 +560,50 @@ function MainApp() {
         await new Promise(r => setTimeout(r, 70));
       }
 
-      const dangerStocks = analysisList.filter(s => s.isDanger).map(s => s.name);
-      setDangerAlert(dangerStocks.length > 0 ? `⚠️ 주의: ${dangerStocks.join(', ')} 수급 이탈!` : null);
+      // --- DANGER ALERT & DAILY NOTIFICATION ---
+      const dangerMsgs = [];
+      const nowKst = new Date(new Date().getTime() + (9 * 60 * 60 * 1000) + (new Date().getTimezoneOffset() * 60000));
+      const todayStr = nowKst.toISOString().split('T')[0];
+      const isMarketStarted = nowKst.getHours() >= 9;
+
+      for (const s of analysisList) {
+        if (!s.isDanger) continue;
+        const { foreigner, institution } = s.analysis;
+        const stockSignals = [];
+
+        const notifyIfNecessary = async (type, count) => {
+          const signalText = `${type} ${count}일 매도`;
+          stockSignals.push(signalText);
+
+          if (isNotificationEnabled && isMarketStarted) {
+            const storageKey = `@notif_${s.code}_${type}`;
+            const lastDate = await AsyncStorage.getItem(storageKey);
+            if (lastDate !== todayStr) {
+              Notifications.scheduleNotificationAsync({
+                content: { title: '⚠️ MY 종목 매도 포착!', body: `${s.name} ${signalText}`, sound: true },
+                trigger: null,
+              });
+              await AsyncStorage.setItem(storageKey, todayStr);
+            }
+          }
+        };
+
+        if (foreigner.sell >= 3) await notifyIfNecessary('외인', foreigner.sell);
+        if (institution.sell >= 3) await notifyIfNecessary('기관', institution.sell);
+
+        if (stockSignals.length > 0) {
+          dangerMsgs.push(`${s.name} ${stockSignals.join('/')}`);
+        }
+      }
+
+      const fullMsg = dangerMsgs.length > 0 ? dangerMsgs.join('\n') : null;
+      setDangerAlert(fullMsg ? `⚠️ 위험 포착:\n${fullMsg}` : null);
 
       if (mode === 'my') {
         setMyAnalysis(analysisList);
+        marketStore.current.lastMyScan = Date.now();
       } else {
-        marketStore.current = { data: nextDataMap, lastScan: Date.now() };
+        marketStore.current = { ...marketStore.current, data: nextDataMap, lastScan: Date.now() };
         setStocks(results.sort((a, b) => b.streak - a.streak));
       }
     } catch (e) {
@@ -553,7 +617,12 @@ function MainApp() {
   // Initial Fetch (Always run on mount/mode change)
   useEffect(() => {
     fetchDirectData();
-  }, [mode, investor]); // Removed fetchDirectData to satisfy dependency rules properly
+  }, [mode, investor]);
+
+  // Trigger analysis when My Stocks change (add/remove) - Force refresh
+  useEffect(() => {
+    if (mode === 'my' && myStocks.length > 0) fetchDirectData(true);
+  }, [myStocks.length]);
 
   // Refresh interval (24/7 Scan)
   useEffect(() => {
@@ -660,10 +729,10 @@ function MainApp() {
                   {analysis && <Text style={styles.stockPriceMy}>{analysis.price.toLocaleString()}원</Text>}
                   {a && (
                     <View style={styles.badgeGrid}>
-                      {a.foreigner.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>💰 외인 수급 {a.foreigner.buy}일</Text></View>}
-                      {a.foreigner.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>⚠️ 외인 이탈 {a.foreigner.sell}일</Text></View>}
-                      {a.institution.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>💰 기관 수급 {a.institution.buy}일</Text></View>}
-                      {a.institution.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>⚠️ 기관 이탈 {a.institution.sell}일</Text></View>}
+                      {a.foreigner.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>외인 {a.foreigner.buy}일 매수</Text></View>}
+                      {a.foreigner.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>외인 {a.foreigner.sell}일 매도</Text></View>}
+                      {a.institution.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>기관 {a.institution.buy}일 매수</Text></View>}
+                      {a.institution.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>기관 {a.institution.sell}일 매도</Text></View>}
                     </View>
                   )}
                 </View>
@@ -673,14 +742,14 @@ function MainApp() {
           {/* MY Mode Sync Section */}
           {mode === 'my' && (
             <View style={styles.syncCard}>
-              <Text style={styles.syncTitle}>☁️ 종목 클라우드 백업</Text>
-              <Text style={styles.syncDesc}>앱을 새로 깔아도 닉네임만 있으면 복구됩니다.</Text>
+              <Text style={styles.syncTitle}>☁️ 종목 클라우드 키(Key) 백업</Text>
+              <Text style={styles.syncDesc}>앱을 새로 깔아도 고유 키(Key)만 있으면 바로 복구됩니다.</Text>
               <View style={styles.syncInputRow}>
                 <TextInput
                   style={styles.syncInput}
-                  placeholder="나만의 닉네임 (예: koreafact7)"
-                  value={syncNickname}
-                  onChangeText={saveSyncNickname}
+                  placeholder="나만의 보안 키 (예: mysecret7)"
+                  value={syncKey}
+                  onChangeText={saveSyncKey}
                 />
                 <TouchableOpacity style={styles.syncCheckBtn} onPress={checkSyncKey}>
                   <Text style={styles.syncCheckBtnText}>중복확인</Text>
