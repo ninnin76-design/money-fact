@@ -442,13 +442,23 @@ function analyzeStreak(daily, inv) {
 }
 
 // --- Cloud Sync for Mobile Data Persistence (File-based with Lock) ---
-const SYNC_FILE = path.join(__dirname, '..', 'sync_data.json');
+const SYNC_FILE = path.join(__dirname, 'sync_data.json');
 let userStore = {};
-let isSyncWriting = false; // Simple write lock for 5 concurrent users
+let isSyncWriting = false;
 
-if (fs.existsSync(SYNC_FILE)) {
-    try { userStore = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch (e) { }
+function loadUserStore() {
+    if (fs.existsSync(SYNC_FILE)) {
+        try {
+            const raw = fs.readFileSync(SYNC_FILE, 'utf8');
+            userStore = JSON.parse(raw);
+            console.log(`[Sync] Loaded ${Object.keys(userStore).length} user profiles from disk.`);
+        } catch (e) {
+            console.error('[Sync] Load error, starting fresh:', e.message);
+            userStore = {};
+        }
+    }
 }
+loadUserStore();
 
 const saveSyncFile = async () => {
     if (isSyncWriting) {

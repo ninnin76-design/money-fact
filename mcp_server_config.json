@@ -1,9 +1,10 @@
 {
     "mcpServers": {
         "notebooklm-mcp": {
-            "command": "notebooklm-mcp",
+            "command": "C:\\Users\\ninni\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
             "args": [
-                "server"
+                "-m",
+                "notebooklm_mcp.server"
             ],
             "disabled": false,
             "autoApprove": []
