@@ -394,8 +394,11 @@ function MainApp() {
         setMyStocks(restored);
         await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(restored));
         Alert.alert('성공', `${restored.length}개의 종목을 복구했습니다!`);
-        // Immediately trigger a scan to show badges
-        setTimeout(() => fetchDirectData(true), 500);
+
+        // Use a flag to avoid stale closure issues
+        setTimeout(() => {
+          fetchDirectData(true);
+        }, 800);
       }
     } catch (e) {
       Alert.alert('실패', '해당 키로 저장된 데이터를 찾을 수 없습니다.');
@@ -536,6 +539,8 @@ function MainApp() {
       }
     }
 
+    // Do NOT clear existing data if we have it, to avoid "Empty Screen" effect
+    // setStocks([]); // Commented out to keep current list until new data replaces it
     setLoading(true);
     setScanProgress(0);
     setFoundCount(0);
@@ -644,13 +649,18 @@ function MainApp() {
           const isDanger = fStreak <= -1 || iStreak <= -1; // TEST: Lowered to 1 day
 
           if (isMyStock || mode === 'my') {
-            analysisList.push({
+            const myEntry = {
               ...analyzedItem, isDanger,
               analysis: {
                 foreigner: { buy: fStreak > 0 ? fStreak : 0, sell: fStreak < 0 ? Math.abs(fStreak) : 0 },
                 institution: { buy: iStreak > 0 ? iStreak : 0, sell: iStreak < 0 ? Math.abs(iStreak) : 0 }
               }
-            });
+            };
+            analysisList.push(myEntry);
+            // Show data incrementally for My stocks too
+            if (i % 2 === 0 || i === monitorList.length - 1) {
+              setMyAnalysis([...analysisList]);
+            }
           }
           if (mode !== 'my' && !serverDataSuccess) {
             const streak = (investor === '2' ? fStreak : iStreak);
@@ -848,13 +858,15 @@ function MainApp() {
                     <Text style={styles.stockName}>{item.name}</Text>
                     <TouchableOpacity onPress={() => removeStock(item.code)}><Trash2 size={16} color="#F04452" /></TouchableOpacity>
                   </View>
-                  {analysis && <Text style={styles.stockPriceMy}>{analysis.price.toLocaleString()}원</Text>}
                   {a && (
                     <View style={styles.badgeGrid}>
-                      {a.foreigner.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일 매수 ↑</Text></View>}
-                      {a.foreigner.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일 매도 ↓</Text></View>}
-                      {a.institution.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일 매수 ↑</Text></View>}
-                      {a.institution.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일 매도 ↓</Text></View>}
+                      {a.foreigner.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일↑</Text></View>}
+                      {a.foreigner.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일↓</Text></View>}
+                      {a.institution.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일↑</Text></View>}
+                      {a.institution.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일↓</Text></View>}
+                      {a.foreigner.buy === 0 && a.foreigner.sell === 0 && a.institution.buy === 0 && a.institution.sell === 0 && (
+                        <View style={[styles.statusTag, { backgroundColor: '#F2F4F6' }]}><Text style={[styles.tagText, { color: '#888' }]}>수급 관찰 중</Text></View>
+                      )}
                     </View>
                   )}
                   {analysis?.history && (
