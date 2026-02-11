@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "836480593152",
+    "project_id": "moneyfact-34481",
+    "storage_bucket": "moneyfact-34481.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836480593152:android:1a87230900ed0d9fb757e5",
+        "android_client_info": {
+          "package_name": "com.eunhee.moneyfact"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFnX39Jzw_LQf2z3TrFDd2xQm2FVDGZfo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

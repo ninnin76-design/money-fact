@@ -4,6 +4,21 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const { Expo } = require('expo-server-sdk');
+
+// --- Expo Push Setup ---
+const expo = new Expo();
+const PUSH_TOKENS_FILE = path.join(__dirname, 'push_tokens.json');
+let pushTokens = []; // Array of { token, syncKey, stocks[] }
+
+if (fs.existsSync(PUSH_TOKENS_FILE)) {
+    try { pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); } catch (e) { }
+}
+
+const savePushTokens = () => {
+    try { fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2)); } catch (e) { }
+};
 
 dotenv.config();
 
@@ -72,6 +87,92 @@ async function getAccessToken() {
         return null;
     }
 }
+
+// --- Shared Token Endpoint (For 5 Users Sharing 1 Token) ---
+app.get('/api/token', async (req, res) => {
+    try {
+        const token = await getAccessToken();
+        if (!token) {
+            return res.status(500).json({ error: 'Token unavailable' });
+        }
+        // Read expiry from cache file
+        let expiry = null;
+        if (fs.existsSync(TOKEN_FILE)) {
+            const saved = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+            expiry = saved.expiry;
+        }
+        res.json({ token, expiry, source: 'server_shared' });
+    } catch (e) {
+        res.status(500).json({ error: 'Token fetch failed' });
+    }
+});
+
+// --- Push Token Registration ---
+app.post('/api/push/register', (req, res) => {
+    const { pushToken, syncKey, stocks } = req.body;
+    if (!pushToken || !Expo.isExpoPushToken(pushToken)) {
+        return res.status(400).json({ error: 'Invalid Expo Push Token' });
+    }
+    // Update or add
+    const idx = pushTokens.findIndex(t => t.token === pushToken);
+    const entry = { token: pushToken, syncKey: syncKey || 'anonymous', stocks: stocks || [], updatedAt: new Date().toISOString() };
+    if (idx >= 0) {
+        pushTokens[idx] = entry;
+    } else {
+        pushTokens.push(entry);
+    }
+    savePushTokens();
+    console.log(`[Push] Registered token for ${syncKey || 'anonymous'} (Total: ${pushTokens.length})`);
+    res.json({ status: 'registered', total: pushTokens.length });
+});
+
+// --- Server Push Notification Sender ---
+async function sendPushNotifications(messages) {
+    if (messages.length === 0) return;
+    const chunks = expo.chunkPushNotifications(messages);
+    for (const chunk of chunks) {
+        try {
+            await expo.sendPushNotificationsAsync(chunk);
+        } catch (e) {
+            console.error('[Push] Send error:', e.message);
+        }
+    }
+    console.log(`[Push] Sent ${messages.length} notifications`);
+}
+
+// --- Buy Opportunity Detection ---
+app.get('/api/alerts/opportunities', async (req, res) => {
+    try {
+        const buyData = marketAnalysisReport.buyData || {};
+        const opportunities = [];
+        Object.keys(buyData).forEach(key => {
+            const items = buyData[key] || [];
+            items.forEach(item => {
+                if (item.streak >= 3) {
+                    opportunities.push({
+                        ...item,
+                        investor: key.split('_')[1],
+                        type: 'buy',
+                        signal: `${item.streak}일 연속 매수세`
+                    });
+                }
+            });
+        });
+        // Deduplicate by code, keep the one with highest streak
+        const deduped = new Map();
+        opportunities.forEach(op => {
+            if (!deduped.has(op.code) || deduped.get(op.code).streak < op.streak) {
+                deduped.set(op.code, op);
+            }
+        });
+        res.json({
+            opportunities: Array.from(deduped.values()).sort((a, b) => b.streak - a.streak).slice(0, 20),
+            updateTime: marketAnalysisReport.updateTime
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to get opportunities' });
+    }
+});
 
 async function runDeepMarketScan(force = false) {
     const now = new Date();
@@ -238,6 +339,60 @@ async function runDeepMarketScan(force = false) {
         marketAnalysisReport.dataType = currentType;
         marketAnalysisReport.status = 'READY';
         fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(marketAnalysisReport));
+
+        // --- SERVER PUSH: Send alerts to all registered devices ---
+        if (pushTokens.length > 0) {
+            console.log(`[Push] Checking alerts for ${pushTokens.length} registered devices...`);
+            const pushMessages = [];
+
+            for (const tokenEntry of pushTokens) {
+                if (!Expo.isExpoPushToken(tokenEntry.token)) continue;
+                const userStocks = tokenEntry.stocks || [];
+                if (userStocks.length === 0) continue;
+
+                const dangerAlerts = [];
+                const buyAlerts = [];
+
+                for (const us of userStocks) {
+                    const stockData = historyData.get(us.code);
+                    if (!stockData) continue;
+
+                    const foreign = analyzeStreak(stockData.daily, '2');
+                    const inst = analyzeStreak(stockData.daily, '1');
+
+                    if (foreign.sellStreak >= 3) dangerAlerts.push(`${us.name} \uc678\uc778 ${foreign.sellStreak}\uc77c \ub9e4\ub3c4`);
+                    if (inst.sellStreak >= 3) dangerAlerts.push(`${us.name} \uae30\uad00 ${inst.sellStreak}\uc77c \ub9e4\ub3c4`);
+                    if (foreign.buyStreak >= 3) buyAlerts.push(`${us.name} \uc678\uc778 ${foreign.buyStreak}\uc77c \ub9e4\uc218`);
+                    if (inst.buyStreak >= 3) buyAlerts.push(`${us.name} \uae30\uad00 ${inst.buyStreak}\uc77c \ub9e4\uc218`);
+                }
+
+                if (dangerAlerts.length > 0) {
+                    pushMessages.push({
+                        to: tokenEntry.token,
+                        title: '\ud83d\udea8 Money Fact \uc704\ud5d8 \uac10\uc9c0',
+                        body: dangerAlerts.join('\n'),
+                        sound: 'default',
+                        priority: 'high',
+                        data: { type: 'danger' }
+                    });
+                }
+                if (buyAlerts.length > 0) {
+                    pushMessages.push({
+                        to: tokenEntry.token,
+                        title: '\ud83c\udfaf Money Fact \ub9e4\uc218 \uae30\ud68c!',
+                        body: buyAlerts.join('\n'),
+                        sound: 'default',
+                        priority: 'default',
+                        data: { type: 'opportunity' }
+                    });
+                }
+            }
+
+            if (pushMessages.length > 0) {
+                await sendPushNotifications(pushMessages);
+            }
+        }
+
     } catch (e) { console.error("Worker Error", e.message); }
 }
 
@@ -279,22 +434,42 @@ function analyzeStreak(daily, inv) {
     return { buyStreak, sellStreak };
 }
 
-// --- Cloud Sync for Mobile Data Persistence (File-based) ---
+// --- Cloud Sync for Mobile Data Persistence (File-based with Lock) ---
 const SYNC_FILE = path.join(__dirname, '..', 'sync_data.json');
 let userStore = {};
+let isSyncWriting = false; // Simple write lock for 5 concurrent users
 
 if (fs.existsSync(SYNC_FILE)) {
     try { userStore = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8')); } catch (e) { }
 }
 
-app.post('/api/sync/save', (req, res) => {
-    const { syncKey, stocks } = req.body;
-    if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
-    userStore[syncKey] = stocks;
+const saveSyncFile = async () => {
+    if (isSyncWriting) {
+        // Wait a bit and retry
+        await new Promise(r => setTimeout(r, 100));
+    }
+    isSyncWriting = true;
     try {
         fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
-        console.log(`[Sync] Saved data for key: ${syncKey}`);
-        res.json({ status: 'success' });
+    } finally {
+        isSyncWriting = false;
+    }
+};
+
+app.post('/api/sync/save', async (req, res) => {
+    const { syncKey, stocks } = req.body;
+    if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
+
+    // Add timestamp for backup tracking
+    userStore[syncKey] = {
+        stocks,
+        updatedAt: new Date().toISOString(),
+        version: (userStore[syncKey]?.version || 0) + 1
+    };
+    try {
+        await saveSyncFile();
+        console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})`);
+        res.json({ status: 'success', version: userStore[syncKey].version });
     } catch (e) {
         res.status(500).json({ error: 'File save error' });
     }
@@ -304,15 +479,17 @@ app.get('/api/sync/check', (req, res) => {
     const { syncKey } = req.query;
     if (!syncKey) return res.status(400).json({ error: 'Missing syncKey' });
     const exists = !!userStore[syncKey];
-    res.json({ exists });
+    res.json({ exists, version: userStore[syncKey]?.version || 0 });
 });
 
 app.get('/api/sync/load', (req, res) => {
     const { syncKey } = req.query;
-    const stocks = userStore[syncKey];
-    if (!stocks) return res.status(404).json({ error: 'No data found' });
+    const data = userStore[syncKey];
+    if (!data) return res.status(404).json({ error: 'No data found' });
     console.log(`[Sync] Loaded data for key: ${syncKey}`);
-    res.json({ stocks });
+    // Support both old format (array) and new format (object with stocks)
+    const stocks = Array.isArray(data) ? data : data.stocks;
+    res.json({ stocks, version: data.version || 1, updatedAt: data.updatedAt });
 });
 
 // Secret Admin Endpoint to Force Scan

@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 
 const { width } = Dimensions.get('window');
 
@@ -51,55 +52,78 @@ const APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccT
 let memToken = null;
 let memExpiry = null;
 let tokenRequestPromise = null;
+let expoPushToken = null; // Expo Push Token for server-side notifications
 
 async function getKisToken() {
-  // 1. Check Memory Cache
-  if (memToken && memExpiry && new Date() < memExpiry) return memToken;
+  // 1. Check Memory Cache first (Fastest)
+  if (memToken && memExpiry && new Date() < memExpiry) {
+    return memToken;
+  }
 
-  // 2. If already requesting, wait for existing promise (Singleton)
+  // 2. If already requesting, wait for it (Singleton)
   if (tokenRequestPromise) {
-    console.log('[App] Waiting for existing token request...');
     return tokenRequestPromise;
   }
 
   tokenRequestPromise = (async () => {
     try {
-      // 3. Double-check Storage inside promise
+      // 3. Check Persistent Storage
       const saved = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
       if (saved) {
         const { token, expiry } = JSON.parse(saved);
         const expDate = new Date(expiry);
-        if (new Date() < expDate) {
+        // Safety buffer: treat as expired if within 10 mins of expiry
+        const safeNow = new Date(new Date().getTime() + 10 * 60 * 1000);
+
+        if (safeNow < expDate) {
+          console.log('[App] Restored Valid KIS Token from Storage');
           memToken = token;
           memExpiry = expDate;
           return token;
         }
       }
 
-      // 4. Request New Token Only Once
-      console.log('[App] Requesting NEW KIS Token (Direct)...');
+      // 4. Try Server Shared Token FIRST (For 5-user sharing)
+      try {
+        console.log('[App] Requesting Shared Token from Server...');
+        const serverRes = await axios.get(`${SERVER_URL}/api/token`, { timeout: 5000 });
+        if (serverRes.data && serverRes.data.token) {
+          const serverToken = serverRes.data.token;
+          const serverExpiry = new Date(serverRes.data.expiry);
+          memToken = serverToken;
+          memExpiry = serverExpiry;
+          await AsyncStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: serverToken, expiry: serverExpiry }));
+          console.log('[App] Using Server Shared Token (5-user mode)');
+          return serverToken;
+        }
+      } catch (serverErr) {
+        console.log('[App] Server token unavailable, falling back to direct...');
+      }
+
+      // 5. Direct Token Request (Fallback)
+      console.log('[App] Issuing NEW KIS Token (Direct)...');
       const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
         grant_type: 'client_credentials',
         appkey: APP_KEY.trim(),
         appsecret: APP_SECRET.trim()
       }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 10000 // 10s timeout
+        timeout: 10000
       });
 
       const newToken = res.data.access_token;
       if (!newToken) throw new Error(res.data.msg1 || 'Token fetch failed');
 
-      const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 120) * 1000);
+      // Expiry is typically 86400s (24h). We use a slight buffer.
+      const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 300) * 1000);
 
       memToken = newToken;
       memExpiry = newExpiry;
       await AsyncStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: newToken, expiry: newExpiry }));
+      console.log('[App] New Token Issued & Saved (Direct)');
       return newToken;
     } catch (e) {
-      const msg = e.response?.data?.msg1 || e.message;
-      console.error('[Token Error]', msg);
-      // Don't alert here to avoid spamming, getMarketData will handle null
+      console.error('[Token Error]', e.message);
       return null;
     } finally {
       tokenRequestPromise = null;
@@ -111,14 +135,8 @@ async function getKisToken() {
 
 // --- HELPER: Get Market Data (Direct) ---
 async function getMarketData(code) {
-  let token = memToken;
-  if (!token || !memExpiry || new Date() >= memExpiry) {
-    token = await getKisToken();
-  }
-  if (!token) {
-    console.error(`[Data Error ${code}] No valid token available.`);
-    return [];
-  }
+  const token = await getKisToken();
+  if (!token) return [];
 
   try {
     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
@@ -126,7 +144,7 @@ async function getMarketData(code) {
         authorization: `Bearer ${token}`,
         appkey: APP_KEY.trim(),
         appsecret: APP_SECRET.trim(),
-        tr_id: 'FHKST01012200', // Daily Investor Trend (List) - REQUIRED for Streak
+        tr_id: 'FHKST01012200',
         custtype: 'P'
       },
       params: {
@@ -134,16 +152,15 @@ async function getMarketData(code) {
         FID_INPUT_ISCD: code
       }
     });
-    // KIS returns a list in output for FHKST01012200
     return res.data.output || [];
   } catch (e) {
-    console.error(`[Data Error ${code}]`, e.message);
+    console.warn(`[Data Error ${code}]`, e.message); // Warn instead of Error to reduce noise
     return [];
   }
 }
 
 // --- LOGIC: Streak Analysis ---
-function analyzeStreak(dailyData, type) { // type: '0'=Total, '1'=Inst, '2'=Foreign
+function analyzeStreak(dailyData, type) {
   if (!dailyData || dailyData.length < 5) return 0;
 
   let buyStreak = 0;
@@ -154,9 +171,9 @@ function analyzeStreak(dailyData, type) { // type: '0'=Total, '1'=Inst, '2'=Fore
     let vol = 0;
 
     // FHKST01012200 Field Mapping
-    if (type === '2') vol = parseInt(day.fgnn_ntby_qty); // Foreigner (NOTICE: fgnn, not frgn)
-    else if (type === '1') vol = parseInt(day.orgn_ntby_qty); // Institution
-    else vol = parseInt(day.prsn_ntby_qty); // Personal
+    if (type === '2') vol = parseInt(day.fgnn_ntby_qty);
+    else if (type === '1') vol = parseInt(day.orgn_ntby_qty);
+    else vol = parseInt(day.prsn_ntby_qty);
 
     if (vol > 0) {
       if (sellStreak > 0) break;
@@ -168,70 +185,106 @@ function analyzeStreak(dailyData, type) { // type: '0'=Total, '1'=Inst, '2'=Fore
       break;
     }
   }
-  return buyStreak > 0 ? buyStreak : -sellStreak; // Positive=Buy, Negative=Sell
+  return buyStreak > 0 ? buyStreak : -sellStreak;
 }
 
 const NOTIF_HISTORY_KEY = '@notif_history';
 
-// 2. Background Task Definition
+// 2. Background Task Definition (15 min Interval)
 TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
-  // Simplified background task: Just check My Stocks
   try {
-    // Market Check (08~20)
+    // 1. Time Check (08:00 ~ 20:00, Mon-Fri)
     const now = new Date();
-    const day = now.getDay();
+    const day = now.getDay(); // 0=Sun, 6=Sat
     const hour = now.getHours();
+
+    // Skip on weekends or late night to save battery
     if (day === 0 || day === 6 || hour < 8 || hour > 20) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
+    // 2. Load MY Stocks
     const saved = await AsyncStorage.getItem(MY_STOCKS_KEY);
     if (!saved) return BackgroundFetch.BackgroundFetchResult.NoData;
     const myStocks = JSON.parse(saved);
     if (myStocks.length === 0) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-    let notifyTitles = [];
+    // 3. Scan for Danger AND Opportunity
+    let notifyItems = [];
     const today = new Date().toISOString().split('T')[0];
     const historyRaw = await AsyncStorage.getItem(NOTIF_HISTORY_KEY);
     let history = historyRaw ? JSON.parse(historyRaw) : {};
     let updatedHistory = { ...history };
 
-    // Check each stock directly
     for (const stock of myStocks) {
+      // Small delay between calls to be gentle on API
+      await new Promise(r => setTimeout(r, 200));
+
       const data = await getMarketData(stock.code);
       if (data && data.length > 0) {
-        // Re-use updated analyzeStreak logic
-        const fStreak = analyzeStreak(data, '2');
-        const iStreak = analyzeStreak(data, '1');
+        const fStreak = analyzeStreak(data, '2'); // Foreigner
+        const iStreak = analyzeStreak(data, '1'); // Institution
 
-        if (!updatedHistory[stock.code]) updatedHistory[stock.code] = { foreigner: '', institution: '' };
+        if (!updatedHistory[stock.code]) updatedHistory[stock.code] = { foreigner: '', institution: '', fBuy: '', iBuy: '' };
 
-        // Sell Warning (-3 days)
+        // Danger Condition: Sell Streak >= 3 days
         if (fStreak <= -3 && updatedHistory[stock.code].foreigner !== today) {
-          notifyTitles.push(`${stock.name} 외인 이탈(${Math.abs(fStreak)}일)`);
+          notifyItems.push({ type: 'danger', msg: `${stock.name} 외인 ${Math.abs(fStreak)}일 연속 매도` });
           updatedHistory[stock.code].foreigner = today;
         }
         if (iStreak <= -3 && updatedHistory[stock.code].institution !== today) {
-          notifyTitles.push(`${stock.name} 기관 이탈(${Math.abs(iStreak)}일)`);
+          notifyItems.push({ type: 'danger', msg: `${stock.name} 기관 ${Math.abs(iStreak)}일 연속 매도` });
           updatedHistory[stock.code].institution = today;
+        }
+
+        // Opportunity Condition: Buy Streak >= 3 days
+        if (fStreak >= 3 && updatedHistory[stock.code].fBuy !== today) {
+          notifyItems.push({ type: 'opportunity', msg: `${stock.name} 외인 ${fStreak}일 연속 매수` });
+          updatedHistory[stock.code].fBuy = today;
+        }
+        if (iStreak >= 3 && updatedHistory[stock.code].iBuy !== today) {
+          notifyItems.push({ type: 'opportunity', msg: `${stock.name} 기관 ${iStreak}일 연속 매수` });
+          updatedHistory[stock.code].iBuy = today;
         }
       }
     }
 
-    if (notifyTitles.length > 0) {
+    // 4. Send Notifications
+    const dangerItems = notifyItems.filter(n => n.type === 'danger');
+    const oppItems = notifyItems.filter(n => n.type === 'opportunity');
+
+    if (dangerItems.length > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: "⚠️ Money Fact 자산 위험 신호",
-          body: `${notifyTitles.join(', ')} 포착! 지금 확인하세요.`,
+          title: "🚨 Money Fact 위험 감지",
+          body: dangerItems.map(n => n.msg).join('\n'),
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
         },
         trigger: null,
       });
+    }
+
+    if (oppItems.length > 0) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "🎯 Money Fact 매수 기회!",
+          body: oppItems.map(n => n.msg).join('\n'),
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+        },
+        trigger: null,
+      });
+    }
+
+    if (notifyItems.length > 0) {
       await AsyncStorage.setItem(NOTIF_HISTORY_KEY, JSON.stringify(updatedHistory));
       return BackgroundFetch.BackgroundFetchResult.NewData;
     }
 
     return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch (error) {
+    console.error('[Background Task Error]', error);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
@@ -258,10 +311,46 @@ function MainApp() {
   const [syncKey, setSyncKey] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // --- Expo Push Token Registration ---
+  const registerPushToken = useCallback(async (stocks = []) => {
+    try {
+      if (!Device.isDevice) {
+        console.log('[Push] Not a physical device, skipping push registration');
+        return;
+      }
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.log('[Push] Permission not granted');
+        return;
+      }
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: undefined // Uses default from app.json
+      });
+      expoPushToken = tokenData.data;
+      console.log('[Push] Expo Push Token:', expoPushToken);
+
+      // Register with server (send current stocks for server-side alerts)
+      const savedSyncKey = await AsyncStorage.getItem(SYNC_KEY_STORAGE);
+      await axios.post(`${SERVER_URL}/api/push/register`, {
+        pushToken: expoPushToken,
+        syncKey: savedSyncKey || 'anonymous',
+        stocks: stocks
+      }, { timeout: 5000 });
+      console.log('[Push] Token registered with server!');
+    } catch (e) {
+      console.warn('[Push] Registration failed:', e.message);
+    }
+  }, []);
+
   // Load Init
   useEffect(() => {
     const init = async () => {
-      await loadMyStocks();
+      const loadedStocks = await loadMyStocks();
       const savedNotif = await AsyncStorage.getItem(NOTIF_STORAGE_KEY);
       const enabled = savedNotif !== null ? JSON.parse(savedNotif) : true;
       setIsNotificationEnabled(enabled);
@@ -270,6 +359,9 @@ function MainApp() {
       if (savedSyncKey) setSyncKey(savedSyncKey);
 
       setupBackgroundTasks(enabled);
+
+      // Register for server-side push notifications
+      await registerPushToken(loadedStocks || []);
     };
     init();
   }, []);
@@ -344,12 +436,21 @@ function MainApp() {
   const loadMyStocks = async () => {
     try {
       const saved = await AsyncStorage.getItem(MY_STOCKS_KEY);
-      if (saved) setMyStocks(JSON.parse(saved));
-    } catch (e) { }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setMyStocks(parsed);
+        return parsed;
+      }
+      return [];
+    } catch (e) { return []; }
   };
 
   const saveMyStocks = async (data) => {
-    try { await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(data)); } catch (e) { }
+    try {
+      await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(data));
+      // Update server with latest stock list for push alerts
+      registerPushToken(data);
+    } catch (e) { }
   };
 
   const addStock = (stock) => {
@@ -576,6 +677,28 @@ function MainApp() {
       }
       setDangerAlert(dangerMsgs.length > 0 ? `⚠️ 위험 포착:\n${dangerMsgs.join('\n')}` : null);
 
+      // --- BUY OPPORTUNITY ALERTS ---
+      const oppMsgs = [];
+      for (const s of analysisList) {
+        const { foreigner, institution } = s.analysis;
+        if (foreigner.buy >= 3) oppMsgs.push(`${s.name} 외인 ${foreigner.buy}일 매수`);
+        if (institution.buy >= 3) oppMsgs.push(`${s.name} 기관 ${institution.buy}일 매수`);
+      }
+      // Send buy opportunity alert (once per day per stock)
+      if (oppMsgs.length > 0 && isNotificationEnabled && isMarketStarted) {
+        for (const msg of oppMsgs) {
+          const oppKey = `@opp_${msg.split(' ')[0]}_${todayStr}`;
+          const alreadySent = await AsyncStorage.getItem(oppKey);
+          if (!alreadySent) {
+            Notifications.scheduleNotificationAsync({
+              content: { title: '🎯 매수 기회 포착!', body: msg, sound: true },
+              trigger: null,
+            });
+            await AsyncStorage.setItem(oppKey, 'sent');
+          }
+        }
+      }
+
       if (mode === 'my') {
         setMyAnalysis(analysisList);
         marketStore.current.lastMyScan = Date.now();
@@ -600,7 +723,7 @@ function MainApp() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchDirectData();
-    }, 60 * 1000 * 5); // 5 min
+    }, 60 * 1000 * 15); // 15 min (aligned with server & background task)
     return () => clearInterval(interval);
   }, [fetchDirectData]);
 
