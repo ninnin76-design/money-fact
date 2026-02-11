@@ -52,6 +52,17 @@ let marketAnalysisReport = {
     sellData: {}
 };
 
+// --- User Portfolio Database ---
+const DB_FILE = path.join(__dirname, 'db.json');
+let userDb = {};
+if (fs.existsSync(DB_FILE)) {
+    try { userDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) { }
+}
+
+const saveDb = () => {
+    try { fs.writeFileSync(DB_FILE, JSON.stringify(userDb, null, 2)); } catch (e) { }
+};
+
 if (fs.existsSync(SNAPSHOT_FILE)) {
     try {
         marketAnalysisReport = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
@@ -620,6 +631,36 @@ app.post('/api/portfolio/recommend', async (req, res) => {
     }));
     res.json({ portfolio: detailedPortfolio });
 });
+
+// --- Portfolio Backup/Recovery API (Legacy Sync Match) ---
+app.post('/api/sync/save', (req, res) => {
+    const { syncKey, stocks } = req.body;
+    if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
+    userDb[syncKey] = stocks;
+    saveDb();
+    console.log(`[DB] Sync Save: ${syncKey} (${stocks.length} stocks)`);
+    res.json({ success: true });
+});
+
+app.get('/api/sync/load', (req, res) => {
+    const { syncKey } = req.query;
+    const stocks = userDb[syncKey];
+    if (!stocks) {
+        console.log(`[DB] Sync Load failed: ${syncKey} not found`);
+        return res.status(404).json({ error: 'NICKNAME_NOT_FOUND' });
+    }
+    console.log(`[DB] Sync Load success: ${syncKey}`);
+    res.json({ stocks });
+});
+
+// Seed data for m1234
+if (!userDb['m1234'] || userDb['m1234'].length === 0) {
+    userDb['m1234'] = [
+        { code: '005930', name: '삼성전자' },
+        { code: '000660', name: 'SK하이닉스' }
+    ];
+    saveDb();
+}
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
 app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));

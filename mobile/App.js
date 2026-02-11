@@ -607,9 +607,19 @@ function MainApp() {
       const analysisList = [];
       let found = 0;
 
-      const monitorList = (mode !== 'my' && serverDataSuccess)
-        ? myStocks
-        : (mode === 'my' ? candidates : [...candidates, ...myStocks.filter(ms => !candidates.find(c => c.code === ms.code))]);
+      // Always scan myStocks for badges/alerts, plus candidates if no server data
+      let monitorList = [];
+      if (mode === 'my') {
+        monitorList = myStocks;
+      } else {
+        const otherStocks = serverDataSuccess ? [] : candidates;
+        // Merge without duplicates
+        const combined = [...otherStocks];
+        myStocks.forEach(ms => {
+          if (!combined.find(c => c.code === ms.code)) combined.push(ms);
+        });
+        monitorList = combined;
+      }
 
       for (let i = 0; i < monitorList.length; i++) {
         const stock = monitorList[i];
@@ -629,7 +639,7 @@ function MainApp() {
           nextDataMap.set(stock.code, analyzedItem);
 
           const isMyStock = myStocks.find(ms => ms.code === stock.code);
-          const isDanger = fStreak <= -3 || iStreak <= -3;
+          const isDanger = fStreak <= -1 || iStreak <= -1; // TEST: Lowered to 1 day
 
           if (isMyStock || mode === 'my') {
             analysisList.push({
@@ -676,8 +686,8 @@ function MainApp() {
             }
           }
         };
-        if (foreigner.sell >= 3) await notifyIfNecessary('외인', foreigner.sell);
-        if (institution.sell >= 3) await notifyIfNecessary('기관', institution.sell);
+        if (foreigner.sell >= 1) await notifyIfNecessary('외인', foreigner.sell);
+        if (institution.sell >= 1) await notifyIfNecessary('기관', institution.sell);
         if (stockSignals.length > 0) dangerMsgs.push(`${s.name}(${stockSignals.join(',')})`);
       }
       setDangerAlert(dangerMsgs.length > 0 ? `매도주의: ${dangerMsgs.join(' / ')}` : null);
@@ -686,8 +696,8 @@ function MainApp() {
       const oppMsgs = [];
       for (const s of analysisList) {
         const { foreigner, institution } = s.analysis;
-        if (foreigner.buy >= 3) oppMsgs.push(`${s.name} 외인 ${foreigner.buy}일 매수`);
-        if (institution.buy >= 3) oppMsgs.push(`${s.name} 기관 ${institution.buy}일 매수`);
+        if (foreigner.buy >= 1) oppMsgs.push(`${s.name} 외인 ${foreigner.buy}일 매수`);
+        if (institution.buy >= 1) oppMsgs.push(`${s.name} 기관 ${institution.buy}일 매수`);
       }
       // Send buy opportunity alert (once per day per stock)
       if (oppMsgs.length > 0 && isNotificationEnabled && isMarketStarted) {
@@ -704,8 +714,10 @@ function MainApp() {
         }
       }
 
+      // Always update myAnalysis state so badges and banners work in any mode
+      setMyAnalysis(analysisList);
+
       if (mode === 'my') {
-        setMyAnalysis(analysisList);
         marketStore.current.lastMyScan = Date.now();
       } else {
         marketStore.current = { ...marketStore.current, data: nextDataMap, lastScan: Date.now() };
@@ -753,7 +765,10 @@ function MainApp() {
       )}
 
       <ImageBackground source={require('./assets/banner.png')} style={styles.bannerContainer} resizeMode="cover">
-        <View style={styles.bannerOverlay}><Text style={styles.bannerBrandText}>Money Fact (Direct)</Text></View>
+        <View style={styles.bannerOverlay}>
+          <Text style={styles.bannerBrandText}>Money Fact (Direct)</Text>
+          <Text style={{ fontSize: 10, color: '#3182F6', fontWeight: 'bold' }}>v1.0.8-Test</Text>
+        </View>
       </ImageBackground>
 
       <View style={styles.modeTabs}>
@@ -831,10 +846,10 @@ function MainApp() {
                   {analysis && <Text style={styles.stockPriceMy}>{analysis.price.toLocaleString()}원</Text>}
                   {a && (
                     <View style={styles.badgeGrid}>
-                      {a.foreigner.buy >= 3 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일 매수 ↑</Text></View>}
-                      {a.foreigner.sell >= 3 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일 매도 ↓</Text></View>}
-                      {a.institution.buy >= 3 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일 매수 ↑</Text></View>}
-                      {a.institution.sell >= 3 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일 매도 ↓</Text></View>}
+                      {a.foreigner.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일 매수 ↑</Text></View>}
+                      {a.foreigner.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일 매도 ↓</Text></View>}
+                      {a.institution.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일 매수 ↑</Text></View>}
+                      {a.institution.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일 매도 ↓</Text></View>}
                     </View>
                   )}
                   {analysis?.history && (
