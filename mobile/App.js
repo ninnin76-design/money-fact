@@ -394,6 +394,8 @@ function MainApp() {
         setMyStocks(restored);
         await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(restored));
         Alert.alert('성공', `${restored.length}개의 종목을 복구했습니다!`);
+        // Immediately trigger a scan to show badges
+        setTimeout(() => fetchDirectData(true), 500);
       }
     } catch (e) {
       Alert.alert('실패', '해당 키로 저장된 데이터를 찾을 수 없습니다.');
@@ -655,7 +657,10 @@ function MainApp() {
             const isMatch = (mode === 'buy' && streak >= 3) || (mode === 'sell' && streak <= -3);
             if (isMatch) {
               found++; setFoundCount(found);
-              results.push({ ...analyzedItem, streak: Math.abs(streak) });
+              const newItem = { ...analyzedItem, streak: Math.abs(streak) };
+              results.push(newItem);
+              // Show data incrementally for better UX
+              setStocks(prev => [...prev, newItem].sort((a, b) => b.streak - a.streak));
             }
           }
         }
