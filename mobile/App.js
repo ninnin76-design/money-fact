@@ -395,10 +395,10 @@ function MainApp() {
         await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(restored));
         Alert.alert('성공', `${restored.length}개의 종목을 복구했습니다!`);
 
-        // Use a flag to avoid stale closure issues
+        // CRITICAL: Manually trigger scan with the RESTORED list to bypass stale state closure
         setTimeout(() => {
-          fetchDirectData(true);
-        }, 800);
+          fetchDirectData(true, restored);
+        }, 500);
       }
     } catch (e) {
       Alert.alert('실패', '해당 키로 저장된 데이터를 찾을 수 없습니다.');
@@ -529,7 +529,7 @@ function MainApp() {
     return { today: `${y}${m}${bday}`, yesterday: `${py}${pm}${pbday}` };
   };
 
-  const fetchDirectData = useCallback(async (force = false) => {
+  const fetchDirectData = useCallback(async (force = false, manualList = null) => {
     // --- 1. MY Mode Cache Check ---
     if (mode === 'my' && !force) {
       const isRecentlyScanned = Date.now() - marketStore.current.lastMyScan < 5 * 60 * 1000;
@@ -616,13 +616,14 @@ function MainApp() {
 
       // Always scan myStocks for badges/alerts, plus candidates if no server data
       let monitorList = [];
+      const currentMyStocks = manualList || myStocks; // Use manualList if provided (e.g. after restore)
+
       if (mode === 'my') {
-        monitorList = myStocks;
+        monitorList = currentMyStocks;
       } else {
         const otherStocks = serverDataSuccess ? [] : candidates;
-        // Merge without duplicates
         const combined = [...otherStocks];
-        myStocks.forEach(ms => {
+        currentMyStocks.forEach(ms => {
           if (!combined.find(c => c.code === ms.code)) combined.push(ms);
         });
         monitorList = combined;
@@ -657,10 +658,8 @@ function MainApp() {
               }
             };
             analysisList.push(myEntry);
-            // Show data incrementally for My stocks too
-            if (i % 2 === 0 || i === monitorList.length - 1) {
-              setMyAnalysis([...analysisList]);
-            }
+            // Instant UI update for My stocks
+            setMyAnalysis([...analysisList]);
           }
           if (mode !== 'my' && !serverDataSuccess) {
             const streak = (investor === '2' ? fStreak : iStreak);
