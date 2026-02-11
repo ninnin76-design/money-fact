@@ -10,14 +10,22 @@ const { Expo } = require('expo-server-sdk');
 // --- Expo Push Setup ---
 const expo = new Expo();
 const PUSH_TOKENS_FILE = path.join(__dirname, 'push_tokens.json');
-let pushTokens = []; // Array of { token, syncKey, stocks[] }
+const PUSH_HISTORY_FILE = path.join(__dirname, 'push_history.json');
+let pushTokens = [];
+let pushHistory = {}; // { token: 'YYYY-MM-DD' }
 
 if (fs.existsSync(PUSH_TOKENS_FILE)) {
     try { pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); } catch (e) { }
 }
+if (fs.existsSync(PUSH_HISTORY_FILE)) {
+    try { pushHistory = JSON.parse(fs.readFileSync(PUSH_HISTORY_FILE, 'utf8')); } catch (e) { }
+}
 
 const savePushTokens = () => {
     try { fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2)); } catch (e) { }
+};
+const savePushHistory = () => {
+    try { fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2)); } catch (e) { }
 };
 
 dotenv.config();
@@ -344,8 +352,12 @@ async function runDeepMarketScan(force = false) {
         if (pushTokens.length > 0) {
             console.log(`[Push] Checking alerts for ${pushTokens.length} registered devices...`);
             const pushMessages = [];
+            const todayStr = kstDate.toISOString().split('T')[0];
 
             for (const tokenEntry of pushTokens) {
+                // Once per day check
+                if (pushHistory[tokenEntry.token] === todayStr) continue;
+
                 if (!Expo.isExpoPushToken(tokenEntry.token)) continue;
                 const userStocks = tokenEntry.stocks || [];
                 if (userStocks.length === 0) continue;
@@ -360,36 +372,31 @@ async function runDeepMarketScan(force = false) {
                     const foreign = analyzeStreak(stockData.daily, '2');
                     const inst = analyzeStreak(stockData.daily, '1');
 
-                    if (foreign.sellStreak >= 3) dangerAlerts.push(`${us.name} \uc678\uc778 ${foreign.sellStreak}\uc77c \ub9e4\ub3c4`);
-                    if (inst.sellStreak >= 3) dangerAlerts.push(`${us.name} \uae30\uad00 ${inst.sellStreak}\uc77c \ub9e4\ub3c4`);
-                    if (foreign.buyStreak >= 3) buyAlerts.push(`${us.name} \uc678\uc778 ${foreign.buyStreak}\uc77c \ub9e4\uc218`);
-                    if (inst.buyStreak >= 3) buyAlerts.push(`${us.name} \uae30\uad00 ${inst.buyStreak}\uc77c \ub9e4\uc218`);
+                    // 3 days consecutive condition
+                    if (foreign.sellStreak >= 3) dangerAlerts.push(`${us.name} 외인 ${foreign.sellStreak}일 매도`);
+                    if (inst.sellStreak >= 3) dangerAlerts.push(`${us.name} 기관 ${inst.sellStreak}일 매도`);
+                    if (foreign.buyStreak >= 3) buyAlerts.push(`${us.name} 외인 ${foreign.buyStreak}일 매수`);
+                    if (inst.buyStreak >= 3) buyAlerts.push(`${us.name} 기관 ${inst.buyStreak}일 매수`);
                 }
 
-                if (dangerAlerts.length > 0) {
+                if (dangerAlerts.length > 0 || buyAlerts.length > 0) {
+                    const combinedBody = [...dangerAlerts, ...buyAlerts].join('\n');
                     pushMessages.push({
                         to: tokenEntry.token,
-                        title: '\ud83d\udea8 Money Fact \uc704\ud5d8 \uac10\uc9c0',
-                        body: dangerAlerts.join('\n'),
+                        title: dangerAlerts.length > 0 ? '🚨 Money Fact 긴급 수급 이탈!' : '🎯 Money Fact 매수 찬스 포착!',
+                        body: combinedBody,
                         sound: 'default',
                         priority: 'high',
-                        data: { type: 'danger' }
+                        data: { type: dangerAlerts.length > 0 ? 'danger' : 'opportunity' }
                     });
-                }
-                if (buyAlerts.length > 0) {
-                    pushMessages.push({
-                        to: tokenEntry.token,
-                        title: '\ud83c\udfaf Money Fact \ub9e4\uc218 \uae30\ud68c!',
-                        body: buyAlerts.join('\n'),
-                        sound: 'default',
-                        priority: 'default',
-                        data: { type: 'opportunity' }
-                    });
+                    // Mark as sent for today
+                    pushHistory[tokenEntry.token] = todayStr;
                 }
             }
 
             if (pushMessages.length > 0) {
                 await sendPushNotifications(pushMessages);
+                savePushHistory();
             }
         }
 

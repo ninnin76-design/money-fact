@@ -620,7 +620,12 @@ function MainApp() {
           const fStreak = analyzeStreak(daily, '2');
           const iStreak = analyzeStreak(daily, '1');
           const price = parseInt(daily[0].stck_clpr);
-          const analyzedItem = { code: stock.code, name: stock.name, price, fStreak, iStreak };
+          // Store last 5 days net buy data for UI trend display
+          const history = daily.slice(0, 5).map(d => ({
+            f: parseInt(d.fgnn_ntby_qty || 0),
+            i: parseInt(d.orgn_ntby_qty || 0)
+          }));
+          const analyzedItem = { code: stock.code, name: stock.name, price, fStreak, iStreak, history };
           nextDataMap.set(stock.code, analyzedItem);
 
           const isMyStock = myStocks.find(ms => ms.code === stock.code);
@@ -658,13 +663,13 @@ function MainApp() {
         const { foreigner, institution } = s.analysis;
         const stockSignals = [];
         const notifyIfNecessary = async (type, count) => {
-          stockSignals.push(`${type} ${count}일 매도`);
+          stockSignals.push(`${type}${count}일연속매도`);
           if (isNotificationEnabled && isMarketStarted) {
             const storageKey = `@notif_${s.code}_${type}`;
             const lastDate = await AsyncStorage.getItem(storageKey);
             if (lastDate !== todayStr) {
               Notifications.scheduleNotificationAsync({
-                content: { title: '⚠️ MY 종목 매도 포착!', body: `${s.name} ${type} ${count}일 매도`, sound: true },
+                content: { title: '⚠️ MY 종목 리스크 포착!', body: `${s.name} ${type} ${count}일 연속 매매 이탈 중`, sound: true },
                 trigger: null,
               });
               await AsyncStorage.setItem(storageKey, todayStr);
@@ -673,9 +678,9 @@ function MainApp() {
         };
         if (foreigner.sell >= 3) await notifyIfNecessary('외인', foreigner.sell);
         if (institution.sell >= 3) await notifyIfNecessary('기관', institution.sell);
-        if (stockSignals.length > 0) dangerMsgs.push(`${s.name} ${stockSignals.join('/')}`);
+        if (stockSignals.length > 0) dangerMsgs.push(`${s.name}(${stockSignals.join(',')})`);
       }
-      setDangerAlert(dangerMsgs.length > 0 ? `⚠️ 위험 포착:\n${dangerMsgs.join('\n')}` : null);
+      setDangerAlert(dangerMsgs.length > 0 ? `매도주의: ${dangerMsgs.join(' / ')}` : null);
 
       // --- BUY OPPORTUNITY ALERTS ---
       const oppMsgs = [];
@@ -733,11 +738,18 @@ function MainApp() {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {dangerAlert && (
-        <View style={styles.dangerBanner}>
-          <AlertTriangle size={16} color="#fff" />
-          <Text style={styles.dangerBannerText} numberOfLines={1}>{dangerAlert}</Text>
-          <TouchableOpacity onPress={() => setDangerAlert(null)}><X size={16} color="#fff" /></TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.dangerBanner} onPress={() => setReportVisible(true)}>
+          <View style={styles.dangerIconBox}>
+            <AlertTriangle size={18} color="#fff" strokeWidth={3} />
+          </View>
+          <View style={styles.dangerTextBox}>
+            <Text style={styles.dangerTitleText}>⚠️ 긴급 위험 감지</Text>
+            <Text style={styles.dangerBannerText} numberOfLines={1}>{dangerAlert}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setDangerAlert(null)} style={styles.closeDangerBtn}>
+            <X size={18} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        </TouchableOpacity>
       )}
 
       <ImageBackground source={require('./assets/banner.png')} style={styles.bannerContainer} resizeMode="cover">
@@ -819,10 +831,30 @@ function MainApp() {
                   {analysis && <Text style={styles.stockPriceMy}>{analysis.price.toLocaleString()}원</Text>}
                   {a && (
                     <View style={styles.badgeGrid}>
-                      {a.foreigner.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>외인 {a.foreigner.buy}일 매수</Text></View>}
-                      {a.foreigner.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>외인 {a.foreigner.sell}일 매도</Text></View>}
-                      {a.institution.buy >= 3 && <View style={styles.badgeBuy}><Text style={styles.badgeBuyText}>기관 {a.institution.buy}일 매수</Text></View>}
-                      {a.institution.sell >= 3 && <View style={styles.badgeSell}><Text style={styles.badgeSellText}>기관 {a.institution.sell}일 매도</Text></View>}
+                      {a.foreigner.buy >= 3 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일 매수 ↑</Text></View>}
+                      {a.foreigner.sell >= 3 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일 매도 ↓</Text></View>}
+                      {a.institution.buy >= 3 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일 매수 ↑</Text></View>}
+                      {a.institution.sell >= 3 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일 매도 ↓</Text></View>}
+                    </View>
+                  )}
+                  {analysis?.history && (
+                    <View style={styles.trendContainer}>
+                      <View style={styles.trendRow}>
+                        <Text style={styles.trendLabel}>외인</Text>
+                        <View style={styles.trendBars}>
+                          {analysis.history.map((h, idx) => (
+                            <View key={`f-${idx}`} style={[styles.trendDot, h.f > 0 ? styles.dotBuy : (h.f < 0 ? styles.dotSell : styles.dotNeutral)]} />
+                          ))}
+                        </View>
+                      </View>
+                      <View style={styles.trendRow}>
+                        <Text style={styles.trendLabel}>기관</Text>
+                        <View style={styles.trendBars}>
+                          {analysis.history.map((h, idx) => (
+                            <View key={`i-${idx}`} style={[styles.trendDot, h.i > 0 ? styles.dotBuy : (h.i < 0 ? styles.dotSell : styles.dotNeutral)]} />
+                          ))}
+                        </View>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -911,8 +943,13 @@ export default function App() { return <SafeAreaProvider><MainApp /></SafeAreaPr
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  dangerBanner: { backgroundColor: '#F04452', flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
-  dangerBannerText: { flex: 1, color: '#fff', fontSize: 12, fontWeight: '700' },
+  dangerBanner: { backgroundColor: '#FF4D4D', flexDirection: 'row', alignItems: 'center', padding: 14, marginHorizontal: 15, marginTop: 10, borderRadius: 16, gap: 12, elevation: 8, shadowColor: '#FF4D4D', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  dangerIconBox: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 10 },
+  dangerTextBox: { flex: 1 },
+  dangerTitleText: { color: '#fff', fontSize: 10, fontWeight: '900', marginBottom: 2, opacity: 0.9 },
+  dangerBannerText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  closeDangerBtn: { padding: 4 },
+  dangerBannerTextLegacy: { flex: 1, color: '#fff', fontSize: 12, fontWeight: '700' },
   bannerContainer: { width: '100%', height: 60, justifyContent: 'center', alignItems: 'center' },
   bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   bannerBrandText: { fontSize: 22, fontWeight: '900', color: '#3182F6', letterSpacing: -1 },
@@ -957,6 +994,20 @@ const styles = StyleSheet.create({
   badgeSell: { backgroundColor: '#FFF0F0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   badgeSellText: { fontSize: 11, fontWeight: '800', color: '#F04452' },
   badgeNeutralText: { fontSize: 11, fontWeight: '700', color: '#888' },
+  // Trend Styles
+  trendContainer: { marginTop: 12, padding: 10, backgroundColor: '#F8F9FA', borderRadius: 12 },
+  trendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  trendLabel: { width: 35, fontSize: 11, fontWeight: '800', color: '#4E5968' },
+  trendBars: { flexDirection: 'row', gap: 4 },
+  trendDot: { width: 14, height: 6, borderRadius: 3 },
+  dotBuy: { backgroundColor: '#3182F6' },
+  dotSell: { backgroundColor: '#F04452' },
+  dotNeutral: { backgroundColor: '#D1D6DB' },
+  // Status Tags
+  statusTag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
+  tagBuy: { backgroundColor: '#3182F6' },
+  tagSell: { backgroundColor: '#F04452' },
+  tagText: { color: '#fff', fontSize: 11, fontWeight: '900' },
   // Sync Styles
   syncCard: { backgroundColor: '#fff', padding: 20, borderRadius: 24, marginBottom: 20, borderTopWidth: 4, borderTopColor: '#3182F6' },
   syncTitle: { fontSize: 16, fontWeight: '900', color: '#191F28', marginBottom: 5 },
