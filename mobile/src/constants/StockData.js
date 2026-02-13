@@ -1,4 +1,4 @@
-module.exports = [
+export const ALL_STOCKS = [
     {
         "code": "005930",
         "name": "삼성전자"
