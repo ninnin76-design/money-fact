@@ -4,20 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>머니팩트(Money Fact) 1분 가이드</title>
+    <title>Money Fact - 전문가용 수급 데이터 가이드</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&family=Jua&display=swap"
         rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --bg: #f5f7f9;
             --primary: #3182f6;
+            --primary-bg: #f2f8ff;
             --secondary: #ff4d4d;
-            --accent: #4ade80;
+            --secondary-bg: #fff5f5;
+            --accent: #00c471;
             --dark: #191f28;
-            --card-red: #fff5f5;
-            --card-blue: #f0f7ff;
-            --card-green: #f2fbf5;
+            --text-main: #333d4b;
+            --text-sub: #6b7684;
+            --gray-bg: #f9fafb;
+            --white: #ffffff;
         }
 
         * {
@@ -29,299 +31,364 @@
 
         body {
             font-family: 'Pretendard', sans-serif;
-            background-color: var(--bg);
-            color: var(--dark);
-            line-height: 1.5;
+            background-color: var(--white);
+            color: var(--text-main);
+            line-height: 1.6;
         }
 
         h1,
         h2,
-        h3 {
+        h3,
+        h4 {
             font-family: 'Jua', sans-serif;
             font-weight: normal;
         }
 
         .container {
-            max-width: 500px;
+            max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0 20px;
         }
 
-        /* Header */
-        .header {
-            text-align: center;
-            padding: 40px 0 20px;
-        }
-
-        .logo-badge {
-            background: var(--primary);
+        /* Header Area */
+        .hero {
+            background-color: var(--dark);
             color: white;
-            padding: 5px 15px;
-            border-radius: 100px;
-            font-size: 0.9rem;
-            font-weight: 800;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-
-        .header h1 {
-            font-size: 2.8rem;
-            color: var(--dark);
-        }
-
-        .header p {
-            color: #4e5968;
-            font-size: 1.1rem;
-            margin-top: 5px;
-        }
-
-        /* Icon Grid - Core Logic */
-        .grid {
-            display: grid;
-            gap: 15px;
-            margin-top: 30px;
-        }
-
-        .info-card {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            border: 1px solid #e5e8eb;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-        }
-
-        .info-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            flex-shrink: 0;
-        }
-
-        .info-card h3 {
-            font-size: 1.3rem;
-            margin-bottom: 2px;
-        }
-
-        .info-card p {
-            font-size: 0.95rem;
-            color: #4e5968;
-        }
-
-        .blue {
-            background: var(--card-blue);
-            color: var(--primary);
-        }
-
-        .red {
-            background: var(--card-red);
-            color: var(--secondary);
-        }
-
-        .green {
-            background: var(--card-green);
-            color: var(--accent);
-        }
-
-        /* Section Title */
-        .section-tag {
-            font-size: 1.4rem;
-            margin: 40px 0 15px;
+            padding: 50px 0 30px;
             text-align: center;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+        }
+
+        .hero-img {
+            width: 80%;
+            max-width: 320px;
+            border-radius: 24px;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .hero h1 {
+            font-size: 2.4rem;
+            margin-bottom: 5px;
+        }
+
+        .hero p {
+            opacity: 0.7;
+            font-size: 1rem;
+        }
+
+        /* Section Styling */
+        section {
+            padding: 50px 0;
+            border-bottom: 8px solid var(--gray-bg);
+        }
+
+        section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            margin-bottom: 25px;
             color: var(--dark);
-            border-bottom: 3px solid #e5e8eb;
-            padding-bottom: 10px;
-            display: block;
-        }
-
-        /* Notification Mockup */
-        .notif-box {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 20px;
-            margin-top: 10px;
-            border: 1px solid #eee;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .notif-box::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 5px;
-            height: 100%;
-            background: var(--primary);
-        }
-
-        .notif-head {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: #8b95a1;
-            margin-bottom: 5px;
-        }
-
-        .notif-title {
-            font-weight: 800;
-            font-size: 1.05rem;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .notif-body {
-            font-size: 0.95rem;
-            color: #333d4b;
-            background: #f9fafb;
-            padding: 10px;
-            border-radius: 12px;
-        }
-
-        /* Visual Data Guide */
-        .data-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: white;
-            padding: 15px 20px;
-            border-radius: 16px;
-            margin-bottom: 10px;
-        }
-
-        .data-label {
             display: flex;
             align-items: center;
             gap: 10px;
-            font-weight: 600;
         }
 
-        .data-val {
-            font-family: 'Jua', sans-serif;
-            font-size: 1.1rem;
+        .section-title i {
             color: var(--primary);
         }
 
-        /* Footer */
-        .footer {
-            text-align: center;
-            padding: 60px 0 40px;
-            color: #8b95a1;
-            font-size: 0.85rem;
+        /* Card System */
+        .card {
+            background: var(--gray-bg);
+            border-radius: 24px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
         }
 
-        .btn-home {
-            background: var(--dark);
-            color: white;
-            padding: 15px;
-            border-radius: 16px;
-            text-decoration: none;
-            display: block;
+        .card-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .card-head h3 {
+            font-size: 1.4rem;
+            color: var(--dark);
+        }
+
+        .card-tag {
+            font-size: 0.8rem;
             font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: var(--primary);
+            color: white;
+        }
+
+        .card p {
+            font-size: 1rem;
+            color: var(--text-sub);
+        }
+
+        .card b {
+            color: var(--dark);
+        }
+
+        /* Logic Box */
+        .logic-box {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 15px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .logic-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .logic-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .logic-bullet {
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        /* Data Interpretation */
+        .data-guide {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
             margin-top: 20px;
         }
 
-        /* Sticker */
-        .sticker {
-            position: absolute;
-            top: 10px;
-            right: 20px;
-            transform: rotate(15deg);
+        .data-card {
+            background: white;
+            padding: 15px;
+            border-radius: 16px;
+            border: 1px solid #eee;
+            text-align: center;
+        }
+
+        .data-card i {
+            margin-bottom: 8px;
+        }
+
+        .data-card span {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .data-card strong {
+            font-size: 1.1rem;
+            color: var(--dark);
             font-family: 'Jua', sans-serif;
-            color: var(--secondary);
-            border: 2px solid var(--secondary);
-            padding: 2px 10px;
-            border-radius: 5px;
+        }
+
+        /* Notification UI */
+        .notif-ui {
+            background: #fdfdfd;
+            border-radius: 20px;
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+        }
+
+        .notif-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .notif-msg {
             font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        /* Button */
+        .fixed-btn-area {
+            background: white;
+            padding: 20px;
+            border-top: 1px solid #eee;
+            position: sticky;
+            bottom: 0;
+            text-align: center;
+            z-index: 100;
+        }
+
+        .main-btn {
+            background: var(--primary);
+            color: white;
+            padding: 18px 40px;
+            border-radius: 100px;
+            text-decoration: none;
+            font-size: 1.25rem;
+            font-weight: 800;
+            display: block;
+            box-shadow: 0 10px 20px rgba(49, 130, 246, 0.3);
+        }
+
+        /* Badge Colors */
+        .streak-tag {
+            background: #e8f3ff;
+            color: #3182f6;
+        }
+
+        .vwap-tag {
+            background: #fff5f5;
+            color: #ff4d4d;
+        }
+
+        .hidden-tag {
+            background: #f2fbf5;
+            color: #00c471;
+        }
+
+        .highlight {
+            background: linear-gradient(to top, #ffe5e5 40%, transparent 40%);
+            font-weight: 800;
         }
     </style>
 </head>
 
 <body>
 
+    <!-- Header -->
+    <header class="hero">
+        <div class="container">
+            <h1>Money Fact v2</h1>
+            <p>데이터로 증명하는 스마트한 투자</p>
+            <img src="money_fact_manual_hero.png" class="hero-img" alt="Money Fact App">
+        </div>
+    </header>
+
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <span class="logo-badge">매우 쉬움</span>
-            <h1>머니팩트 가이드</h1>
-            <p>개미는 모르는 고래들의 흔적 찾기</p>
-        </div>
+        <!-- Section 1: Core Analysis -->
+        <section>
+            <h2 class="section-title"><i data-lucide="bar-chart-3"></i> 핵심 분석 알고리즘</h2>
 
-        <!-- Section 1: 3-Second Core -->
-        <span class="section-tag">🌟 핵심 기능 (딱 3개!)</span>
-        <div class="grid">
-            <div class="info-card">
-                <div class="info-icon blue"><i data-lucide="repeat"></i></div>
-                <div>
-                    <h3>연속 매수 (Streak)</h3>
-                    <p>며칠 연속으로 샀을까요? <b>3일 이상</b> 사면 신호!</p>
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-tag">STREAK</span>
+                    <h3>연속 매매 분석</h3>
+                </div>
+                <p>단순한 일회성 매수가 아닌, 세력의 <b>지속성</b>을 추적합니다.</p>
+                <div class="logic-box">
+                    <div class="logic-item"><span class="logic-bullet">✔</span><span>외인/기관이 <b>최소 3일 연속</b> 매수 시
+                            포착</span></div>
+                    <div class="logic-item"><span class="logic-bullet">✔</span><span>장중 잠정치가 '0'이어도 흐름이 살아있으면 <b>연속성
+                                유지</b></span></div>
                 </div>
             </div>
-            <div class="info-card">
-                <div class="info-icon red"><i data-lucide="target"></i></div>
-                <div>
-                    <h3>세력 평단가 (VWAP)</h3>
-                    <p>그들은 얼마에 샀을까요? <b>세력 단가</b>를 보여드려요.</p>
+
+            <div class="card">
+                <div class="card-head" style="background:var(--secondary-bg); padding:5px 10px; border-radius:12px;">
+                    <span class="card-tag" style="background:var(--secondary)">VWAP</span>
+                    <h3 style="color:var(--secondary)">세력 평단가</h3>
+                </div>
+                <p>거래량이 많이 실린 가격대를 분석하여 <b>세력의 본전 가격</b>을 찾습니다.</p>
+                <div class="logic-box" style="border-left-color: var(--secondary);">
+                    <div class="logic-item"><span class="logic-bullet" style="color:var(--secondary)">✔</span><span>최근
+                            <b>3일간의 거래량 가중 평균가</b> 계산</span></div>
+                    <div class="logic-item"><span class="logic-bullet" style="color:var(--secondary)">✔</span><span>현재가가
+                            평단가보다 낮으면 <b>"세력보다 싸다"</b>고 판단</span></div>
                 </div>
             </div>
-            <div class="info-card">
-                <div class="info-icon green"><i data-lucide="eye-off"></i></div>
-                <div>
-                    <h3>몰래 매집 포착</h3>
-                    <p>가격은 조용한데 <b>큰손만 슬쩍</b> 사는 종목 찾기!</p>
+
+            <div class="card">
+                <div class="card-head" style="background:#f2fbf5; padding:5px 10px; border-radius:12px;">
+                    <span class="card-tag" style="background:var(--accent)">SECRET</span>
+                    <h3 style="color:var(--accent)">몰래 매집 포착 (Hidden)</h3>
+                </div>
+                <p>개미들은 지쳐서 떠나고, 큰손들만 몰래 줍는 종목을 발굴합니다.</p>
+                <div class="logic-box" style="border-left-color: var(--accent);">
+                    <div class="logic-item"><span class="logic-bullet" style="color:var(--accent)">✔</span><span><b>가격
+                                고요</b>: 5일간 주가 변동 <b>3% 미만</b></span></div>
+                    <div class="logic-item"><span class="logic-bullet" style="color:var(--accent)">✔</span><span><b>수급
+                                포착</b>: 그 와중에 외인/기관 <b>3일 연속 매수</b></span></div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Section 2: Data Guide -->
-        <span class="section-tag">📈 앱에서 보는 데이터</span>
-        <div class="data-item">
-            <div class="data-label"><i data-lucide="flame" color="#ff4d4d"></i> <span>오늘의 열기</span></div>
-            <div class="data-val">투자 심리 온도</div>
-        </div>
-        <div class="data-item">
-            <div class="data-label"><i data-lucide="landmark" color="#3182f6"></i> <span>큰 자금의 흐름</span></div>
-            <div class="data-val">연기금 수급</div>
-        </div>
-        <div class="data-item">
-            <div class="data-label"><i data-lucide="clock" color="#4ade80"></i> <span>실시간 동향</span></div>
-            <div class="data-val">잠정치 데이터</div>
-        </div>
+        <!-- Section 2: Data Point -->
+        <section>
+            <h2 class="section-title"><i data-lucide="info"></i> 어떤 데이터를 보나요?</h2>
+            <div class="data-guide">
+                <div class="data-card">
+                    <i data-lucide="thermometer" color="#ff4d4d"></i>
+                    <span>심리 온도</span>
+                    <strong>바닥 vs 과열</strong>
+                </div>
+                <div class="data-card">
+                    <i data-lucide="landmark" color="#3182f6"></i>
+                    <span>연기금 흐름</span>
+                    <strong>장기 우상향 지표</strong>
+                </div>
+                <div class="data-card">
+                    <i data-lucide="zap" color="#f59e0b"></i>
+                    <span>잠정치 (09:00~)</span>
+                    <strong>세력의 장중 실시간 의도</strong>
+                </div>
+                <div class="data-card">
+                    <i data-lucide="moon" color="#6366f1"></i>
+                    <span>넥스트레이드</span>
+                    <strong>밤 8시까지 실시간 시세</strong>
+                </div>
+            </div>
+            <p style="margin-top:20px; font-size:0.95rem; color:var(--text-sub); text-align:center;">
+                ※ 앱에서 종목을 <b>새로고침(Refresh)</b> 할 때마다<br>위의 모든 데이터가 실시간으로 분석됩니다.
+            </p>
+        </section>
 
-        <!-- Section 3: Push Notif -->
-        <span class="section-tag">🔔 도착하는 알림</span>
-        <div class="notif-box">
-            <div class="notif-head"><span>Money Fact</span> <span>지금</span></div>
-            <div class="notif-title">🚀 매수 신호 포착!</div>
-            <div class="notif-body"><b>덕산하이메탈</b>: 세력이 3일 연속 매집 중입니다. 평단가보다 저렴한 기회!</div>
-        </div>
-        <div class="notif-box" style="margin-top:20px">
-            <div class="notif-head"><span>Money Fact</span> <span>10분 전</span></div>
-            <div class="notif-title">🤫 조용한 매집 정황</div>
-            <div class="notif-body">주가 변동은 없으나 외국인이 5일째 몰래 담고 있는 종목이 발견됐습니다.</div>
-        </div>
+        <!-- Section 3: Push Notification -->
+        <section style="background:var(--gray-bg); border-radius:24px; padding:30px; margin: 40px 0;">
+            <h2 class="section-title" style="margin-bottom:15px;"><i data-lucide="bell"></i> 실시간 스마트 알림</h2>
+            <p style="margin-bottom:15px; font-size:0.95rem;">머니팩트는 중요한 순간에만 <b>콕</b> 찝어서 알려드립니다.</p>
 
-        <!-- Section 4: Backup -->
-        <span class="section-tag">🔒 안심 백업</span>
-        <div
-            style="background: white; border-radius: 20px; padding: 25px; text-align: center; border: 1px solid #e5e8eb;">
-            <p style="margin-bottom: 10px; color: #4e5968;">닉네임 하나면 끝!</p>
-            <h3 style="color: var(--primary);">나만의 키로 리스트 복구</h3>
-            <p style="font-size: 0.85rem; color: #8b95a1; margin-top: 10px;">폰을 바꿔도 걱정하지 마세요.</p>
-        </div>
+            <div class="notif-ui">
+                <div class="notif-line"><span>Money Fact</span> <span>지금</span></div>
+                <div class="notif-msg">🚀 <b>매집 신호</b>: 덕산하이메탈 3일 연속 매수 포착!</div>
+            </div>
+            <div class="notif-ui" style="border-left: 4px solid var(--secondary)">
+                <div class="notif-line"><span>Money Fact</span> <span>10분 전</span></div>
+                <div class="notif-msg">🎯 <b>평단가 진입</b>: 현재가가 세력 단가보다 낮아졌습니다.</div>
+            </div>
+        </section>
 
-        <!-- Footer -->
-        <div class="footer">
-            <p>본 서비스는 투자 참고용이며,<br>모든 투자의 책임은 본인에게 있습니다.</p>
-            <a href="./MoneyFact.apk" class="btn-home" download>지금 바로 시작하기 (v2 설치)</a>
+        <!-- Section 4: Safety -->
+        <section style="text-align:center;">
+            <h2 class="section-title" style="justify-content:center;"><i data-lucide="shield-check"></i> 100% 안전한 백업
+            </h2>
+            <p>닉네임만 설정하면 어떤 폰에서도 내 종목을 <b>즉시 복원</b>할 수 있습니다.</p>
+            <div style="margin-top:20px; color:var(--primary); font-family:'monospace';">
+                Firebase ☁️ 클라우드 영구 보관 중
+            </div>
+        </section>
+
+        <div class="footer" style="padding: 40px 0; color: #8b95a1; font-size: 0.85rem; text-align: center;">
+            <p>© 2026 Money Fact Team. All rights reserved.</p>
+            <p style="margin-top:10px;">본 서비스는 투자 참고용이며, 최종 책임은 투자자 본인에게 있습니다.</p>
         </div>
+    </div>
+
+    <!-- Sticky Footer Button -->
+    <div class="fixed-btn-area">
+        <a href="./MoneyFact.apk" class="main-btn" download>지금 바로 시작하기 (v2 설치)</a>
     </div>
 
     <script>lucide.createIcons();</script>
