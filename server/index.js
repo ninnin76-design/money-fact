@@ -452,12 +452,14 @@ function analyzeStreak(daily, inv) {
     return { buyStreak, sellStreak };
 }
 
-// --- Cloud Sync for Mobile Data Persistence (File-based with Lock) ---
+// --- Cloud Sync for Mobile Data Persistence (File + Firebase) ---
 const SYNC_FILE = path.join(__dirname, 'sync_data.json');
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '';
 let userStore = {};
 let isSyncWriting = false;
 
 function loadUserStore() {
+    // 1. Load from sync_data.json
     if (fs.existsSync(SYNC_FILE)) {
         try {
             const raw = fs.readFileSync(SYNC_FILE, 'utf8');
@@ -468,17 +470,78 @@ function loadUserStore() {
             userStore = {};
         }
     }
+    // 2. Migrate legacy db.json data (one-time)
+    if (fs.existsSync(DB_FILE)) {
+        try {
+            const legacy = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+            let migrated = 0;
+            Object.keys(legacy).forEach(key => {
+                if (!userStore[key] && Array.isArray(legacy[key]) && legacy[key].length > 0) {
+                    userStore[key] = { stocks: legacy[key], updatedAt: new Date().toISOString(), version: 1 };
+                    migrated++;
+                }
+            });
+            if (migrated > 0) {
+                console.log(`[Sync] Migrated ${migrated} profiles from legacy db.json`);
+                fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+            }
+        } catch (e) { }
+    }
 }
 loadUserStore();
 
-const saveSyncFile = async () => {
+// --- Firebase Cloud Recovery (runs async after startup) ---
+const firebaseKey = (key) => encodeURIComponent(key).replace(/\./g, '%2E');
+
+async function recoverFromFirebase() {
+    if (!FIREBASE_DB_URL) {
+        console.log('[Firebase] FIREBASE_DB_URL not set. Cloud backup disabled.');
+        return;
+    }
+    if (Object.keys(userStore).length > 0) {
+        // Local data exists → sync TO Firebase as safety backup
+        console.log('[Firebase] Local data found. Syncing to cloud...');
+        try {
+            await axios.put(`${FIREBASE_DB_URL}/sync.json`, userStore);
+            console.log('[Firebase] ✅ All local data backed up to cloud!');
+        } catch (e) {
+            console.error('[Firebase] Cloud backup failed:', e.message);
+        }
+        return;
+    }
+    // Local is empty → recover FROM Firebase
+    try {
+        console.log('[Firebase] ⚠️ Local data empty! Attempting cloud recovery...');
+        const res = await axios.get(`${FIREBASE_DB_URL}/sync.json`);
+        const cloudData = res.data;
+        if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
+            userStore = cloudData;
+            fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+            console.log(`[Firebase] ✅ Recovered ${Object.keys(userStore).length} user profiles from cloud!`);
+        } else {
+            console.log('[Firebase] No cloud data available.');
+        }
+    } catch (e) {
+        console.error('[Firebase] Recovery failed:', e.message);
+    }
+}
+recoverFromFirebase();
+
+const saveSyncFile = async (changedKey) => {
     if (isSyncWriting) {
-        // Wait a bit and retry
         await new Promise(r => setTimeout(r, 100));
     }
     isSyncWriting = true;
     try {
+        // 1. Always save to local file
         fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+        // 2. Also save to Firebase (non-blocking, per-key)
+        if (FIREBASE_DB_URL && changedKey) {
+            const safeKey = firebaseKey(changedKey);
+            axios.put(`${FIREBASE_DB_URL}/sync/${safeKey}.json`, userStore[changedKey])
+                .then(() => console.log(`[Firebase] ☁️ Backed up: ${changedKey}`))
+                .catch(e => console.error(`[Firebase] Backup failed for ${changedKey}:`, e.message));
+        }
     } finally {
         isSyncWriting = false;
     }
@@ -495,7 +558,7 @@ app.post('/api/sync/save', async (req, res) => {
         version: (userStore[syncKey]?.version || 0) + 1
     };
     try {
-        await saveSyncFile();
+        await saveSyncFile(syncKey);
         console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})`);
         res.json({ status: 'success', version: userStore[syncKey].version });
     } catch (e) {
@@ -510,12 +573,25 @@ app.get('/api/sync/check', (req, res) => {
     res.json({ exists, version: userStore[syncKey]?.version || 0 });
 });
 
-app.get('/api/sync/load', (req, res) => {
+app.get('/api/sync/load', async (req, res) => {
     const { syncKey } = req.query;
-    const data = userStore[syncKey];
+    let data = userStore[syncKey];
+
+    // Fallback: Try Firebase if not found locally
+    if (!data && FIREBASE_DB_URL) {
+        try {
+            const safeKey = firebaseKey(syncKey);
+            const fbRes = await axios.get(`${FIREBASE_DB_URL}/sync/${safeKey}.json`);
+            if (fbRes.data) {
+                data = fbRes.data;
+                userStore[syncKey] = data;
+                console.log(`[Firebase] ☁️ Recovered data for: ${syncKey}`);
+            }
+        } catch (e) { }
+    }
+
     if (!data) return res.status(404).json({ error: 'No data found' });
     console.log(`[Sync] Loaded data for key: ${syncKey}`);
-    // Support both old format (array) and new format (object with stocks)
     const stocks = Array.isArray(data) ? data : data.stocks;
     res.json({ stocks, version: data.version || 1, updatedAt: data.updatedAt });
 });
@@ -632,35 +708,7 @@ app.post('/api/portfolio/recommend', async (req, res) => {
     res.json({ portfolio: detailedPortfolio });
 });
 
-// --- Portfolio Backup/Recovery API (Legacy Sync Match) ---
-app.post('/api/sync/save', (req, res) => {
-    const { syncKey, stocks } = req.body;
-    if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
-    userDb[syncKey] = stocks;
-    saveDb();
-    console.log(`[DB] Sync Save: ${syncKey} (${stocks.length} stocks)`);
-    res.json({ success: true });
-});
-
-app.get('/api/sync/load', (req, res) => {
-    const { syncKey } = req.query;
-    const stocks = userDb[syncKey];
-    if (!stocks) {
-        console.log(`[DB] Sync Load failed: ${syncKey} not found`);
-        return res.status(404).json({ error: 'NICKNAME_NOT_FOUND' });
-    }
-    console.log(`[DB] Sync Load success: ${syncKey}`);
-    res.json({ stocks });
-});
-
-// Seed data for m1234
-if (!userDb['m1234'] || userDb['m1234'].length === 0) {
-    userDb['m1234'] = [
-        { code: '005930', name: '삼성전자' },
-        { code: '000660', name: 'SK하이닉스' }
-    ];
-    saveDb();
-}
+// (Legacy duplicate routes removed - now handled by Cloud Sync system above)
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
 app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));
