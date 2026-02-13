@@ -1,32 +1,47 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
-  TextInput, Modal, StatusBar,
-  ActivityIndicator, Dimensions, Alert, ImageBackground, Platform, Switch, LogBox,
-  KeyboardAvoidingView
+  TextInput, Modal, StatusBar, ActivityIndicator, Dimensions, Alert,
+  Platform, Switch, LogBox, KeyboardAvoidingView
 } from 'react-native';
-
-// Ignore specific Expo Go warnings
-LogBox.ignoreLogs(['expo-notifications', 'New Architecture', 'AxiosError', 'Network Error']);
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  SafeAreaProvider,
-  SafeAreaView,
-  useSafeAreaInsets
-} from 'react-native-safe-area-context';
-import {
-  TrendingUp, TrendingDown, Wand2,
-  CheckCircle2, X, ClipboardList, Search, Plus, Trash2, Star, AlertTriangle, Bell, BellOff
+  TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
+  AlertTriangle, Settings, RefreshCcw, CloudUpload, Download, User, X
 } from 'lucide-react-native';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Services & Components
+import { AuthService } from './src/services/AuthService';
+import { StockService } from './src/services/StockService';
+import { StorageService } from './src/services/StorageService';
+import Ticker from './src/components/Ticker';
+import Thermometer from './src/components/Thermometer';
+import SectorHeatmap from './src/components/SectorHeatmap';
+import StockCard from './src/components/StockCard';
+import { BACKGROUND_TASK_NAME, STORAGE_KEYS } from './src/constants/Config';
+import { ALL_STOCKS } from './src/constants/StockData';
+
+const MARKET_WATCH_STOCKS = [
+  { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' }, { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' },
+  { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
+  { name: '셀트리온', code: '068270', sector: '바이오' }, { name: 'KB금융', code: '105560', sector: '금융' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
+  { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '삼성SDI', code: '006400', sector: '2차전지' }, { name: '신한지주', code: '055550', sector: '금융' },
+  { name: '카카오', code: '035720', sector: '플랫폼' }, { name: '에코프로비엠', code: '247540', sector: '2차전지' }, { name: '에코프로', code: '086520', sector: '2차전지' },
+  { name: '엘앤에프', code: '066970', sector: '2차전지' }, { name: 'HLB', code: '028300', sector: '바이오' }, { name: '알테오젠', code: '196170', sector: '바이오' },
+  { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '레인보우로보틱스', code: '277810', sector: '로봇' }, { name: '두산로보틱스', code: '454910', sector: '로봇' },
+  { name: '포스코DX', code: '022100', sector: '기계' }, { name: '한미반도체', code: '042700', sector: '반도체' }, { name: '제주반도체', code: '080220', sector: '반도체' },
+  { name: 'LS ELECTRIC', code: '010120', sector: '기계' }, { name: '현대무비스', code: '012330', sector: '자동차' }, { name: 'LG화학', code: '051910', sector: '화학' },
+];
+
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
+LogBox.ignoreAllLogs();
 
-// --- Notifications Configuration ---
+// --- Notification Config ---
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -35,1020 +50,1212 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// --- CONSTANTS ---
-// const SERVER_URL = 'http://127.0.0.1:3000'; 
-const SERVER_URL = 'https://money-fact-server.onrender.com';
-const MY_STOCKS_KEY = '@my_stocks';
-const NOTIF_STORAGE_KEY = '@notif_enabled';
-const SYNC_KEY_STORAGE = '@sync_nickname';
-const BACKGROUND_TASK_NAME = 'BACKGROUND_STOCK_CHECK';
-const TOKEN_STORAGE_KEY = '@kis_token';
-
-// KIS API CONFIG (Client-Side Direct Access)
-const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443';
-const APP_KEY = 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
-const APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
-// --- HELPER: Get KIS Token (Direct with Singleton & Memory Cache) ---
-let memToken = null;
-let memExpiry = null;
-let tokenRequestPromise = null;
-let expoPushToken = null; // Expo Push Token for server-side notifications
-
-async function getKisToken() {
-  // 1. Check Memory Cache first (Fastest)
-  if (memToken && memExpiry && new Date() < memExpiry) {
-    return memToken;
-  }
-
-  // 2. If already requesting, wait for it (Singleton)
-  if (tokenRequestPromise) {
-    return tokenRequestPromise;
-  }
-
-  tokenRequestPromise = (async () => {
+// --- Background Task ---
+if (Platform.OS !== 'web') {
+  TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
     try {
-      // 3. Check Persistent Storage
-      const saved = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
-      if (saved) {
-        const { token, expiry } = JSON.parse(saved);
-        const expDate = new Date(expiry);
-        // Safety buffer: treat as expired if within 10 mins of expiry
-        const safeNow = new Date(new Date().getTime() + 10 * 60 * 1000);
+      const rawStocks = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
+      if (!rawStocks) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-        if (safeNow < expDate) {
-          console.log('[App] Restored Valid KIS Token from Storage');
-          memToken = token;
-          memExpiry = expDate;
-          return token;
+      const notifEnabled = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_ENABLED);
+      if (notifEnabled === 'false') return BackgroundFetch.BackgroundFetchResult.NoData;
+
+      const myStocks = JSON.parse(rawStocks);
+
+      const rawHistory = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_HISTORY);
+      let history = rawHistory ? JSON.parse(rawHistory) : {};
+      const today = new Date().toISOString().split('T')[0];
+      let hasNewData = false;
+
+      for (const stock of myStocks) {
+        const data = await StockService.getInvestorData(stock.code);
+        if (data && data.length > 0) {
+          const { fStreak, iStreak } = StockService.analyzeSupply(data);
+          const currentPrice = parseInt(data[0].stck_clpr || 0);
+          const vwap = StockService.calculateVWAP(data, 3);
+          const isHiddenAcc = StockService.checkHiddenAccumulation(data);
+
+          const currentStatus = `${fStreak}|${iStreak}`;
+          if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
+
+          // 1. Streak Alert (Status Change)
+          if (history[stock.code].streak !== currentStatus) {
+            if (Math.abs(fStreak) >= 3 || Math.abs(iStreak) >= 3) {
+              const type = fStreak >= 3 || iStreak >= 3 ? "🎯 매수 기회" : "⚠️ 매도 경고";
+              await Notifications.scheduleNotificationAsync({
+                content: { title: `Money Fact: ${stock.name}`, body: `${stock.name} ${type} 기류 포착 (${fStreak}/${iStreak})` },
+                trigger: null,
+              });
+              hasNewData = true;
+            }
+            history[stock.code].streak = currentStatus;
+          }
+
+          // 2. Value Buy Zone Alert (Once per day)
+          if (vwap > 0 && currentPrice < vwap * 0.95 && history[stock.code].vwapDate !== today) {
+            await Notifications.scheduleNotificationAsync({
+              content: { title: "💸 세력보다 싸게 살 기회!", body: `${stock.name}: 세력평단(${vwap.toLocaleString()}원)보다 5% 이상 저렴!` },
+              trigger: null,
+            });
+            history[stock.code].vwapDate = today;
+            hasNewData = true;
+          }
+
+          // 3. Hidden Accumulation Alert (Once per day)
+          if (isHiddenAcc && history[stock.code].hiddenDate !== today) {
+            await Notifications.scheduleNotificationAsync({
+              content: { title: "🤫 조용한 매집 포착", body: `${stock.name}: 주가는 조용하지만 세력이 몰래 사고 있어요.` },
+              trigger: null,
+            });
+            history[stock.code].hiddenDate = today;
+            hasNewData = true;
+          }
         }
       }
 
-      // 4. Try Server Shared Token FIRST (For 5-user sharing)
-      try {
-        console.log('[App] Requesting Shared Token from Server...');
-        const serverRes = await axios.get(`${SERVER_URL}/api/token`, { timeout: 5000 });
-        if (serverRes.data && serverRes.data.token) {
-          const serverToken = serverRes.data.token;
-          const serverExpiry = new Date(serverRes.data.expiry);
-          memToken = serverToken;
-          memExpiry = serverExpiry;
-          await AsyncStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: serverToken, expiry: serverExpiry }));
-          console.log('[App] Using Server Shared Token (5-user mode)');
-          return serverToken;
-        }
-      } catch (serverErr) {
-        console.log('[App] Server token unavailable, falling back to direct...');
+      if (hasNewData) {
+        await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_HISTORY, JSON.stringify(history));
+        return BackgroundFetch.BackgroundFetchResult.NewData;
       }
-
-      // 5. Direct Token Request (Fallback)
-      console.log('[App] Issuing NEW KIS Token (Direct)...');
-      const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
-        grant_type: 'client_credentials',
-        appkey: APP_KEY.trim(),
-        appsecret: APP_SECRET.trim()
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
-      });
-
-      const newToken = res.data.access_token;
-      if (!newToken) throw new Error(res.data.msg1 || 'Token fetch failed');
-
-      // Expiry is typically 86400s (24h). We use a slight buffer.
-      const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 300) * 1000);
-
-      memToken = newToken;
-      memExpiry = newExpiry;
-      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: newToken, expiry: newExpiry }));
-      console.log('[App] New Token Issued & Saved (Direct)');
-      return newToken;
-    } catch (e) {
-      console.error('[Token Error]', e.message);
-      return null;
-    } finally {
-      tokenRequestPromise = null;
-    }
-  })();
-
-  return tokenRequestPromise;
-}
-
-// --- HELPER: Get Market Data (Direct) ---
-async function getMarketData(code) {
-  const token = await getKisToken();
-  if (!token) return [];
-
-  try {
-    const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        appkey: APP_KEY.trim(),
-        appsecret: APP_SECRET.trim(),
-        tr_id: 'FHKST01012200',
-        custtype: 'P'
-      },
-      params: {
-        FID_COND_MRKT_DIV_CODE: 'J',
-        FID_INPUT_ISCD: code
-      }
-    });
-    return res.data.output || [];
-  } catch (e) {
-    console.warn(`[Data Error ${code}]`, e.message); // Warn instead of Error to reduce noise
-    return [];
-  }
-}
-
-// --- LOGIC: Streak Analysis ---
-function analyzeStreak(dailyData, type) {
-  if (!dailyData || dailyData.length < 5) return 0;
-
-  let buyStreak = 0;
-  let sellStreak = 0;
-
-  for (let i = 0; i < dailyData.length; i++) {
-    const day = dailyData[i];
-    let vol = 0;
-
-    // FHKST01012200 Field Mapping
-    if (type === '2') vol = parseInt(day.fgnn_ntby_qty);
-    else if (type === '1') vol = parseInt(day.orgn_ntby_qty);
-    else vol = parseInt(day.prsn_ntby_qty);
-
-    if (vol > 0) {
-      if (sellStreak > 0) break;
-      buyStreak++;
-    } else if (vol < 0) {
-      if (buyStreak > 0) break;
-      sellStreak++;
-    } else {
-      break;
-    }
-  }
-  return buyStreak > 0 ? buyStreak : -sellStreak;
-}
-
-const NOTIF_HISTORY_KEY = '@notif_history';
-
-// 2. Background Task Definition (15 min Interval)
-TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
-  try {
-    // 1. Time Check (08:00 ~ 20:00, Mon-Fri)
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun, 6=Sat
-    const hour = now.getHours();
-
-    // Skip on weekends or late night to save battery
-    if (day === 0 || day === 6 || hour < 8 || hour > 20) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
+    } catch (err) {
+      return BackgroundFetch.BackgroundFetchResult.Failed;
     }
+  });
+}
 
-    // 2. Load MY Stocks
-    const saved = await AsyncStorage.getItem(MY_STOCKS_KEY);
-    if (!saved) return BackgroundFetch.BackgroundFetchResult.NoData;
-    const myStocks = JSON.parse(saved);
-    if (myStocks.length === 0) return BackgroundFetch.BackgroundFetchResult.NoData;
-
-    // 3. Scan for Danger AND Opportunity
-    let notifyItems = [];
-    const today = new Date().toISOString().split('T')[0];
-    const historyRaw = await AsyncStorage.getItem(NOTIF_HISTORY_KEY);
-    let history = historyRaw ? JSON.parse(historyRaw) : {};
-    let updatedHistory = { ...history };
-
-    for (const stock of myStocks) {
-      // Small delay between calls to be gentle on API
-      await new Promise(r => setTimeout(r, 200));
-
-      const data = await getMarketData(stock.code);
-      if (data && data.length > 0) {
-        const fStreak = analyzeStreak(data, '2'); // Foreigner
-        const iStreak = analyzeStreak(data, '1'); // Institution
-
-        if (!updatedHistory[stock.code]) updatedHistory[stock.code] = { foreigner: '', institution: '', fBuy: '', iBuy: '' };
-
-        // Danger Condition: Sell Streak >= 3 days
-        if (fStreak <= -3 && updatedHistory[stock.code].foreigner !== today) {
-          notifyItems.push({ type: 'danger', msg: `${stock.name} 외인 ${Math.abs(fStreak)}일 연속 매도` });
-          updatedHistory[stock.code].foreigner = today;
-        }
-        if (iStreak <= -3 && updatedHistory[stock.code].institution !== today) {
-          notifyItems.push({ type: 'danger', msg: `${stock.name} 기관 ${Math.abs(iStreak)}일 연속 매도` });
-          updatedHistory[stock.code].institution = today;
-        }
-
-        // Opportunity Condition: Buy Streak >= 3 days
-        if (fStreak >= 3 && updatedHistory[stock.code].fBuy !== today) {
-          notifyItems.push({ type: 'opportunity', msg: `${stock.name} 외인 ${fStreak}일 연속 매수` });
-          updatedHistory[stock.code].fBuy = today;
-        }
-        if (iStreak >= 3 && updatedHistory[stock.code].iBuy !== today) {
-          notifyItems.push({ type: 'opportunity', msg: `${stock.name} 기관 ${iStreak}일 연속 매수` });
-          updatedHistory[stock.code].iBuy = today;
-        }
-      }
-    }
-
-    // 4. Send Notifications
-    const dangerItems = notifyItems.filter(n => n.type === 'danger');
-    const oppItems = notifyItems.filter(n => n.type === 'opportunity');
-
-    if (dangerItems.length > 0) {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "🚨 Money Fact 위험 감지",
-          body: dangerItems.map(n => n.msg).join('\n'),
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-        },
-        trigger: null,
-      });
-    }
-
-    if (oppItems.length > 0) {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "🎯 Money Fact 매수 기회!",
-          body: oppItems.map(n => n.msg).join('\n'),
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.DEFAULT,
-        },
-        trigger: null,
-      });
-    }
-
-    if (notifyItems.length > 0) {
-      await AsyncStorage.setItem(NOTIF_HISTORY_KEY, JSON.stringify(updatedHistory));
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-
-    return BackgroundFetch.BackgroundFetchResult.NoData;
-  } catch (error) {
-    console.error('[Background Task Error]', error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <MainApp />
+    </SafeAreaProvider>
+  );
+}
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState('buy'); // 'buy', 'sell', 'my'
-  const [investor, setInvestor] = useState('2'); // Default to Foreigner
-  const [stocks, setStocks] = useState([]);
+  const [tab, setTab] = useState('home'); // home, list, my, settings
   const [loading, setLoading] = useState(false);
-  const [reportVisible, setReportVisible] = useState(false);
-  const [reportTitle, setReportTitle] = useState('');
-
-  // MY Portfolio State
   const [myStocks, setMyStocks] = useState([]);
-  const [myAnalysis, setMyAnalysis] = useState([]);
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [dangerAlert, setDangerAlert] = useState(null);
-  const [searchTimer, setSearchTimer] = useState(null);
-
-  const [isNotificationEnabled, setIsNotificationEnabled] = useState(true);
+  const [analyzedStocks, setAnalyzedStocks] = useState([]);
+  const [tickerItems, setTickerItems] = useState(["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"]);
   const [syncKey, setSyncKey] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [searchModal, setSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [detailModal, setDetailModal] = useState(false);
+  const [investorType, setInvestorType] = useState('INSTITUTION'); // INSTITUTION, FOREIGN, ALL
+  const [tradingType, setTradingType] = useState('BUY'); // BUY, SELL
+  const [suggestions, setSuggestions] = useState([]);
+  const [isMarketOpen, setIsMarketOpen] = useState(StockService.isMarketOpen());
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const isRefreshing = useRef(false);
 
-  // --- Expo Push Token Registration ---
-  const registerPushToken = useCallback(async (stocks = []) => {
-    try {
-      if (!Device.isDevice) {
-        console.log('[Push] Not a physical device, skipping push registration');
-        return;
-      }
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== 'granted') {
-        console.log('[Push] Permission not granted');
-        return;
-      }
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: undefined // Uses default from app.json
-      });
-      expoPushToken = tokenData.data;
-      console.log('[Push] Expo Push Token:', expoPushToken);
+  // Sample Sectors
+  const [sectors, setSectors] = useState([
+    { name: '반도체', flow: 0 },
+    { name: '2차전지', flow: 0 },
+    { name: '바이오', flow: 0 },
+    { name: '자동차', flow: 0 },
+    { name: '금융', flow: 0 },
+    { name: '로봇', flow: 0 },
+  ]);
+  const [detailedInstFlow, setDetailedInstFlow] = useState({ pnsn: 0, ivtg: 0, ins: 0 });
 
-      // Register with server (send current stocks for server-side alerts)
-      const savedSyncKey = await AsyncStorage.getItem(SYNC_KEY_STORAGE);
-      await axios.post(`${SERVER_URL}/api/push/register`, {
-        pushToken: expoPushToken,
-        syncKey: savedSyncKey || 'anonymous',
-        stocks: stocks
-      }, { timeout: 5000 });
-      console.log('[Push] Token registered with server!');
-    } catch (e) {
-      console.warn('[Push] Registration failed:', e.message);
-    }
-  }, []);
-
-  // Load Init
   useEffect(() => {
-    const init = async () => {
-      const loadedStocks = await loadMyStocks();
-      const savedNotif = await AsyncStorage.getItem(NOTIF_STORAGE_KEY);
-      const enabled = savedNotif !== null ? JSON.parse(savedNotif) : true;
-      setIsNotificationEnabled(enabled);
-
-      const savedSyncKey = await AsyncStorage.getItem(SYNC_KEY_STORAGE);
-      if (savedSyncKey) setSyncKey(savedSyncKey);
-
-      setupBackgroundTasks(enabled);
-
-      // Register for server-side push notifications
-      await registerPushToken(loadedStocks || []);
-    };
     init();
   }, []);
 
-  const saveSyncKey = async (val) => {
-    setSyncKey(val);
-    await AsyncStorage.setItem(SYNC_KEY_STORAGE, val);
+  const init = async () => {
+    // Hybrid Loading Stage 1: Fast data
+    const stocks = await StorageService.loadMyStocks();
+    setMyStocks(stocks);
+    const key = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_NICKNAME);
+    if (key) setSyncKey(key);
+
+    const notif = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_ENABLED);
+    setPushEnabled(notif !== 'false');
+
+    setIsMarketOpen(StockService.isMarketOpen());
+
+    // Stage 2: Deferred detailed analysis
+    setTimeout(() => {
+      refreshData(stocks);
+    }, 500);
+
+    setupBackground();
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const open = StockService.isMarketOpen();
+      setIsMarketOpen(open);
+      if (open && tab !== 'settings') {
+        refreshData(undefined, true); // Silent refresh
+      }
+    }, 30000); // Auto refresh every 30s
+    return () => clearInterval(timer);
+  }, [tab, myStocks]);
+
+  const setupBackground = async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
+        minimumInterval: 15 * 60,
+        stopOnTerminate: false,
+        startOnBoot: true,
+      });
+    } catch (e) { }
+  };
+
+  const refreshData = async (targetStocks, silent = false) => {
+    if (isRefreshing.current) return;
+    isRefreshing.current = true;
+    if (!silent) setLoading(true);
+    const results = [];
+    // Analyze both user stocks and default market watch stocks
+    const base = targetStocks || myStocks;
+    const combined = [...base];
+
+    // Add market watch stocks if not already in there
+    MARKET_WATCH_STOCKS.forEach(ms => {
+      if (!combined.find(c => c.code === ms.code)) {
+        combined.push(ms);
+      }
+    });
+
+    const tickerTexts = ["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"];
+    const sectorMap = {};
+    const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
+
+    for (const stock of combined) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      try {
+        const [data, livePrice] = await Promise.all([
+          StockService.getInvestorData(stock.code),
+          StockService.getCurrentPrice(stock.code)
+        ]);
+
+        if (data && data.length > 0) {
+          const analysis = StockService.analyzeSupply(data);
+          const vwap = StockService.calculateVWAP(data, 3);
+          const hidden = StockService.checkHiddenAccumulation(data);
+          const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
+          const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
+          const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
+          const insBuy = StockService.getNetBuyAmount(data, 1, 'INS');
+
+          // Prioritize live price (ATS or KRX real-time) over daily close
+          let currentPrice = 0;
+          if (livePrice && livePrice.stck_prpr) {
+            currentPrice = parseInt(livePrice.stck_prpr);
+          } else {
+            currentPrice = parseInt(data[0].stck_clpr || 0);
+          }
+
+          // Auto-fix stock names that were registered by code only
+          let stockName = stock.name;
+          if (stock.name.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm) {
+            stockName = livePrice.hts_kor_isnm.trim();
+            // Persist the corrected name
+            const idx = myStocks.findIndex(s => s.code === stock.code);
+            if (idx >= 0) {
+              const updatedStocks = [...myStocks];
+              updatedStocks[idx] = { ...updatedStocks[idx], name: stockName };
+              setMyStocks(updatedStocks);
+              StorageService.saveMyStocks(updatedStocks);
+            }
+          }
+
+          results.push({
+            ...stock,
+            name: stockName,
+            ...analysis,
+            vwap,
+            isHiddenAccumulation: hidden,
+            price: currentPrice
+          });
+
+          if (stock.sector) {
+            sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuy;
+          }
+
+          // Sum inst sub-types (Market monitor focus)
+          instTotals.pnsn += pnsnBuy;
+          instTotals.ivtg += ivtgBuy;
+          instTotals.ins += insBuy;
+
+          // Ticker logic for MY stocks only
+          const isMyStock = base.some(bs => bs.code === stock.code);
+          if (isMyStock) {
+            if (analysis.fStreak >= 3) tickerTexts.push(`🚀 ${stock.name}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
+            if (analysis.iStreak >= 3) tickerTexts.push(`🏛️ ${stock.name}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
+            const price = parseInt(data[0].stck_clpr || 0);
+            if (vwap > 0 && price < vwap * 0.97) tickerTexts.push(`💎 ${stock.name}: 세력평단 대비 저평가 구간 진입!`);
+            if (hidden) tickerTexts.push(`🤫 ${stock.name}: 수상한 매집 정황 포착!`);
+          }
+        } else {
+          results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
+        }
+      } catch (e) {
+        results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true });
+      }
+    }
+    setAnalyzedStocks(results);
+
+    // Finalize sectors (Convert raw KRW to 100M units)
+    const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
+      const flow = Math.round(rawFlow / 100000000);
+      return { name, flow };
+    });
+
+    if (updatedSectors.length > 0) {
+      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+    }
+    // Round inst sub-types to billion KRW
+    const roundedInstTotals = {
+      pnsn: Math.round(instTotals.pnsn / 100000000),
+      ivtg: Math.round(instTotals.ivtg / 100000000),
+      ins: Math.round(instTotals.ins / 100000000),
+    };
+    setDetailedInstFlow(roundedInstTotals);
+
+    if (tickerTexts.length > 2) setTickerItems(tickerTexts);
+    setLastUpdate(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    setLoading(false);
+    isRefreshing.current = false;
+  };
+
+  const handleSearch = async (text) => {
+    setSearchQuery(text);
+    if (text.length >= 2) {
+      // 1. Local Search
+      const localFiltered = ALL_STOCKS.filter(s =>
+        s.name.toLowerCase().includes(text.toLowerCase()) || s.code.includes(text)
+      );
+
+      // 2. Server Search (If local is empty or few results)
+      if (localFiltered.length < 5 && !/^\d+$/.test(text)) {
+        const serverResults = await StockService.searchStock(text);
+        const combined = [...localFiltered];
+        serverResults.forEach(ss => {
+          if (!combined.some(c => c.code === ss.code)) {
+            combined.push(ss);
+          }
+        });
+        setSuggestions(combined.slice(0, 10));
+      } else {
+        setSuggestions(localFiltered.slice(0, 10));
+      }
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const handleAddStock = async (selected) => {
+    let name, code;
+
+    if (selected && selected.name) {
+      name = selected.name;
+      code = selected.code;
+    } else {
+      // 1. Local Check
+      const found = ALL_STOCKS.find(s => s.name === searchQuery || s.code === searchQuery);
+      if (found) {
+        name = found.name;
+        code = found.code;
+      } else if (searchQuery.length === 6 && /^\d+$/.test(searchQuery)) {
+        // 2. 6-digit Code Input
+        code = searchQuery;
+        try {
+          const priceData = await StockService.getCurrentPrice(code);
+          if (priceData && priceData.hts_kor_isnm) {
+            name = priceData.hts_kor_isnm.trim();
+          } else {
+            name = `종목(${code})`;
+          }
+        } catch (e) {
+          name = `종목(${code})`;
+        }
+      } else if (searchQuery.length >= 2) {
+        // 3. Name Input -> Try Server Search
+        setLoading(true);
+        const serverResults = await StockService.searchStock(searchQuery);
+        setLoading(false);
+        if (serverResults.length > 0) {
+          // If exactly one match or first one
+          name = serverResults[0].name;
+          code = serverResults[0].code;
+        }
+      }
+
+      if (!code) {
+        name = searchQuery;
+        code = null;
+      }
+    }
+
+    if (code) {
+      const newStock = { code, name };
+      const isAlreadyAdded = myStocks.some(s => s.code === code);
+      if (isAlreadyAdded) {
+        Alert.alert('알림', '이미 추가된 종목입니다.');
+      } else {
+        const updated = [...myStocks, newStock];
+        setMyStocks(updated);
+        StorageService.saveMyStocks(updated);
+        refreshData(updated);
+        setSearchQuery('');
+        setSuggestions([]);
+        setSearchModal(false);
+      }
+    } else {
+      Alert.alert('검색 실패', '정확한 종목명이나 6자리 종목코드를 입력해주세요.');
+    }
+  };
+
+  const handleCheckDuplicate = async () => {
+    if (!syncKey) {
+      Alert.alert('알림', '먼저 닉네임을 입력해주세요.');
+      return;
+    }
+    const isTaken = await StorageService.checkNickname(syncKey);
+    if (isTaken) {
+      Alert.alert('중복 확인', '이미 사용 중인 닉네임입니다. 본인이라면 [가져오기]를, 아니라면 다른 키를 사용해 주세요.');
+    } else {
+      Alert.alert('중복 확인', '사용 가능한 닉네임입니다!');
+    }
   };
 
   const handleBackup = async () => {
-    const trimmedKey = syncKey.trim();
-    if (!trimmedKey) { Alert.alert('알림', '사용할 키를 입력해주세요.'); return; }
-    setIsSyncing(true);
-    try {
-      await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey: trimmedKey, stocks: myStocks });
-      Alert.alert('성공', '내 종목이 클라우드에 안전하게 보관되었습니다!');
-    } catch (e) {
-      Alert.alert('실패', '서버 통신 중 오류가 발생했습니다.');
-    } finally { setIsSyncing(false); }
-  };
-
-  const handleRestore = async () => {
-    const trimmedKey = syncKey.trim();
-    if (!trimmedKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
-    setIsSyncing(true);
-    try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${trimmedKey}`);
-      const restored = res.data.stocks || [];
-      if (restored.length > 0) {
-        setMyStocks(restored);
-        await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(restored));
-        Alert.alert('성공', `${restored.length}개의 종목을 복구했습니다!`);
-
-        // CRITICAL: Manually trigger scan with the RESTORED list to bypass stale state closure
-        setTimeout(() => {
-          fetchDirectData(true, restored);
-        }, 500);
-      }
-    } catch (e) {
-      Alert.alert('실패', '해당 키로 저장된 데이터를 찾을 수 없습니다.');
-    } finally { setIsSyncing(false); }
-  };
-
-  const checkSyncKey = async () => {
-    const trimmedKey = syncKey.trim();
-    if (!trimmedKey) { Alert.alert('알림', '키를 입력해주세요.'); return; }
-    try {
-      const res = await axios.get(`${SERVER_URL}/api/sync/check?syncKey=${trimmedKey}`);
-      if (res.data.exists) {
-        Alert.alert('경고', '이미 사용 중인 키입니다. 키가 중복되니 다른 키를 입력해 주세요.');
-      } else {
-        Alert.alert('성공', '사용 가능한 키입니다! 지금 바로 백업해 보세요.');
-      }
-    } catch (e) { }
-  };
-
-  const toggleNotification = async (val) => {
-    setIsNotificationEnabled(val);
-    await AsyncStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(val));
-    setupBackgroundTasks(val);
-  };
-
-  const setupBackgroundTasks = async (enabled) => {
-    if (!enabled) {
-      try { await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TASK_NAME); } catch (e) { }
-      return;
-    }
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') return;
-    try {
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
-        minimumInterval: 15 * 60, stopOnTerminate: false, startOnBoot: true,
-      });
-    } catch (err) { }
-  };
-
-  const loadMyStocks = async () => {
-    try {
-      const saved = await AsyncStorage.getItem(MY_STOCKS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setMyStocks(parsed);
-        return parsed;
-      }
-      return [];
-    } catch (e) { return []; }
-  };
-
-  const saveMyStocks = async (data) => {
-    try {
-      await AsyncStorage.setItem(MY_STOCKS_KEY, JSON.stringify(data));
-      // Update server with latest stock list for push alerts
-      registerPushToken(data);
-    } catch (e) { }
-  };
-
-  const addStock = (stock) => {
-    setMyStocks((prev) => {
-      if (prev.find(s => s.code === stock.code)) {
-        Alert.alert('알림', '이미 등록된 종목입니다.');
-        return prev;
-      }
-      const updated = [...prev, stock];
-      saveMyStocks(updated);
-      return updated;
-    });
-    setSearchVisible(false); setSearchKeyword(''); setSearchResults([]);
-  };
-
-  const removeStock = (code) => {
-    const updated = myStocks.filter(s => s.code !== code);
-    setMyStocks(updated);
-    saveMyStocks(updated);
-    setMyAnalysis(myAnalysis.filter(s => s.code !== code));
-  };
-
-  const searchStock = (keyword) => {
-    setSearchKeyword(keyword);
-    if (searchTimer) clearTimeout(searchTimer);
-    if (keyword.length < 1) { setSearchResults([]); return; }
-
-    const timer = setTimeout(async () => {
-      try {
-        // Search still uses Server (it's hardcoded list anyway)
-        const res = await axios.get(`${SERVER_URL}/api/search?keyword=${encodeURIComponent(keyword)}`);
-        setSearchResults(res.data.result || []);
-      } catch (e) { setSearchResults([]); }
-    }, 400);
-    setSearchTimer(timer);
-  };
-
-  // --- STORE: Memory Cache for Market Data ---
-  const marketStore = React.useRef({ data: new Map(), lastScan: 0, lastMyScan: 0 });
-  const [scanProgress, setScanProgress] = useState(0);
-  const [foundCount, setFoundCount] = useState(0);
-
-  // Helper: Get formatted date YYYYMMDD for last business day in KST (UTC+9)
-  const getLatestBusinessDay = () => {
-    const now = new Date();
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const kstDate = new Date(utcTime + (9 * 3600000));
-
-    let d = kstDate;
-    const isWeekend = (day) => day === 0 || day === 6;
-
-    // In KST, if before 4 PM (16:00), today's close data might not be ready
-    if (d.getHours() < 16) d.setDate(d.getDate() - 1);
-
-    while (isWeekend(d.getDay())) {
-      d.setDate(d.getDate() - 1);
-    }
-
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const bday = String(d.getDate()).padStart(2, '0');
-
-    // 추가: 만약 주말이거나 오늘 데이터가 아직 안 올라왔을 경우를 대비해 어제 날짜도 준비
-    const prev = new Date(d);
-    prev.setDate(prev.getDate() - 1);
-    while (isWeekend(prev.getDay())) prev.setDate(prev.getDate() - 1);
-    const py = prev.getFullYear();
-    const pm = String(prev.getMonth() + 1).padStart(2, '0');
-    const pbday = String(prev.getDate()).padStart(2, '0');
-
-    return { today: `${y}${m}${bday}`, yesterday: `${py}${pm}${pbday}` };
-  };
-
-  const fetchDirectData = useCallback(async (force = false, manualList = null) => {
-    // --- 1. MY Mode Cache Check ---
-    if (mode === 'my' && !force) {
-      const isRecentlyScanned = Date.now() - marketStore.current.lastMyScan < 5 * 60 * 1000;
-      if (isRecentlyScanned && myAnalysis.length > 0) {
-        console.log('[App] Using MY cache (last scanned < 5min)');
-        return;
-      }
-    }
-
-    // Do NOT clear existing data if we have it, to avoid "Empty Screen" effect
-    // setStocks([]); // Commented out to keep current list until new data replaces it
     setLoading(true);
-    setScanProgress(0);
-    setFoundCount(0);
-
     try {
-      // --- 2. SERVER MODE ---
-      let serverDataSuccess = false;
-      if (mode !== 'my' && !force) {
-        try {
-          console.log(`[App] Requesting Server Analysis (Mode: ${mode}, Inv: ${investor})`);
-          const res = await axios.get(`${SERVER_URL}/api/analysis/supply/5/${investor}?mode=${mode}`);
-          if (res.data && res.data.output && res.data.output.length > 0) {
-            console.log(`[App] Server data received: ${res.data.output.length} items`);
-            setStocks(res.data.output);
-            serverDataSuccess = true;
-          }
-        } catch (serverErr) {
-          console.log('[App] Server fallback to Direct Mode.');
-        }
-      }
-
-      // --- 3. DIRECT MODE ---
-      const token = await getKisToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      let candidates = [];
-      if (mode === 'my') {
-        candidates = myStocks;
-      } else if (!serverDataSuccess) {
-        const candidateMap = new Map();
-        const add = (arr) => arr?.forEach(c => {
-          const code = c.stck_shrn_iscd || c.mksc_shrn_iscd;
-          const name = c.hts_kor_isnm;
-          if (code && !candidateMap.has(code)) candidateMap.set(code, { code, name });
-        });
-
-        const fetchRank = async (dateStr = '') => {
-          const endpoints = [
-            { tid: 'FHPTJ04400000', p: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' } },
-            { tid: 'FHPTJ04400000', p: { FID_COND_MRKT_DIV_CODE: 'W', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' } },
-            { tid: 'FHPST01710000', p: { FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20171', FID_INPUT_ISCD: '0001', FID_DIV_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000', FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: dateStr } },
-            { tid: 'FHPST01710000', p: { FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20171', FID_INPUT_ISCD: '1001', FID_DIV_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000', FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: dateStr } },
-            { tid: 'FHPST01700000', p: { FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20170', FID_INPUT_ISCD: '0001', FID_RANK_SORT_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000', FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: dateStr } },
-            { tid: 'FHPST01700000', p: { FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20170', FID_INPUT_ISCD: '1001', FID_RANK_SORT_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000', FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: dateStr } }
-          ];
-          const resArr = await Promise.all(endpoints.map(e =>
-            axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/${e.tid === 'FHPTJ04400000' ? 'foreign-institution-total' : (e.tid === 'FHPST01710000' ? 'volume-rank' : 'fluctuation-rank')}`, {
-              headers: { authorization: `Bearer ${token}`, appkey: APP_KEY.trim(), appsecret: APP_SECRET.trim(), tr_id: e.tid, custtype: 'P' },
-              params: e.p
-            }).catch(() => ({ data: { output: [] } }))
-          ));
-          resArr.forEach(r => add(r.data.output));
-        };
-
-        const { today, yesterday } = getLatestBusinessDay();
-        await fetchRank(today);
-        if (candidateMap.size < 30) await fetchRank(yesterday);
-        if (candidateMap.size < 10) await fetchRank('');
-        candidates = Array.from(candidateMap.values()).slice(0, 450);
-      }
-
-      if (mode !== 'my' && !serverDataSuccess && candidates.length === 0) {
-        setStocks([]); setLoading(false); return;
-      }
-
-      const nextDataMap = new Map();
-      const results = [];
-      const analysisList = [];
-      let found = 0;
-
-      // Always scan myStocks for badges/alerts, plus candidates if no server data
-      let monitorList = [];
-      const currentMyStocks = manualList || myStocks; // Use manualList if provided (e.g. after restore)
-
-      if (mode === 'my') {
-        monitorList = currentMyStocks;
-      } else {
-        const otherStocks = serverDataSuccess ? [] : candidates;
-        const combined = [...otherStocks];
-        currentMyStocks.forEach(ms => {
-          if (!combined.find(c => c.code === ms.code)) combined.push(ms);
-        });
-        monitorList = combined;
-      }
-
-      for (let i = 0; i < monitorList.length; i++) {
-        const stock = monitorList[i];
-        if (i % 5 === 0) setScanProgress(Math.round(((i + 1) / monitorList.length) * 100));
-
-        const daily = await getMarketData(stock.code);
-        if (daily && daily.length > 0) {
-          const fStreak = analyzeStreak(daily, '2');
-          const iStreak = analyzeStreak(daily, '1');
-          const price = parseInt(daily[0].stck_clpr);
-          // Store last 5 days net buy data for UI trend display
-          const history = daily.slice(0, 5).map(d => ({
-            f: parseInt(d.fgnn_ntby_qty || 0),
-            i: parseInt(d.orgn_ntby_qty || 0)
-          }));
-          const analyzedItem = { code: stock.code, name: stock.name, price, fStreak, iStreak, history };
-          nextDataMap.set(stock.code, analyzedItem);
-
-          const isMyStock = myStocks.find(ms => ms.code === stock.code);
-          const isDanger = fStreak <= -1 || iStreak <= -1; // TEST: Lowered to 1 day
-
-          if (isMyStock || mode === 'my') {
-            const myEntry = {
-              ...analyzedItem, isDanger,
-              analysis: {
-                foreigner: { buy: fStreak > 0 ? fStreak : 0, sell: fStreak < 0 ? Math.abs(fStreak) : 0 },
-                institution: { buy: iStreak > 0 ? iStreak : 0, sell: iStreak < 0 ? Math.abs(iStreak) : 0 }
-              }
-            };
-            analysisList.push(myEntry);
-            // Instant UI update for My stocks
-            setMyAnalysis([...analysisList]);
-          }
-          if (mode !== 'my' && !serverDataSuccess) {
-            const streak = (investor === '2' ? fStreak : iStreak);
-            const isMatch = (mode === 'buy' && streak >= 3) || (mode === 'sell' && streak <= -3);
-            if (isMatch) {
-              found++; setFoundCount(found);
-              const newItem = { ...analyzedItem, streak: Math.abs(streak) };
-              results.push(newItem);
-              // Show data incrementally for better UX
-              setStocks(prev => [...prev, newItem].sort((a, b) => b.streak - a.streak));
-            }
-          }
-        }
-        await new Promise(r => setTimeout(r, 70));
-      }
-
-      // --- ALERTS ---
-      const dangerMsgs = [];
-      const nowKst = new Date(new Date().getTime() + (9 * 60 * 60 * 1000) + (new Date().getTimezoneOffset() * 60000));
-      const todayStr = nowKst.toISOString().split('T')[0];
-      const isMarketStarted = nowKst.getHours() >= 9;
-
-      for (const s of analysisList) {
-        if (!s.isDanger) continue;
-        const { foreigner, institution } = s.analysis;
-        const stockSignals = [];
-        const notifyIfNecessary = async (type, count) => {
-          stockSignals.push(`${type}${count}일연속매도`);
-          if (isNotificationEnabled && isMarketStarted) {
-            const storageKey = `@notif_${s.code}_${type}`;
-            const lastDate = await AsyncStorage.getItem(storageKey);
-            if (lastDate !== todayStr) {
-              Notifications.scheduleNotificationAsync({
-                content: { title: '⚠️ MY 종목 리스크 포착!', body: `${s.name} ${type} ${count}일 연속 매매 이탈 중`, sound: true },
-                trigger: null,
-              });
-              await AsyncStorage.setItem(storageKey, todayStr);
-            }
-          }
-        };
-        if (foreigner.sell >= 1) await notifyIfNecessary('외인', foreigner.sell);
-        if (institution.sell >= 1) await notifyIfNecessary('기관', institution.sell);
-        if (stockSignals.length > 0) dangerMsgs.push(`${s.name}(${stockSignals.join(',')})`);
-      }
-      setDangerAlert(dangerMsgs.length > 0 ? `매도주의: ${dangerMsgs.join(' / ')}` : null);
-
-      // --- BUY OPPORTUNITY ALERTS ---
-      const oppMsgs = [];
-      for (const s of analysisList) {
-        const { foreigner, institution } = s.analysis;
-        if (foreigner.buy >= 1) oppMsgs.push(`${s.name} 외인 ${foreigner.buy}일 매수`);
-        if (institution.buy >= 1) oppMsgs.push(`${s.name} 기관 ${institution.buy}일 매수`);
-      }
-      // Send buy opportunity alert (once per day per stock)
-      if (oppMsgs.length > 0 && isNotificationEnabled && isMarketStarted) {
-        for (const msg of oppMsgs) {
-          const oppKey = `@opp_${msg.split(' ')[0]}_${todayStr}`;
-          const alreadySent = await AsyncStorage.getItem(oppKey);
-          if (!alreadySent) {
-            Notifications.scheduleNotificationAsync({
-              content: { title: '🎯 매수 기회 포착!', body: msg, sound: true },
-              trigger: null,
-            });
-            await AsyncStorage.setItem(oppKey, 'sent');
-          }
-        }
-      }
-
-      // Always update myAnalysis state so badges and banners work in any mode
-      setMyAnalysis(analysisList);
-
-      if (mode === 'my') {
-        marketStore.current.lastMyScan = Date.now();
-      } else {
-        marketStore.current = { ...marketStore.current, data: nextDataMap, lastScan: Date.now() };
-        if (!serverDataSuccess) setStocks(results.sort((a, b) => b.streak - a.streak));
-      }
+      await StorageService.backup(syncKey, myStocks);
+      await AsyncStorage.setItem(STORAGE_KEYS.SYNC_NICKNAME, syncKey);
+      Alert.alert('성공', '백업이 완료되었습니다.');
     } catch (e) {
-      console.error(e);
-      Alert.alert('오류', '데이터 분석 중 문제가 발생했습니다.');
+      Alert.alert('오류', '백업 실패');
     } finally {
       setLoading(false);
     }
-  }, [mode, investor, myStocks, isNotificationEnabled]);
+  };
 
-  // Initial Fetch & Refresh (Combined Logic)
-  useEffect(() => {
-    fetchDirectData();
-  }, [mode, investor]);
+  const handleRestore = async () => {
+    setLoading(true);
+    try {
+      const stocks = await StorageService.restore(syncKey);
+      if (stocks && stocks.length > 0) {
+        setMyStocks(stocks);
+        StorageService.saveMyStocks(stocks);
+        refreshData(stocks);
+        await AsyncStorage.setItem(STORAGE_KEYS.SYNC_NICKNAME, syncKey);
+        Alert.alert('성공', '데이터를 성공적으로 가져왔습니다.');
+      } else {
+        Alert.alert('알림', '해당 키에 저장된 데이터가 없습니다.');
+      }
+    } catch (e) {
+      Alert.alert('오류', '데이터를 가져오지 못했습니다. 키를 확인해 주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Refresh interval (24/7 Scan)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchDirectData();
-    }, 60 * 1000 * 15); // 15 min (aligned with server & background task)
-    return () => clearInterval(interval);
-  }, [fetchDirectData]);
+  const handleDeleteStock = (code) => {
+    Alert.alert(
+      '종목 삭제',
+      '이 종목을 목록에서 삭제하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            const updated = myStocks.filter(s => s.code !== code);
+            setMyStocks(updated);
+            await StorageService.saveMyStocks(updated);
+          }
+        }
+      ]
+    );
+  };
 
+  const MarketStatusHeader = () => (
+    <View style={[styles.marketHeader, isMarketOpen ? styles.marketOpenBg : styles.marketClosedBg]}>
+      <View style={styles.marketInfo}>
+        <View style={[styles.statusDot, isMarketOpen ? styles.dotOpen : styles.dotClosed]} />
+        <View>
+          <Text style={styles.marketStatusText}>
+            {isMarketOpen ? "장중 - 실시간 대응 모드" : "장후 - 심층 분석 모드"}
+          </Text>
+          {lastUpdate && <Text style={styles.updateText}>{lastUpdate} 마지막 갱신</Text>}
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={styles.marketTimeText}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+        {isMarketOpen && <Text style={styles.liveBadge}>LIVE</Text>}
+      </View>
+    </View>
+  );
+
+  const renderContent = () => {
+    if (tab === 'home') {
+      const fStrength = analyzedStocks.reduce((acc, s) => acc + (s.fStreak || 0), 0);
+      const iStrength = analyzedStocks.reduce((acc, s) => acc + (s.iStreak || 0), 0);
+
+      const getSentimentInfo = () => {
+        if (isMarketOpen) {
+          return {
+            title: "급변하는 실시간 수급 현황",
+            desc: `🔥 외국인(${fStrength > 0 ? '매수우위' : '매도우위'})과 기관(${iStrength > 0 ? '매수우위' : '매도우위'})이 현재 시장의 방향성을 결정하고 있습니다.`,
+            temp: 50 + (fStrength * 2) + (iStrength * 2)
+          };
+        } else {
+          return {
+            title: "오늘의 시장 종합 심리",
+            desc: `📅 금일 외국인은 ${fStrength > 0 ? '순매수' : '순매도'}를, 기관은 ${iStrength > 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
+            temp: 50 + (fStrength * 2) + (iStrength * 2)
+          };
+        }
+      };
+
+      const info = getSentimentInfo();
+
+      return (
+        <ScrollView style={styles.scroll}>
+          <MarketStatusHeader />
+          <SectorHeatmap sectors={sectors} />
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{info.title}</Text>
+            <View style={styles.row}>
+              <Thermometer temperature={Math.max(10, Math.min(95, info.temp))} label={info.temp > 50 ? "매수세 강세" : "관망세 우세"} />
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>{info.desc}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>나의 매집 의심 종목</Text>
+          {analyzedStocks.filter(s => s.isHiddenAccumulation).map(s => (
+            <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
+          ))}
+          {analyzedStocks.filter(s => s.isHiddenAccumulation).length === 0 && <Text style={styles.emptyText}>현재 조용히 매집 중인 종목이 없습니다.</Text>}
+        </ScrollView>
+      );
+    }
+    if (tab === 'list') {
+      const filtered = analyzedStocks.filter(s => {
+        const isBuy = tradingType === 'BUY';
+        if (investorType === 'FOREIGN') return isBuy ? s.fStreak >= 3 : s.fStreak <= -3;
+        if (investorType === 'INSTITUTION') return isBuy ? s.iStreak >= 3 : s.iStreak <= -3;
+        return isBuy ? (s.fStreak >= 3 || s.iStreak >= 3) : (s.fStreak <= -3 || s.iStreak <= -3);
+      });
+
+      return (
+        <ScrollView style={styles.scroll}>
+          <MarketStatusHeader />
+          <Text style={styles.sectionTitle}>
+            {isMarketOpen ? "실시간 수급 연속 매매" : "금일 수급 연속 매매 TOP"}
+          </Text>
+
+          <View style={styles.mainFilterRow}>
+            <TouchableOpacity
+              style={[styles.mainFilterBtn, tradingType === 'BUY' && styles.buyActive]}
+              onPress={() => setTradingType('BUY')}>
+              <Text style={[styles.mainFilterText, tradingType === 'BUY' && styles.activeTabText]}>매수</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.mainFilterBtn, tradingType === 'SELL' && styles.sellActive]}
+              onPress={() => setTradingType('SELL')}>
+              <Text style={[styles.mainFilterText, tradingType === 'SELL' && styles.activeTabText]}>매도</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.filterRow}>
+            <TouchableOpacity
+              style={investorType === 'INSTITUTION' ? styles.filterBtnActive : styles.filterBtn}
+              onPress={() => setInvestorType('INSTITUTION')}>
+              <Text style={styles.filterBtnText}>기관</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={investorType === 'FOREIGN' ? styles.filterBtnActive : styles.filterBtn}
+              onPress={() => setInvestorType('FOREIGN')}>
+              <Text style={styles.filterBtnText}>외국인</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={investorType === 'ALL' ? styles.filterBtnActive : styles.filterBtn}
+              onPress={() => setInvestorType('ALL')}>
+              <Text style={styles.filterBtnText}>전체</Text>
+            </TouchableOpacity>
+          </View>
+
+          {filtered.sort((a, b) => {
+            const getVal = (s) => {
+              if (investorType === 'FOREIGN') return Math.abs(s.fStreak);
+              if (investorType === 'INSTITUTION') return Math.abs(s.iStreak);
+              return Math.abs(s.fStreak) + Math.abs(s.iStreak);
+            };
+            return getVal(b) - getVal(a);
+          }).map(s => (
+            <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
+          ))}
+          {filtered.length === 0 && !loading && <Text style={styles.emptyText}>조건에 맞는 종목이 없습니다.</Text>}
+          {loading && <ActivityIndicator size="small" color="#3182f6" style={{ marginTop: 20 }} />}
+        </ScrollView>
+      );
+    }
+    if (tab === 'my') {
+      return (
+        <ScrollView style={styles.scroll}>
+          <View style={styles.headerRow}>
+            <Text style={styles.sectionTitle}>보유 종목 현황</Text>
+            <TouchableOpacity onPress={() => setSearchModal(true)}>
+              <Plus size={20} color="#3182f6" />
+            </TouchableOpacity>
+          </View>
+          {analyzedStocks.filter(s => myStocks.some(ms => ms.code === s.code)).map(s => (
+            <StockCard
+              key={s.code}
+              stock={s}
+              onPress={() => { setSelectedStock(s); setDetailModal(true); }}
+              onDelete={() => handleDeleteStock(s.code)}
+            />
+          ))}
+          {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
+        </ScrollView>
+      );
+    }
+    if (tab === 'settings') {
+      return (
+        <View style={styles.scroll}>
+          <Text style={styles.sectionTitle}>관리 및 백업</Text>
+          <View style={styles.card}>
+            <Text style={styles.label}>닉네임 백업 키</Text>
+            <View style={styles.nickRow}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                value={syncKey}
+                onChangeText={setSyncKey}
+                placeholder="나만의 키 입력"
+                placeholderTextColor="#555"
+              />
+              <TouchableOpacity style={styles.checkBtn} onPress={handleCheckDuplicate}>
+                <Text style={styles.checkBtnText}>중복 확인</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.descText}>* 중복 확인 후 사용 가능한 키로 백업해 주세요.</Text>
+
+            <View style={[styles.row, { marginTop: 15 }]}>
+              <TouchableOpacity style={styles.btn} onPress={handleBackup}>
+                <CloudUpload size={16} color="#fff" />
+                <Text style={styles.btnText}>백업하기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, { backgroundColor: '#333' }]} onPress={handleRestore}>
+                <Download size={16} color="#fff" />
+                <Text style={styles.btnText}>가져오기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.label}>알림 설정</Text>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingText}>3일 연속 수급 발생 시 푸시</Text>
+              <Switch
+                value={pushEnabled}
+                onValueChange={async (val) => {
+                  setPushEnabled(val);
+                  await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_ENABLED, val.toString());
+                }}
+                trackColor={{ true: '#3182f6' }}
+              />
+            </View>
+          </View>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="light-content" />
+      <Ticker items={tickerItems} />
 
-      {dangerAlert && (
-        <TouchableOpacity style={styles.dangerBanner} onPress={() => setReportVisible(true)}>
-          <View style={styles.dangerIconBox}>
-            <AlertTriangle size={18} color="#fff" strokeWidth={3} />
-          </View>
-          <View style={styles.dangerTextBox}>
-            <Text style={styles.dangerTitleText}>⚠️ 긴급 위험 감지</Text>
-            <Text style={styles.dangerBannerText} numberOfLines={1}>{dangerAlert}</Text>
-          </View>
-          <TouchableOpacity onPress={() => setDangerAlert(null)} style={styles.closeDangerBtn}>
-            <X size={18} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      )}
+      <View style={styles.content}>
+        {renderContent()}
+      </View>
 
-      <ImageBackground source={require('./assets/banner.png')} style={styles.bannerContainer} resizeMode="cover">
-        <View style={styles.bannerOverlay}>
-          <Text style={styles.bannerBrandText}>Money Fact (Direct)</Text>
-          <Text style={{ fontSize: 10, color: '#3182F6', fontWeight: 'bold' }}>v1.0.8-Test</Text>
-        </View>
-      </ImageBackground>
-
-      <View style={styles.modeTabs}>
-        <TouchableOpacity style={[styles.modeTab, mode === 'buy' && styles.modeTabActiveBuy]} onPress={() => setMode('buy')}>
-          <TrendingUp size={14} color={mode === 'buy' ? '#fff' : '#888'} />
-          <Text style={[styles.modeTabText, mode === 'buy' && styles.modeTextActive]}>BUY</Text>
+      {/* Nav BAr */}
+      <View style={[styles.nav, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity style={styles.navItem} onPress={() => setTab('home')}>
+          <TrendingUp size={24} color={tab === 'home' ? '#3182f6' : '#888'} />
+          <Text style={[styles.navText, tab === 'home' && styles.navTextActive]}>대시보드</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.modeTab, mode === 'sell' && styles.modeTabActiveSell]} onPress={() => setMode('sell')}>
-          <TrendingDown size={14} color={mode === 'sell' ? '#fff' : '#888'} />
-          <Text style={[styles.modeTabText, mode === 'sell' && styles.modeTextActive]}>SELL</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => setTab('list')}>
+          <RefreshCcw size={24} color={tab === 'list' ? '#3182f6' : '#888'} />
+          <Text style={[styles.navText, tab === 'list' && styles.navTextActive]}>연속매매</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.modeTab, mode === 'my' && styles.modeTabActiveMy]} onPress={() => setMode('my')}>
-          <Star size={14} color={mode === 'my' ? '#fff' : '#888'} />
-          <Text style={[styles.modeTabText, mode === 'my' && styles.modeTextActive]}>MY</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => setTab('my')}>
+          <Star size={24} color={tab === 'my' ? '#3182f6' : '#888'} />
+          <Text style={[styles.navText, tab === 'my' && styles.navTextActive]}>내 종목</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => setTab('settings')}>
+          <Settings size={24} color={tab === 'settings' ? '#3182f6' : '#888'} />
+          <Text style={[styles.navText, tab === 'settings' && styles.navTextActive]}>설정</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {mode !== 'my' && (
-          <View style={styles.stickySection}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-              {['2', '1'].map((v, i) => { // Removed '0' (Total) as it's complex to calc direct
-                const labels = ['외국인', '기관'];
-                return (
-                  <TouchableOpacity key={v} style={[styles.chip, investor === v && styles.chipActive]} onPress={() => setInvestor(v)}>
-                    <Text style={[styles.chipText, investor === v && styles.chipTextActive]}>{labels[i]}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
+      {/* Search Modal */}
+      <Modal visible={searchModal} transparent animationType="slide">
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>종목 추가</Text>
+            <TextInput
+              style={styles.modalInput}
+              autoFocus
+              placeholder="종목명 또는 코드 입력"
+              placeholderTextColor="#555"
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
 
-        <View style={styles.listContainer}>
-          <View style={styles.statusBar}>
-            <View style={styles.dot} />
-            <Text style={styles.statusText}>
-              {loading ? '⚡ KIS 직접 연결 중...' : '✅ 실시간 데이터 수신 완료'}
-            </Text>
-          </View>
-
-          {mode === 'my' && (
-            <TouchableOpacity style={styles.addStockBtn} onPress={() => setSearchVisible(true)}>
-              <Plus size={18} color="#3182F6" />
-              <Text style={styles.addStockBtnText}>내 종목 추가</Text>
-            </TouchableOpacity>
-          )}
-
-          {!loading && mode !== 'my' && stocks.length === 0 && (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <Text style={{ color: '#888', textAlign: 'center' }}>조건에 맞는 종목이 없습니다.{"\n"}(가장 최근 마감 데이터를 분석 중입니다.)</Text>
-            </View>
-          )}
-
-          {mode !== 'my' && stocks.map((item) => (
-            <View key={item.code} style={styles.stockCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stockName}>{item.name}</Text>
-                <Text style={styles.stockStreak}>{item.streak}일 연속 {mode === 'buy' ? '매집' : '이탈'} 🔥</Text>
-              </View>
-              <Text style={styles.stockPrice}>{item.price.toLocaleString()}원</Text>
-            </View>
-          ))}
-
-          {mode === 'my' && myStocks.map((item) => {
-            const analysis = myAnalysis.find(a => a.code === item.code);
-            const a = analysis?.analysis;
-            return (
-              <View key={item.code} style={[styles.stockCard, styles.stockCardMy, analysis?.isDanger && styles.stockCardDanger]}>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={styles.stockName}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => removeStock(item.code)}><Trash2 size={16} color="#F04452" /></TouchableOpacity>
-                  </View>
-                  {a && (
-                    <View style={styles.badgeGrid}>
-                      {a.foreigner.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>외인 {a.foreigner.buy}일↑</Text></View>}
-                      {a.foreigner.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>외인 {a.foreigner.sell}일↓</Text></View>}
-                      {a.institution.buy >= 1 && <View style={[styles.statusTag, styles.tagBuy]}><Text style={styles.tagText}>기관 {a.institution.buy}일↑</Text></View>}
-                      {a.institution.sell >= 1 && <View style={[styles.statusTag, styles.tagSell]}><Text style={styles.tagText}>기관 {a.institution.sell}일↓</Text></View>}
-                      {a.foreigner.buy === 0 && a.foreigner.sell === 0 && a.institution.buy === 0 && a.institution.sell === 0 && (
-                        <View style={[styles.statusTag, { backgroundColor: '#F2F4F6' }]}><Text style={[styles.tagText, { color: '#888' }]}>수급 관찰 중</Text></View>
-                      )}
-                    </View>
-                  )}
-                  {analysis?.history && (
-                    <View style={styles.trendContainer}>
-                      <View style={styles.trendRow}>
-                        <Text style={styles.trendLabel}>외인</Text>
-                        <View style={styles.trendBars}>
-                          {analysis.history.map((h, idx) => (
-                            <View key={`f-${idx}`} style={[styles.trendDot, h.f > 0 ? styles.dotBuy : (h.f < 0 ? styles.dotSell : styles.dotNeutral)]} />
-                          ))}
-                        </View>
-                      </View>
-                      <View style={styles.trendRow}>
-                        <Text style={styles.trendLabel}>기관</Text>
-                        <View style={styles.trendBars}>
-                          {analysis.history.map((h, idx) => (
-                            <View key={`i-${idx}`} style={[styles.trendDot, h.i > 0 ? styles.dotBuy : (h.i < 0 ? styles.dotSell : styles.dotNeutral)]} />
-                          ))}
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-          {/* MY Mode Sync Section */}
-          {mode === 'my' && (
-            <View style={styles.syncCard}>
-              <Text style={styles.syncTitle}>☁️ 종목 클라우드 키(Key) 백업</Text>
-              <Text style={styles.syncDesc}>앱을 새로 깔아도 고유 키(Key)만 있으면 바로 복구됩니다.</Text>
-              <View style={styles.syncInputRow}>
-                <TextInput
-                  style={styles.syncInput}
-                  placeholder="나만의 보안 키 (예: mysecret7)"
-                  value={syncKey}
-                  onChangeText={saveSyncKey}
-                />
-                <TouchableOpacity style={styles.syncCheckBtn} onPress={checkSyncKey}>
-                  <Text style={styles.syncCheckBtnText}>중복확인</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.syncBtnRow}>
-                <TouchableOpacity style={[styles.syncBtn, { backgroundColor: '#3182F6' }]} onPress={handleBackup}>
-                  <Text style={styles.syncBtnText}>서버에 저장</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.syncBtn, { backgroundColor: '#6227FF' }]} onPress={handleRestore}>
-                  <Text style={styles.syncBtnText}>데이터 복구</Text>
-                </TouchableOpacity>
-              </View>
-              {isSyncing && <ActivityIndicator size="small" color="#3182F6" style={{ marginTop: 10 }} />}
-            </View>
-          )}
-
-          <View style={{ height: 100 }} />
-        </View>
-      </ScrollView>
-
-      {/* Search Modal (Same as before) */}
-      <Modal visible={searchVisible} animationType="slide" transparent={true} statusBarTranslucent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
-            <View style={styles.searchSheet}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>종목 검색</Text>
-                <TouchableOpacity onPress={() => setSearchVisible(false)}><X size={24} color="#000" /></TouchableOpacity>
-              </View>
-              <TextInput style={styles.searchInput} placeholder="종목명 입력" value={searchKeyword} onChangeText={searchStock} autoFocus />
-              <ScrollView style={{ maxHeight: 300 }}>
-                {searchResults.map(s => (
-                  <TouchableOpacity key={s.code} style={styles.searchResultItem} onPress={() => addStock(s)}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.searchResultName}>{s.name}</Text>
-                      <Text style={styles.searchResultCode}>{s.code}</Text>
-                    </View>
-                    <View style={styles.plusCircle}>
-                      <Plus size={16} color="#3182F6" />
-                    </View>
+            {suggestions.length > 0 && (
+              <View style={styles.suggestionList}>
+                {suggestions.map(s => (
+                  <TouchableOpacity
+                    key={s.code}
+                    style={styles.suggestionItem}
+                    onPress={() => handleAddStock(s)}>
+                    <Text style={styles.suggestionName}>{s.name}</Text>
+                    <Text style={styles.suggestionCode}>{s.code}</Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-            </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.modalBtn} onPress={() => handleAddStock()}>
+              <Text style={styles.modalBtnText}>직접 추가/검색</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => { setSearchModal(false); setSuggestions([]); }}>
+              <Text style={styles.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Stock Details Modal */}
+      <Modal visible={detailModal} transparent animationType="slide">
+        <View style={styles.modalBg}>
+          <View style={styles.modalContentLarge}>
+            {selectedStock && (
+              <>
+                <View style={styles.modalHeaderClose}>
+                  <TouchableOpacity onPress={() => setDetailModal(false)}>
+                    <X size={24} color="#888" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.detailHeader}>
+                  <Text style={styles.modalTitleLarge}>{selectedStock.name}</Text>
+                  <Text style={styles.modalPriceLarge}>{selectedStock.price.toLocaleString()}원</Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.detailRow}>
+                  <Thermometer temperature={selectedStock.sentiment} label="투자 심리 온도" />
+                  <View style={styles.detailStats}>
+                    <Text style={styles.statLabel}>세력 평단가(VWAP)</Text>
+                    <Text style={styles.statValue}>
+                      {selectedStock.vwap > 0 ? `${selectedStock.vwap.toLocaleString()}원` : '분석 중...'}
+                    </Text>
+                    {selectedStock.vwap > 0 && (
+                      <Text style={[styles.statDiff, { color: selectedStock.price < selectedStock.vwap ? '#00ff00' : '#ff4d4d' }]}>
+                        {selectedStock.price < selectedStock.vwap
+                          ? `세력보다 ${(100 - (selectedStock.price / selectedStock.vwap) * 100).toFixed(1)}% 저렴!`
+                          : '세력보다 비싼 구간'}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.analysisBox}>
+                  <Text style={styles.analysisTitle}>🔍 수급 집중 상세 분석</Text>
+                  <Text style={styles.analysisText}>
+                    {(() => {
+                      const { fStreak, iStreak, price, vwap, isHiddenAccumulation } = selectedStock;
+                      let analysis = "";
+
+                      // 1. Foreigner & Institution Trend Detail
+                      let fTrend = fStreak >= 3 ? `🌍 외인 ${fStreak}일 연속 매집` : (fStreak <= -3 ? `🌍 외인 ${Math.abs(fStreak)}일 연속 매도` : "🌍 외인 수급 중립");
+                      let iTrend = iStreak >= 3 ? `🏛️ 기관 ${iStreak}일 연속 매집` : (iStreak <= -3 ? `🏛️ 기관 ${Math.abs(iStreak)}일 연속 매도` : "🏛️ 기관 수급 중립");
+
+                      analysis += `${fTrend}\n${iTrend}\n\n`;
+
+                      // 1-2. Strategic Advice (Synthesis)
+                      if (fStreak >= 3 && iStreak >= 3) {
+                        analysis += `🔥 [강력 매수 관점] 외인과 기관이 의기투합하여 물량을 쓸어담는 중입니다. 시세 분출의 가능성이 매우 높습니다.`;
+                      } else if (fStreak >= 3 && iStreak <= -3) {
+                        analysis += `⚔️ [힘겨루기 구간] 외국인은 사고 있지만 기관이 그 물량을 퍼붓고 있습니다. 외국인의 매수세가 기관의 매도세를 압도하는지 확인하며 분할 접근을 권장합니다.`;
+                      } else if (fStreak <= -3 && iStreak >= 3) {
+                        analysis += `⚔️ [힘겨루기 구간] 기관은 하방을 지지하며 사고 있으나 외국인이 차익 실현 중입니다. 기관의 방어선 지지 여부가 핵심입니다.`;
+                      } else if (fStreak >= 3 || iStreak >= 3) {
+                        analysis += `📈 [긍정적 관점] 한쪽 주체의 수급만으로도 시세를 견인할 수 있는 모멘텀이 형성되고 있습니다.`;
+                      } else if (fStreak <= -3 && iStreak <= -3) {
+                        analysis += `⚠️ [위험 관리] 외인과 기관 모두가 등을 돌린 상태입니다. 바닥 확인 전까지는 성급한 진입을 자제해야 합니다.`;
+                      } else {
+                        analysis += `⚖️ [관망 모드] 뚜렷한 주도 주체가 없어 박스권 흐름이 예상됩니다. 일방향 수급이 터질 때까지 대기하세요.`;
+                      }
+
+                      // 2. VWAP & Safety Margin
+                      if (vwap > 0) {
+                        const margin = ((vwap / price - 1) * 100).toFixed(1);
+                        if (price < vwap) analysis += `\n\n💎 현재 주가는 세력 평균 단가(${vwap.toLocaleString()}원)보다 약 ${margin}% 저렴한 저평가 구간에 위치하여 가격 매력도가 높습니다. `;
+                        else analysis += `\n\n📊 현재 세력 평단 대비 프리미엄이 붙은 구간이므로, 눌림목 형성 시 분할 매수로 접근하는 것이 유리합니다. `;
+                      }
+
+                      // 3. Hidden Accumulation
+                      if (isHiddenAccumulation) analysis += `\n\n🤫 특이사항: 주가 변동성을 죽인 채 조용히 물량을 확보하는 '매집 정황'이 포착되었습니다. `;
+
+                      return analysis;
+                    })()}
+                  </Text>
+                </View>
+
+                <TouchableOpacity style={styles.modalBtn} onPress={() => setDetailModal(false)}>
+                  <Text style={styles.modalBtnText}>확인</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#3182F6" />
-          <Text style={{ marginTop: 15, fontWeight: 'bold', color: '#191F28', fontSize: 16 }}>
-            ⚡ KIS 데이터 분석 중... ({scanProgress}%)
-          </Text>
-          <Text style={{ marginTop: 8, color: '#4E5968', fontSize: 14 }}>
-            {foundCount > 0 ? `🔥 현재까지 ${foundCount}개 종목 포착!` : '시장의 모든 수급을 훑고 있습니다.'}
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 12, color: '#888' }}>
-            (약 450개 종목 전수 조사 중)
-          </Text>
+          <ActivityIndicator size="large" color="#3182f6" />
+          <Text style={styles.loadingText}>수급 분석 중...</Text>
         </View>
       )}
     </View>
   );
 }
 
-export default function App() { return <SafeAreaProvider><MainApp /></SafeAreaProvider>; }
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  dangerBanner: { backgroundColor: '#FF4D4D', flexDirection: 'row', alignItems: 'center', padding: 14, marginHorizontal: 15, marginTop: 10, borderRadius: 16, gap: 12, elevation: 8, shadowColor: '#FF4D4D', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  dangerIconBox: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 10 },
-  dangerTextBox: { flex: 1 },
-  dangerTitleText: { color: '#fff', fontSize: 10, fontWeight: '900', marginBottom: 2, opacity: 0.9 },
-  dangerBannerText: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  closeDangerBtn: { padding: 4 },
-  dangerBannerTextLegacy: { flex: 1, color: '#fff', fontSize: 12, fontWeight: '700' },
-  bannerContainer: { width: '100%', height: 60, justifyContent: 'center', alignItems: 'center' },
-  bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
-  bannerBrandText: { fontSize: 22, fontWeight: '900', color: '#3182F6', letterSpacing: -1 },
-  modeTabs: { flexDirection: 'row', backgroundColor: '#EEE', marginHorizontal: 15, marginVertical: 10, borderRadius: 12, padding: 4 },
-  modeTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 9, gap: 6 },
-  modeTabActiveBuy: { backgroundColor: '#3182F6' },
-  modeTabActiveSell: { backgroundColor: '#F04452' },
-  modeTabActiveMy: { backgroundColor: '#6227FF' },
-  modeTabText: { fontSize: 13, fontWeight: '900', color: '#888' },
-  modeTextActive: { color: '#fff' },
-  stickySection: { backgroundColor: '#F4F7FB', paddingBottom: 10 },
-  chipScroll: { paddingHorizontal: 15, marginBottom: 10 },
-  chip: { paddingHorizontal: 16, paddingVertical: 11, backgroundColor: '#fff', borderRadius: 12, marginRight: 8, borderWidth: 1, borderColor: '#E5E8EB' },
-  chipActive: { backgroundColor: '#3182F6', borderColor: '#3182F6' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#4E5968' },
-  chipTextActive: { color: '#fff' },
-  listContainer: { paddingHorizontal: 15, paddingTop: 10, backgroundColor: '#F4F7FB' },
-  statusBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 15 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3182F6' },
-  statusText: { fontSize: 11, fontWeight: '800', color: '#4E5968' },
-  addStockBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 2, borderColor: '#3182F6', borderStyle: 'dashed', marginBottom: 15 },
-  addStockBtnText: { fontSize: 14, fontWeight: '800', color: '#3182F6' },
-  stockCard: { backgroundColor: '#fff', padding: 18, borderRadius: 22, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  stockCardDanger: { borderWidth: 2, borderColor: '#F04452', backgroundColor: '#FFF5F5' },
-  stockName: { fontSize: 16, fontWeight: '800', color: '#191F28' },
-  stockStreak: { fontSize: 11, fontWeight: '900', color: '#3182F6', marginTop: 3 },
-  stockPrice: { fontSize: 16, fontWeight: '800', color: '#191F28' },
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  searchSheet: { backgroundColor: '#fff', borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, height: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#191F28' },
-  searchInput: { padding: 14, fontSize: 16, fontWeight: '600', color: '#191F28', backgroundColor: '#F4F7FB', borderRadius: 14, marginBottom: 15 },
-  searchResultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F2F4F6' },
-  searchResultName: { fontSize: 15, fontWeight: '700', color: '#191F28' },
-  searchResultCode: { fontSize: 12, color: '#888' },
-  // MY Tab Styles
-  stockCardMy: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
-  stockPriceMy: { fontSize: 14, fontWeight: '700', color: '#4E5968', marginTop: 4 },
-  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  badgeBuy: { backgroundColor: '#EBF4FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  badgeBuyText: { fontSize: 11, fontWeight: '800', color: '#3182F6' },
-  badgeSell: { backgroundColor: '#FFF0F0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  badgeSellText: { fontSize: 11, fontWeight: '800', color: '#F04452' },
-  badgeNeutralText: { fontSize: 11, fontWeight: '700', color: '#888' },
-  // Trend Styles
-  trendContainer: { marginTop: 12, padding: 10, backgroundColor: '#F8F9FA', borderRadius: 12 },
-  trendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  trendLabel: { width: 35, fontSize: 11, fontWeight: '800', color: '#4E5968' },
-  trendBars: { flexDirection: 'row', gap: 4 },
-  trendDot: { width: 14, height: 6, borderRadius: 3 },
-  dotBuy: { backgroundColor: '#3182F6' },
-  dotSell: { backgroundColor: '#F04452' },
-  dotNeutral: { backgroundColor: '#D1D6DB' },
-  // Status Tags
-  statusTag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
-  tagBuy: { backgroundColor: '#3182F6' },
-  tagSell: { backgroundColor: '#F04452' },
-  tagText: { color: '#fff', fontSize: 11, fontWeight: '900' },
-  // Sync Styles
-  syncCard: { backgroundColor: '#fff', padding: 20, borderRadius: 24, marginBottom: 20, borderTopWidth: 4, borderTopColor: '#3182F6' },
-  syncTitle: { fontSize: 16, fontWeight: '900', color: '#191F28', marginBottom: 5 },
-  syncDesc: { fontSize: 12, color: '#888', marginBottom: 15 },
-  syncInputRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  syncInput: { flex: 1, backgroundColor: '#F4F7FB', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 12, fontSize: 14, fontWeight: '600' },
-  syncCheckBtn: { backgroundColor: '#E5E8EB', paddingHorizontal: 12, borderRadius: 12, justifyContent: 'center' },
-  syncCheckBtnText: { fontSize: 12, fontWeight: '700', color: '#4E5968' },
-  syncBtnRow: { flexDirection: 'row', gap: 10 },
-  syncBtn: { flex: 1, paddingVertical: 14, borderRadius: 15, alignItems: 'center' },
-  syncBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  plusCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#EBF4FF', alignItems: 'center', justifyContent: 'center' }
+  container: {
+    flex: 1,
+    backgroundColor: '#0b1219',
+  },
+  bannerContainer: {
+    height: 100,
+    width: '100%',
+  },
+  bannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(11, 18, 25, 0.6)',
+    padding: 20,
+    justifyContent: 'flex-end',
+  },
+  bannerBrandText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  content: {
+    flex: 1,
+  },
+  scroll: {
+    padding: 20,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoBox: {
+    flex: 1,
+    marginLeft: 15,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 10,
+    borderRadius: 10,
+  },
+  infoText: {
+    color: '#ccc',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  emptyText: {
+    color: '#555',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  nav: {
+    flexDirection: 'row',
+    backgroundColor: '#161e27',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: 10,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  navText: {
+    fontSize: 10,
+    color: '#888',
+    marginTop: 4,
+  },
+  navTextActive: {
+    color: '#3182f6',
+  },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 15,
+  },
+  label: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#1a232b',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  btn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#3182f6',
+    padding: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  btnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+    marginLeft: 5,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingText: {
+    color: '#ccc',
+    fontSize: 14,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#161e27',
+    padding: 25,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  modalInput: {
+    backgroundColor: '#1a232b',
+    color: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  modalBtn: {
+    backgroundColor: '#3182f6',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  closeBtn: {
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  closeBtnText: {
+    color: '#888',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(11, 18, 25, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#3182f6',
+    marginTop: 10,
+    fontWeight: 'bold',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalContentLarge: {
+    backgroundColor: '#161e27',
+    padding: 25,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  detailHeader: {
+    marginBottom: 20,
+  },
+  modalTitleLarge: {
+    color: '#fff',
+    fontSize: 26,
+    fontWeight: 'bold',
+  },
+  modalPriceLarge: {
+    color: '#3182f6',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginVertical: 15,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  detailStats: {
+    flex: 1,
+    marginLeft: 20,
+  },
+  statLabel: {
+    color: '#888',
+    fontSize: 12,
+  },
+  statValue: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  statDiff: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  analysisBox: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 25,
+  },
+  analysisTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  analysisText: {
+    color: '#ccc',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  filterBtn: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  filterBtnActive: {
+    backgroundColor: '#3182f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  filterBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modalHeaderClose: {
+    alignItems: 'flex-end',
+    marginBottom: -10,
+  },
+  mainFilterRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 15,
+  },
+  mainFilterBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  buyActive: {
+    backgroundColor: '#ff4d4d',
+  },
+  sellActive: {
+    backgroundColor: '#3182f6',
+  },
+  mainFilterText: {
+    color: '#888',
+    fontWeight: 'bold',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  suggestionList: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  suggestionName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  suggestionCode: {
+    color: '#3182f6',
+    fontSize: 12,
+  },
+  marketHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  marketOpenBg: {
+    backgroundColor: 'rgba(49, 130, 246, 0.1)', // Light blue
+  },
+  marketClosedBg: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', // Subtle gray
+  },
+  marketInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  dotOpen: {
+    backgroundColor: '#3182f6',
+  },
+  dotClosed: {
+    backgroundColor: '#888',
+  },
+  marketStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  marketTimeText: {
+    color: '#888',
+    fontSize: 11,
+  },
+  updateText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  liveBadge: {
+    color: '#00ff00',
+    fontSize: 9,
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(0,255,0,0.1)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  nickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  checkBtn: {
+    backgroundColor: '#3182f6',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    marginLeft: 10,
+  },
+  checkBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  descText: {
+    color: '#888',
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  instDetailBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  instDetailItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  instLabel: {
+    color: '#888',
+    fontSize: 10,
+    marginBottom: 2,
+  },
+  instValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  }
 });
