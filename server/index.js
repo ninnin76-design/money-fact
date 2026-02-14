@@ -414,7 +414,7 @@ async function runDeepMarketScan(force = false) {
     } catch (e) { console.error("Worker Error", e.message); }
 }
 
-runDeepMarketScan(true);
+// runDeepMarketScan(true); // Removed immediate call to prevent token issuance on every server wake-up/static request
 setInterval(runDeepMarketScan, 15 * 60 * 1000);
 
 app.get('/api/analysis/supply/:period/:investor', (req, res) => {
