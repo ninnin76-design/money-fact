@@ -3,22 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Money Fact - 상세 사용 매뉴얼</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Money Fact - 프리미엄 수급 가이드</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&family=Jua&display=swap"
         rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
             --primary: #3182f6;
-            --primary-bg: #f2f8ff;
-            --secondary: #ff4d4d;
-            --secondary-bg: #fff5f5;
+            --primary-light: #e8f3ff;
+            --secondary: #f04452;
+            --secondary-light: #fff0f1;
             --accent: #00c471;
             --dark: #191f28;
             --gray: #8b95a1;
-            --border: #e5e8eb;
-            --white: #ffffff;
+            --bg: #f9fafb;
+            --radius-lg: 24px;
+            --radius-sm: 12px;
         }
 
         * {
@@ -27,15 +28,14 @@
             box-sizing: border-box;
             -webkit-font-smoothing: antialiased;
             word-break: keep-all;
-            /* 한국어 줄바꿈 자연스럽게 */
         }
 
         body {
             font-family: 'Pretendard', sans-serif;
-            background-color: #f9fafb;
+            background-color: var(--bg);
             color: #333d4b;
             line-height: 1.6;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
         }
 
         h1,
@@ -43,30 +43,41 @@
         h3,
         h4 {
             font-family: 'Jua', sans-serif;
-            font-weight: normal;
             color: var(--dark);
         }
 
         .container {
-            max-width: 650px;
+            max-width: 500px;
             margin: 0 auto;
-            background: var(--white);
+            background: white;
             min-height: 100vh;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.03);
         }
 
-        /* Hero Section */
+        /* Hero */
         .hero {
-            background: var(--dark);
+            background: linear-gradient(180deg, var(--dark) 0%, #2d3644 100%);
             color: white;
-            padding: 50px 20px 30px;
+            padding: 60px 24px 40px;
             text-align: center;
-            border-bottom-left-radius: 40px;
-            border-bottom-right-radius: 40px;
+            border-bottom-left-radius: var(--radius-lg);
+            border-bottom-right-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: '✨';
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2rem;
+            opacity: 0.2;
         }
 
         .hero h1 {
-            font-size: 2.8rem;
+            font-size: 3.2rem;
             margin-bottom: 8px;
             background: linear-gradient(90deg, #fff, var(--primary));
             -webkit-background-clip: text;
@@ -75,401 +86,360 @@
         }
 
         .hero p {
-            font-size: 1.05rem;
-            opacity: 0.8;
-            margin-bottom: 20px;
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 24px;
+            font-weight: 400;
         }
 
         .hero-img {
-            width: 90%;
-            max-width: 380px;
-            border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            width: 85%;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
         }
 
-        /* Main Content */
+        /* Section Styling */
         .content {
-            padding: 30px 20px;
+            padding: 32px 20px 100px;
         }
 
         section {
-            margin-bottom: 45px;
+            margin-bottom: 48px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            margin-bottom: 8px;
         }
 
         .section-title {
-            font-size: 1.8rem;
-            border-bottom: 3px solid var(--primary-bg);
-            padding-bottom: 8px;
-            margin-bottom: 25px;
+            font-size: 1.6rem;
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .algo-card {
-            background: var(--primary-bg);
-            border-radius: 18px;
-            padding: 20px;
-            margin-bottom: 15px;
+        /* Cards */
+        .card {
+            background: #fff;
+            border: 1px solid #f2f4f6;
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
         }
 
-        .algo-card.red {
-            background: var(--secondary-bg);
+        .card:active {
+            transform: scale(0.98);
         }
 
-        .algo-card.green {
-            background: #f2fbf5;
+        .card.impact {
+            background: var(--primary-light);
+            border: none;
         }
 
-        .algo-header {
+        .card-header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             margin-bottom: 12px;
         }
 
-        .algo-header h3 {
-            font-size: 1.35rem;
+        .card-header h3 {
+            font-size: 1.25rem;
         }
 
-        .algo-badge {
-            font-size: 0.75rem;
+        .badge {
+            font-size: 0.7rem;
             font-weight: 800;
             background: var(--primary);
             color: white;
-            padding: 2px 7px;
-            border-radius: 5px;
+            padding: 2px 8px;
+            border-radius: 6px;
         }
 
-        .algo-desc {
+        .card-desc {
             font-size: 0.95rem;
             color: #4e5968;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
         }
 
-        .algo-list {
+        .feature-list {
             list-style: none;
         }
 
-        .algo-list li {
-            margin-bottom: 10px;
+        .feature-list li {
+            margin-bottom: 12px;
             display: flex;
-            gap: 8px;
+            gap: 10px;
             font-size: 0.9rem;
+            align-items: flex-start;
         }
 
-        .algo-list li i {
+        .feature-list li i {
             color: var(--primary);
             flex-shrink: 0;
-            margin-top: 3px;
+            margin-top: 2px;
         }
 
-        .ui-item {
+        /* Special Visuals */
+        .notif-demo {
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .notif-row {
             display: flex;
-            gap: 15px;
-            margin-bottom: 30px;
+            gap: 12px;
+            align-items: flex-start;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f9f9f9;
+            margin-bottom: 12px;
         }
 
-        .ui-icon {
-            width: 45px;
-            height: 45px;
+        .notif-row:last-child {
+            border: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .notif-icon {
+            width: 36px;
+            height: 36px;
             background: #f2f4f6;
-            border-radius: 12px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
 
-        .ui-text h4 {
-            font-size: 1.25rem;
-            margin-bottom: 4px;
-        }
-
-        .ui-text p {
+        .notif-text b {
+            display: block;
             font-size: 0.9rem;
-            color: #6b7684;
+            margin-bottom: 2px;
         }
 
-        .notif-wrap {
-            background: #fdfdfd;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px;
-            margin-top: 15px;
-            position: relative;
+        .notif-text span {
+            font-size: 0.8rem;
+            color: var(--gray);
         }
 
-        .notif-wrap::after {
-            content: 'PUSH';
-            position: absolute;
-            right: 18px;
-            top: 15px;
-            font-size: 0.65rem;
-            font-weight: 800;
-            color: #dee2e6;
-        }
-
-        .notif-item {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed #eee;
-        }
-
-        .notif-item:last-child {
-            margin: 0;
-            padding: 0;
-            border: none;
-        }
-
-        .notif-title {
-            font-weight: 800;
-            color: var(--dark);
-            margin-bottom: 3px;
-        }
-
-        .notif-body {
-            font-size: 0.85rem;
-            color: #4e5968;
-        }
-
-        .sync-box {
-            text-align: center;
+        /* Sync Box */
+        .sync-visual {
             background: var(--dark);
+            border-radius: var(--radius-lg);
+            padding: 32px 20px;
+            text-align: center;
             color: white;
-            border-radius: 20px;
-            padding: 35px 20px;
         }
 
-        .sync-box h3 {
-            font-size: 1.6rem;
-            margin-bottom: 12px;
+        .sync-visual h3 {
             color: var(--primary);
+            font-size: 1.5rem;
+            margin-bottom: 12px;
         }
 
-        .sync-box p {
-            font-size: 0.9rem;
-            opacity: 0.8;
-            margin-bottom: 20px;
-        }
-
-        .key-mock {
+        .sync-key {
             background: rgba(255, 255, 255, 0.1);
-            border: 2px dashed var(--primary);
+            border: 1px dashed var(--primary);
             padding: 12px;
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             font-family: monospace;
             font-size: 1.1rem;
+            margin: 16px 0;
+            display: block;
         }
 
-        .sticky-footer {
-            position: sticky;
+        /* Sticky Footer */
+        .footer-cta {
+            position: fixed;
             bottom: 0;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 15px 20px;
-            border-top: 1px solid var(--border);
-            text-align: center;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 500px;
+            padding: 16px 20px 32px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
             z-index: 100;
+            border-top: 1px solid #eee;
         }
 
-        .install-btn {
+        .btn-main {
             background: var(--primary);
             color: white;
-            padding: 16px 20px;
+            text-align: center;
+            display: block;
+            padding: 18px;
             border-radius: 100px;
-            text-decoration: none;
             font-size: 1.2rem;
             font-weight: 800;
-            display: block;
-            box-shadow: 0 8px 20px rgba(49, 130, 246, 0.3);
+            text-decoration: none;
+            box-shadow: 0 10px 24px rgba(49, 130, 246, 0.3);
+            transition: all 0.2s;
         }
 
-        .highlight {
-            font-weight: 800;
+        .btn-main:active {
+            transform: translateY(2px);
+            box-shadow: none;
+        }
+
+        /* Highlight */
+        .hl {
             color: var(--primary);
+            font-weight: 700;
         }
 
-        /* Mobile Optimization */
-        @media (max-width: 600px) {
-            .hero h1 {
-                font-size: 2.2rem;
-            }
-
-            .hero p {
-                font-size: 0.95rem;
-            }
-
-            .content {
-                padding: 25px 15px;
-            }
-
-            .section-title {
-                font-size: 1.5rem;
-                margin-bottom: 20px;
-            }
-
-            .algo-header h3 {
-                font-size: 1.2rem;
-            }
-
-            .ui-text h4 {
-                font-size: 1.15rem;
-            }
-
-            .sync-box h3 {
-                font-size: 1.4rem;
-            }
-
-            .install-btn {
-                font-size: 1.1rem;
-                padding: 14px 15px;
-            }
-
-            .hero {
-                padding: 40px 15px 25px;
-            }
+        .danger {
+            color: var(--secondary);
         }
     </style>
 </head>
 
 <body>
-
     <div class="container">
-        <!-- Hero Section -->
+        <!-- Hero -->
         <header class="hero">
             <h1>Money Fact</h1>
-            <p>"가격은 속여도 수급의 흔적은 숨길 수 없습니다"</p>
-            <img src="money_fact_manual_hero.png" class="hero-img" alt="Money Fact Hero">
+            <p>데이터는 결코 거짓말을 하지 않습니다 ✨</p>
+            <img src="money_fact_manual_hero.png" class="hero-img" alt="Money Fact Preview">
         </header>
 
         <div class="content">
-            <!-- Section 1: Algorithms -->
-            <section id="algorithm">
-                <h2 class="section-title"><i data-lucide="brain-circuit"></i> 핵심 분석 알고리즘</h2>
+            <!-- Algorithm -->
+            <section>
+                <span class="section-tag">AI ANALYSIS</span>
+                <h2 class="section-title">🗝️ 핵심 수급 알고리즘</h2>
 
-                <div class="algo-card">
-                    <div class="algo-header">
-                        <span class="algo-badge">STREAK</span>
-                        <h3>연속 매매 (Streak) 분석</h3>
+                <div class="card impact">
+                    <div class="card-header">
+                        <span class="badge">STREAK</span>
+                        <h3>연속 수급 추적기</h3>
                     </div>
-                    <p class="algo-desc">시장의 주인인 외인과 기관의 '의지'를 읽습니다.</p>
-                    <ul class="algo-list">
-                        <li><i data-lucide="check-circle"></i> <span><b>최소 3일 연속</b> 매수/매매 발생 시 리스트에 노출됩니다.</span></li>
-                        <li><i data-lucide="check-circle"></i> <span><b>지능형 유지 로직</b>: 장중 수급 데이터가 아직 집계되지 않아 '0'인 경우,
-                                흐름이 끊긴 것으로 보지 않고 전일 기록을 유지하여 보여줍니다.</span></li>
+                    <p class="card-desc">진짜 세력은 흔적을 남깁니다. 3일 이상 연속된 '진짜' 매수세를 필터링합니다.</p>
+                    <ul class="feature-list">
+                        <li><i data-lucide="zap"></i> <span><b>3일 연속 매집</b> 시 레이더에 즉시 포착됩니다.</span></li>
+                        <li><i data-lucide="refresh-cw"></i> <span><b>데이터 연속성 보장</b>: 장중 잠정치가 '0'이어도 전체 흐름을 깨지 않고 스마트하게
+                                분석합니다.</span></li>
                     </ul>
                 </div>
 
-                <div class="algo-card red">
-                    <div class="algo-header">
-                        <span class="algo-badge" style="background:var(--secondary)">VWAP</span>
-                        <h3 style="color:var(--secondary)">세력 평단가 (VWAP)</h3>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="badge" style="background:var(--secondary)">VWAP</span>
+                        <h3 style="color:var(--secondary)">세력 평단가 레이더</h3>
                     </div>
-                    <p class="algo-desc">거래량 가중 평균 가격을 통해 세력의 본전을 추적합니다.</p>
-                    <ul class="algo-list">
-                        <li><i data-lucide="check-circle" style="color:var(--secondary)"></i> <span><b>최근 3일간</b>의 거래량과
-                                가격을 조합하여 정밀 계산합니다.</span></li>
-                        <li><i data-lucide="check-circle" style="color:var(--secondary)"></i> <span>현재 주가가 이 가격보다 낮다면
-                                세력보다 <b>저렴하게 진입할 기회</b>로 판단합니다.</span></li>
+                    <p class="card-desc">세력보다 싸게 사는 것이 투자의 기본! 매물대 기반 진짜 원가를 계산합니다.</p>
+                    <ul class="feature-list">
+                        <li><i data-lucide="target" style="color:var(--secondary)"></i> <span><b>3일 가중 평균</b>: 단순 가격이 아닌
+                                거래량이 실린 가격을 찾아냅니다.</span></li>
+                        <li><i data-lucide="gem" style="color:var(--secondary)"></i> <span>주가가 VWAP 아래로 내려가면? <b
+                                    class="danger">절호의 매수 찬스!</b></span></li>
                     </ul>
                 </div>
 
-                <div class="algo-card green">
-                    <div class="algo-header">
-                        <span class="algo-badge" style="background:var(--accent)">HIDDEN</span>
-                        <h3 style="color:var(--accent)">매집 의심 종목 (Hidden)</h3>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="badge" style="background:var(--accent)">HIDDEN</span>
+                        <h3 style="color:var(--accent)">폭풍전야 (Hidden) 매집</h3>
                     </div>
-                    <p class="algo-desc">숨어있는 고래를 찾는 Money Fact만의 특수 레이더입니다.</p>
-                    <ul class="algo-list">
-                        <li><i data-lucide="check-circle" style="color:var(--accent)"></i> <span><b>🧐 가격 고요</b>: 지난 5일간
-                                주가 변동폭이 평균 <b>3% 미만</b>인 잠잠한 종목.</span></li>
-                        <li><i data-lucide="check-circle" style="color:var(--accent)"></i> <span><b>🛒 몰래 매수</b>: 가격은 안
-                                오르는데 외국인/기관은 <b>3일 연속</b> 매집 중인 정황 포착.</span></li>
-                    </ul>
-                </div>
-            </section>
-
-            <!-- Section 2: UI & Tips -->
-            <section id="ui">
-                <h2 class="section-title"><i data-lucide="layout"></i> 주요 기능 및 인터페이스</h2>
-
-                <div class="ui-item">
-                    <div class="ui-icon"><i data-lucide="clock" color="#3182f6"></i></div>
-                    <div class="ui-text">
-                        <h4>시장 상태 헤더 (Real-time)</h4>
-                        <p>정규장(09:00~15:30)에는 <b>실시간 잠정치</b>를, 그 외 시간(~20:00)에는 <b>넥스트레이드(Nextrade)</b> 시세를 100% 반영합니다.
-                            30초마다 자동으로 조용히 업데이트(Silent Refresh)됩니다.</p>
-                    </div>
-                </div>
-
-                <div class="ui-item">
-                    <div class="ui-icon"><i data-lucide="monitor" color="#f59e0b"></i></div>
-                    <div class="ui-text">
-                        <h4>지능형 실시간 전광판</h4>
-                        <p>상단 흐르는 Ticker는 단순 정보가 아닙니다. 내 종목 중 <span class="highlight">연속 매집 발생</span>이나 <span
-                                class="highlight">평단가 아래 진입</span> 시 실시간 인사이트(🚀, 💎)를 띄워줍니다.</p>
-                    </div>
-                </div>
-
-                <div class="ui-item">
-                    <div class="ui-icon"><i data-lucide="microscope" color="#4ade80"></i></div>
-                    <div class="ui-text">
-                        <h4>연속매매 스냅샷 리스트</h4>
-                        <p>내가 추가하지 않은 종목이라도 <b>시장 대표 우량주 50개</b>를 항상 감시합니다. 필터를 통해 오늘의 주도 세력이 누구인지 1초 만에 파악하세요.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 3: Push Notifications -->
-            <section id="push">
-                <h2 class="section-title"><i data-lucide="bell-ring"></i> 정밀 푸시 알림 가이드</h2>
-                <div class="notif-wrap">
-                    <div class="notif-item">
-                        <div class="notif-title">📈 흐름 감지 알림</div>
-                        <div class="notif-body">관심 종목의 수급이 <b>3일 연속</b> 포착되거나 이탈할 때 즉시 알림이 발송됩니다.</div>
-                    </div>
-                    <div class="notif-item">
-                        <div class="notif-title">🎯 타겟 가격 도달</div>
-                        <div class="notif-body">주가가 세력 평단가 대비 <b>5% 이상 하락</b>하여 충분한 안전 마진이 확보되었을 때 알려드립니다.</div>
-                    </div>
-                    <div class="notif-item">
-                        <div class="notif-title">🤫 매집 정황 알림</div>
-                        <div class="notif-body">주가는 움직이지 않으나 수급이 쏠리는 '폭풍 전야' 종목을 발굴하여 알려드립니다.</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 4: Sync & Backup -->
-            <section id="sync">
-                <h2 class="section-title"><i data-lucide="database"></i> 관리 및 데이터 복구</h2>
-                <div class="sync-box">
-                    <h3>클라우드 영구 백업</h3>
-                    <p>본인만의 닉네임 키를 설정하면 기기 변경 후에도<br>내 종목 리스트를 즉시 가져올 수 있습니다.</p>
-                    <div class="key-mock">복원 키: (예) MoneyStar2025</div>
-                    <ul class="algo-list" style="margin-top:20px; text-align:left;">
-                        <li style="color:rgba(255,255,255,0.7)"><i data-lucide="check" color="#3182f6"></i>
-                            <span>Firebase 연동으로 데이터 삭제 걱정 No!</span>
-                        </li>
-                        <li style="color:rgba(255,255,255,0.7)"><i data-lucide="check" color="#3182f6"></i> <span>중복 확인
-                                기능을 통해 나만의 고유 키 점유 가능</span></li>
+                    <p class="card-desc">주가는 조용한데 수급만 은밀하게 쏠리는 종목을 발굴합니다. 🕵️‍♀️</p>
+                    <ul class="feature-list">
+                        <li><i data-lucide="eye-off" style="color:var(--accent)"></i> <span><b>가격 고요함</b>: 5일간 주가 변동 3%
+                                미만의 잠잠한 상태.</span></li>
+                        <li><i data-lucide="trending-up" style="color:var(--accent)"></i> <span><b>은밀한 수급</b>: 가격 변화 없이
+                                수급만 3일째 채워지는 중!</span></li>
                     </ul>
                 </div>
             </section>
 
-            <p style="text-align:center; font-size:0.8rem; color:#8b95a1; padding:20px;">
-                주의: 본 자료는 투자 참고용이며, 최종 결정의 책임은 투자자 본인에게 있습니다.<br>
-                데이터 출처: 한국투자증권 Open API
-            </p>
+            <!-- Features -->
+            <section>
+                <span class="section-tag">UI & UX</span>
+                <h2 class="section-title">📱 똑똑한 실시간 비서</h2>
+
+                <div class="card">
+                    <div class="card-header">
+                        <i data-lucide="radio" color="#3182f6"></i>
+                        <h3>실시간 수급 전광판</h3>
+                    </div>
+                    <p class="card-desc">상단에 흐르는 티커는 단순한 정보가 아닙니다. 내 종목에 <span class="hl">🚀 3일 연속 매수</span>, <span
+                            class="hl">💎 평단가 하회</span> 정황이 포착되면 실시간으로 신호를 줍니다.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <i data-lucide="bell-ring" color="#fcc419"></i>
+                        <h3>정밀 푸시 알림</h3>
+                    </div>
+                    <div class="notif-demo">
+                        <div class="notif-row">
+                            <div class="notif-icon">📈</div>
+                            <div class="notif-text"><b>[수급포착] 삼성전자</b><span>외국인 4일 연속 매집 중!</span></div>
+                        </div>
+                        <div class="notif-row">
+                            <div class="notif-icon">💎</div>
+                            <div class="notif-text"><b>[가격찬스] SK하이닉스</b><span>세력 평단가 진입 (안전마진 확보)</span></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Backup -->
+            <section>
+                <span class="section-tag">DATA SAFETY</span>
+                <h2 class="section-title">☁️ 기기를 바꿔도 그대로</h2>
+                <div class="sync-visual">
+                    <h3>퍼스널 데이터 싱크</h3>
+                    <p>나만의 고유 키를 설정하세요. 기기를 바꿔도<br>내 관심 종목이 마법처럼 복원됩니다. ✨</p>
+                    <span class="sync-key">MY_SECRET_KEY_777</span>
+                    <p style="font-size:0.85rem; opacity:0.7;">🛡️ Firebase Cloud 기반 안전 보관</p>
+                </div>
+            </section>
+
+            <footer>
+                <p style="text-align:center; font-size:0.8rem; color:var(--gray); padding-bottom: 20px;">
+                    본 정보는 투자 참고용이며, 최종 책임은 본인에게 있습니다.<br>
+                    데이터 출처: 한국투자증권 Open API
+                </p>
+            </footer>
         </div>
 
-        <!-- Sticky Install Button -->
-        <div class="sticky-footer">
-            <a href="./MoneyFact_v2_1.apk" class="install-btn" download>지금 바로 시작하기 (v2.1 설치)</a>
+        <!-- Sticky CTA -->
+        <div class="footer-cta">
+            <a href="./MoneyFact_v2_1.apk" class="btn-main" download>
+                지금 설치하고 비서 고용하기 (v2.1)
+            </a>
         </div>
     </div>
 
-    <script>lucide.createIcons();</script>
+    <script>
+        lucide.createIcons();
+        // Subtle entrance animation for image
+        document.addEventListener('DOMContentLoaded', () => {
+            const img = document.querySelector('.hero-img');
+            img.style.opacity = '0';
+            img.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                img.style.transition = 'all 1s ease';
+                img.style.opacity = '1';
+                img.style.transform = 'translateY(0)';
+            }, 300);
+        });
+    </script>
 </body>
 
 </html>
