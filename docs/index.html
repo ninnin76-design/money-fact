@@ -191,34 +191,67 @@
         }
 
         /* Stock Grid for Elite 60 */
-        .stock-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-top: 16px;
+        /* Detailed Elite Table */
+        .elite-table-container {
+            margin-top: 20px;
+            overflow-x: auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid #f2f4f6;
         }
 
-        .sector-box {
-            background: rgba(255, 255, 255, 0.5);
+        .elite-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .elite-table th {
+            background: #f9fafb;
             padding: 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.03);
+            color: var(--gray);
+            font-weight: 800;
+            border-bottom: 1px solid #f2f4f6;
+            font-size: 0.75rem;
         }
 
-        .sector-name {
-            font-size: 0.8rem;
+        .elite-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f9fafb;
+            vertical-align: top;
+        }
+
+        .elite-table .sector-col {
+            width: 90px;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            background: #fcfdfe;
         }
 
-        .stock-names {
-            font-size: 0.75rem;
+        .elite-table .stocks-col {
             color: #4e5968;
-            line-height: 1.4;
+            line-height: 1.5;
+            font-size: 0.8rem;
+        }
+
+        .elite-table .count-col {
+            width: 40px;
+            text-align: center;
+            font-weight: 800;
+            color: var(--gray);
+        }
+
+        .my-stock-note {
+            margin-top: 16px;
+            background: var(--primary-light);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.85rem;
         }
 
         /* Special Visuals */
@@ -408,34 +441,67 @@
                                 종목도 무제한 추가 분석 가능!</span></li>
                     </ul>
 
-                    <div class="stock-grid">
-                        <div class="sector-box">
-                            <div class="sector-name">💻 반도체</div>
-                            <div class="stock-names">삼성전자, SK하이닉스, 한미반도체, HPSP, 제주반도체, 리노공업, 가온칩스, 주성엔지니어링, 이오테크닉스, ISC
-                            </div>
-                        </div>
-                        <div class="sector-box">
-                            <div class="sector-name">🔋 2차전지</div>
-                            <div class="stock-names">LG엔솔, POSCO홀딩스, 삼성SDI, 에코프로비엠, 에코프로, 엘앤에프, 금양, 포스코퓨처엠, 엔켐, 레이크머티리얼즈
-                            </div>
-                        </div>
-                        <div class="sector-box">
-                            <div class="sector-name">🧬 바이오</div>
-                            <div class="stock-names">삼성바이오로직스, 셀트리온, HLB, 알테오젠, 유한양행, 한미약품, 에스티팜, 리가켐바이오, 휴젤, 삼천당제약
-                            </div>
-                        </div>
-                        <div class="sector-box">
-                            <div class="sector-name">🚗 자동차/로봇</div>
-                            <div class="stock-names">현대차, 기아, 현대모비스, 레인보우로보틱스, 두산로보틱스, 루닛, 뷰노, 마음AI, 엔젤로보틱스</div>
-                        </div>
-                        <div class="sector-box">
-                            <div class="sector-name">💰 금융/IT</div>
-                            <div class="stock-names">KB금융, 신한지주, 하나금융, 메리츠금융, NAVER, 카카오, 하이브, JYP, 에스엠</div>
-                        </div>
-                        <div class="sector-box">
-                            <div class="sector-name">🚀 방산/에너지</div>
-                            <div class="stock-names">한화에어로, 현대로템, LIG넥스원, 두산에너빌리티, 포스코DX, LS ELECTRIC, LG화학</div>
-                        </div>
+                    <div class="elite-table-container">
+                        <table class="elite-table">
+                            <thead>
+                                <tr>
+                                    <th>섹터</th>
+                                    <th>주요 포함 종목</th>
+                                    <th>명수</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="sector-col">반도체/장비</td>
+                                    <td class="stocks-col">삼성전자, SK하이닉스, HPSP, 한미반도체, 제주반도체, 리노공업, 가온칩스, 주성엔지니어링,
+                                        이오테크닉스, ISC</td>
+                                    <td class="count-col">10</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">2차전지/소재</td>
+                                    <td class="stocks-col">LG엔솔, POSCO홀딩스, 삼성SDI, 에코프로비엠, 에코프로, 엘앤에프, 금양, 포스코퓨처엠, 엔켐,
+                                        레이크머티리얼즈</td>
+                                    <td class="count-col">10</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">바이오/헬스</td>
+                                    <td class="stocks-col">삼성바이오로직스, 셀트리온, HLB, 알테오젠, 유한양행, 한미약품, 에스티팜, 리가켐바이오, 휴젤,
+                                        삼천당제약</td>
+                                    <td class="count-col">10</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">자동차/모빌리티</td>
+                                    <td class="stocks-col">현대차, 기아, 현대모비스, HL만도, 현대위아, 서연이화</td>
+                                    <td class="count-col">6</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">로봇/AI</td>
+                                    <td class="stocks-col">레인보우로보틱스, 두산로보틱스, 루닛, 뷰노, 마음AI, 엔젤로보틱스</td>
+                                    <td class="count-col">6</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">금융/상사</td>
+                                    <td class="stocks-col">KB금융, 신한지주, 하나금융지주, 삼성생명, 메리츠금융지주, 포스코인터내셔널</td>
+                                    <td class="count-col">6</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">IT/플랫폼/엔터</td>
+                                    <td class="stocks-col">NAVER, 카카오, 하이브, JYP Ent., 에스엠</td>
+                                    <td class="count-col">5</td>
+                                </tr>
+                                <tr>
+                                    <td class="sector-col">중공업/방산/에너지</td>
+                                    <td class="stocks-col">포스코DX, LS ELECTRIC, LG화학, 한화에어로스페이스, 현대로템, 두산에너빌리티, LIG넥스원
+                                    </td>
+                                    <td class="count-col">7</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="my-stock-note">
+                        <i data-lucide="info"></i>
+                        <span>기본 60종목 외에 사용자가 <b>직접 등록한 종목</b>도 동일하게 분석됩니다.</span>
                     </div>
                 </div>
             </section>
