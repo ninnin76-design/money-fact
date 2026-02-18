@@ -190,6 +190,37 @@
             margin-top: 2px;
         }
 
+        /* Stock Grid for Elite 60 */
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .sector-box {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.03);
+        }
+
+        .sector-name {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stock-names {
+            font-size: 0.75rem;
+            color: #4e5968;
+            line-height: 1.4;
+        }
+
         /* Special Visuals */
         .notif-demo {
             background: #fff;
@@ -376,6 +407,36 @@
                         <li><i data-lucide="plus-circle" style="color:#6741d9"></i> <span><b>무한 확장</b>: 기본 60개 외에 내 관심
                                 종목도 무제한 추가 분석 가능!</span></li>
                     </ul>
+
+                    <div class="stock-grid">
+                        <div class="sector-box">
+                            <div class="sector-name">💻 반도체</div>
+                            <div class="stock-names">삼성전자, SK하이닉스, 한미반도체, HPSP, 제주반도체, 리노공업, 가온칩스, 주성엔지니어링, 이오테크닉스, ISC
+                            </div>
+                        </div>
+                        <div class="sector-box">
+                            <div class="sector-name">🔋 2차전지</div>
+                            <div class="stock-names">LG엔솔, POSCO홀딩스, 삼성SDI, 에코프로비엠, 에코프로, 엘앤에프, 금양, 포스코퓨처엠, 엔켐, 레이크머티리얼즈
+                            </div>
+                        </div>
+                        <div class="sector-box">
+                            <div class="sector-name">🧬 바이오</div>
+                            <div class="stock-names">삼성바이오로직스, 셀트리온, HLB, 알테오젠, 유한양행, 한미약품, 에스티팜, 리가켐바이오, 휴젤, 삼천당제약
+                            </div>
+                        </div>
+                        <div class="sector-box">
+                            <div class="sector-name">🚗 자동차/로봇</div>
+                            <div class="stock-names">현대차, 기아, 현대모비스, 레인보우로보틱스, 두산로보틱스, 루닛, 뷰노, 마음AI, 엔젤로보틱스</div>
+                        </div>
+                        <div class="sector-box">
+                            <div class="sector-name">💰 금융/IT</div>
+                            <div class="stock-names">KB금융, 신한지주, 하나금융, 메리츠금융, NAVER, 카카오, 하이브, JYP, 에스엠</div>
+                        </div>
+                        <div class="sector-box">
+                            <div class="sector-name">🚀 방산/에너지</div>
+                            <div class="stock-names">한화에어로, 현대로템, LIG넥스원, 두산에너빌리티, 포스코DX, LS ELECTRIC, LG화학</div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
