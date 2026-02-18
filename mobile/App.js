@@ -23,15 +23,52 @@ import { BACKGROUND_TASK_NAME, STORAGE_KEYS } from './src/constants/Config';
 import { ALL_STOCKS } from './src/constants/StockData';
 
 const MARKET_WATCH_STOCKS = [
-  { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' }, { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' },
-  { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
-  { name: '셀트리온', code: '068270', sector: '바이오' }, { name: 'KB금융', code: '105560', sector: '금융' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
-  { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '삼성SDI', code: '006400', sector: '2차전지' }, { name: '신한지주', code: '055550', sector: '금융' },
-  { name: '카카오', code: '035720', sector: '플랫폼' }, { name: '에코프로비엠', code: '247540', sector: '2차전지' }, { name: '에코프로', code: '086520', sector: '2차전지' },
-  { name: '엘앤에프', code: '066970', sector: '2차전지' }, { name: 'HLB', code: '028300', sector: '바이오' }, { name: '알테오젠', code: '196170', sector: '바이오' },
-  { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '레인보우로보틱스', code: '277810', sector: '로봇' }, { name: '두산로보틱스', code: '454910', sector: '로봇' },
-  { name: '포스코DX', code: '022100', sector: '기계' }, { name: '한미반도체', code: '042700', sector: '반도체' }, { name: '제주반도체', code: '080220', sector: '반도체' },
-  { name: 'LS ELECTRIC', code: '010120', sector: '기계' }, { name: '현대무비스', code: '012330', sector: '자동차' }, { name: 'LG화학', code: '051910', sector: '화학' },
+  // 반도체 (10)
+  { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' },
+  { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '한미반도체', code: '042700', sector: '반도체' },
+  { name: '제주반도체', code: '080220', sector: '반도체' }, { name: '리노공업', code: '058470', sector: '반도체' },
+  { name: '가온칩스', code: '399720', sector: '반도체' }, { name: '주성엔지니어링', code: '036930', sector: '반도체' },
+  { name: '이오테크닉스', code: '039030', sector: '반도체' }, { name: 'ISC', code: '095340', sector: '반도체' },
+
+  // 2차전지 (10)
+  { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
+  { name: '삼성SDI', code: '006400', sector: '2차전지' }, { name: '에코프로비엠', code: '247540', sector: '2차전지' },
+  { name: '에코프로', code: '086520', sector: '2차전지' }, { name: '엘앤에프', code: '066970', sector: '2차전지' },
+  { name: '금양', code: '001570', sector: '2차전지' }, { name: '포스코퓨처엠', code: '003670', sector: '2차전지' },
+  { name: '엔켐', code: '348370', sector: '2차전지' }, { name: '레이크머티리얼즈', code: '281740', sector: '2차전지' },
+
+  // 바이오 (10)
+  { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '셀트리온', code: '068270', sector: '바이오' },
+  { name: 'HLB', code: '028300', sector: '바이오' }, { name: '알테오젠', code: '196170', sector: '바이오' },
+  { name: '유한양행', code: '000100', sector: '바이오' }, { name: '한미약품', code: '128940', sector: '바이오' },
+  { name: '에스티팜', code: '237690', sector: '바이오' }, { name: '리가켐바이오', code: '141080', sector: '바이오' },
+  { name: '휴젤', code: '145020', sector: '바이오' }, { name: '삼천당제약', code: '000250', sector: '바이오' },
+
+  // 자동차 (6)
+  { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
+  { name: '현대모비스', code: '012330', sector: '자동차' }, { name: 'HL만도', code: '204320', sector: '자동차' },
+  { name: '현대위아', code: '011210', sector: '자동차' }, { name: '서연이화', code: '200880', sector: '자동차' },
+
+  // 로봇 (6)
+  { name: '레인보우로보틱스', code: '277810', sector: '로봇' }, { name: '두산로보틱스', code: '454910', sector: '로봇' },
+  { name: '루닛', code: '328130', sector: '로봇' }, { name: '뷰노', code: '338220', sector: '로봇' },
+  { name: '마음AI', code: '377480', sector: '로봇' }, { name: '엔젤로보틱스', code: '455390', sector: '로봇' },
+
+  // 금융 (6)
+  { name: 'KB금융', code: '105560', sector: '금융' }, { name: '신한지주', code: '055550', sector: '금융' },
+  { name: '하나금융지주', code: '086790', sector: '금융' }, { name: '삼성생명', code: '032830', sector: '금융' },
+  { name: '메리츠금융지주', code: '138040', sector: '금융' }, { name: '포스코인터내셔널', code: '047050', sector: '금융' },
+
+  // IT/플랫폼/엔터 (5)
+  { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '카카오', code: '035720', sector: '플랫폼' },
+  { name: '하이브', code: '352820', sector: '엔터' }, { name: 'JYP Ent.', code: '035900', sector: '엔터' },
+  { name: '에스엠', code: '041510', sector: '엔터' },
+
+  // 중공업/방산/화학 (7)
+  { name: '포스코DX', code: '022100', sector: '기계' }, { name: 'LS ELECTRIC', code: '010120', sector: '기계' },
+  { name: 'LG화학', code: '051910', sector: '화학' }, { name: '한화에어로스페이스', code: '012450', sector: '방산' },
+  { name: '현대로템', code: '064350', sector: '방산' }, { name: '두산에너빌리티', code: '034020', sector: '에너지' },
+  { name: 'LIG넥스원', code: '079550', sector: '방산' },
 ];
 
 import * as BackgroundFetch from 'expo-background-fetch';
@@ -54,6 +91,9 @@ Notifications.setNotificationHandler({
 if (Platform.OS !== 'web') {
   TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
     try {
+      // [코다리 부장 터치] 장외 시간에는 백그라운드도 푹 쉬어야죠! 배터리 절약!
+      if (!StockService.isMarketOpen()) return BackgroundFetch.BackgroundFetchResult.NoData;
+
       const rawStocks = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
       if (!rawStocks) return BackgroundFetch.BackgroundFetchResult.NoData;
 
@@ -171,6 +211,13 @@ function MainApp() {
     // Hybrid Loading Stage 1: Fast data
     const stocks = await StorageService.loadMyStocks();
     setMyStocks(stocks);
+
+    // [코다리 부장 터치] 앱 켤 때 일단 저장해놨던 마지막 데이터를 먼저 싹~ 보여줍니다!
+    const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
+    if (cached) {
+      setAnalyzedStocks(JSON.parse(cached));
+    }
+
     const key = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_NICKNAME);
     if (key) setSyncKey(key);
 
@@ -211,6 +258,10 @@ function MainApp() {
 
   const refreshData = async (targetStocks, silent = false) => {
     if (isRefreshing.current) return;
+
+    // [코다리 부장 터치] 장종료 시간대에는 서버에 물어보지 않고 조용히 패스~
+    if (!StockService.isMarketOpen() && analyzedStocks.length > 0) return;
+
     isRefreshing.current = true;
     if (!silent) setLoading(true);
     const results = [];
@@ -311,7 +362,7 @@ function MainApp() {
     });
 
     if (updatedSectors.length > 0) {
-      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 9));
     }
     // Round inst sub-types to billion KRW
     const roundedInstTotals = {
@@ -323,6 +374,12 @@ function MainApp() {
 
     if (tickerTexts.length > 2) setTickerItems(tickerTexts);
     setLastUpdate(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+    // [코다리 부장 터치] 방금 분석한 따끈따끈한 데이터를 나중(새벽)을 위해 메모리에 저장!
+    if (results.length > 0) {
+      AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(results));
+    }
+
     setLoading(false);
     isRefreshing.current = false;
   };
