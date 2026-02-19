@@ -39,6 +39,16 @@ const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443';
 const APP_KEY = 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
 const APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
 
+const MARKET_WATCH_STOCKS = [
+    { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' },
+    { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '한미반도체', code: '042700', sector: '반도체' },
+    { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
+    { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '셀트리온', code: '068270', sector: '바이오' },
+    { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
+    { name: 'KB금융', code: '105560', sector: '금융' }, { name: '신한지주', code: '055550', sector: '금융' },
+    { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '카카오', code: '035720', sector: '플랫폼' }
+];
+
 const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
 
 let cachedToken = '';
@@ -49,7 +59,9 @@ let marketAnalysisReport = {
     dataType: 'LIVE',
     status: 'INITIALIZING',
     buyData: {},
-    sellData: {}
+    sellData: {},
+    sectors: [],
+    instFlow: { pnsn: 0, ivtg: 0, ins: 0 }
 };
 
 // --- User Portfolio Database ---
@@ -274,6 +286,11 @@ async function runDeepMarketScan(force = false) {
         });
         add(raw1); add(raw2); add(raw3);
 
+        // [코다리 부장 터치] 핵심 감시 종목은 무조건 포함!
+        MARKET_WATCH_STOCKS.forEach(s => {
+            if (!candidateMap.has(s.code)) candidateMap.set(s.code, s);
+        });
+
         const candidates = Array.from(candidateMap.values());
         console.log(`[Worker] Deep Scan Targets: ${candidates.length} unique from (Rank:${raw1.length}, KOSPI:${raw2.length}, KOSDAQ:${raw3.length})`);
 
@@ -328,40 +345,61 @@ async function runDeepMarketScan(force = false) {
             newSellData[`5_${inv}`] = [];
         });
 
+        const sectorMap = {};
+        const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
+
         historyData.forEach((val, code) => {
+            // 섹터/기관 흐름 계산용 (오늘 데이터 기준)
+            const d = val.daily[0];
+            const netBuy = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
+            const pnsnBuy = parseInt(d.pnsn_ntby_qty || 0);
+            const ivtgBuy = parseInt(d.ivtg_ntby_qty || 0);
+            const insBuy = parseInt(d.ins_ntby_qty || 0);
+
+            const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
+            if (mwc && mwc.sector) {
+                sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuy;
+            }
+            instTotals.pnsn += pnsnBuy;
+            instTotals.ivtg += ivtgBuy;
+            instTotals.ins += insBuy;
+
             investors.forEach(inv => {
                 let buyStreak = 0, sellStreak = 0;
 
-                // Calculate Strict Streak (allowing 0 net change to not break, but opposite breaks)
                 for (let j = 0; j < val.daily.length; j++) {
-                    const d = val.daily[j];
+                    const row = val.daily[j];
                     let net = 0;
-                    if (inv === '0') net = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
-                    else if (inv === '2') net = parseInt(d.frgn_ntby_qty);
-                    else if (inv === '1') net = parseInt(d.orgn_ntby_qty);
+                    if (inv === '0') net = parseInt(row.frgn_ntby_qty) + parseInt(row.orgn_ntby_qty);
+                    else if (inv === '2') net = parseInt(row.frgn_ntby_qty);
+                    else if (inv === '1') net = parseInt(row.orgn_ntby_qty);
 
                     if (net > 0) {
                         buyStreak++;
-                        if (sellStreak > 0) break; // Direction changed
+                        if (sellStreak > 0) break;
                     } else if (net < 0) {
                         sellStreak++;
-                        if (buyStreak > 0) break; // Direction changed
-                    } else {
-                        // Net is 0. Does it break streak? 
-                        // For "Trend", maybe not. For "Consecutive", yes.
-                        // User wants "Trend" effectively. Let's strictly break on 0 for purity.
-                        break;
-                    }
+                        if (buyStreak > 0) break;
+                    } else break;
                 }
 
                 if (buyStreak >= 3) {
-                    newBuyData[`5_${inv}`].push({ name: val.name, code, price: val.price, rate: val.rate, streak: buyStreak });
+                    newBuyData[`5_${inv}`].push({
+                        name: val.name, code, price: val.price, rate: val.rate,
+                        streak: buyStreak, fStreak: buyStreak, iStreak: (inv === '0' || inv === '1') ? buyStreak : 0
+                    });
                 }
                 if (sellStreak >= 3) {
-                    newSellData[`5_${inv}`].push({ name: val.name, code, price: val.price, rate: val.rate, streak: sellStreak });
+                    newSellData[`5_${inv}`].push({
+                        name: val.name, code, price: val.price, rate: val.rate,
+                        streak: sellStreak, fStreak: -sellStreak, iStreak: (inv === '0' || inv === '1') ? -sellStreak : 0
+                    });
                 }
             });
         });
+
+        // 맵을 배열로 변환
+        const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
 
         // Sort by Streak Descending
         investors.forEach(inv => {
@@ -371,6 +409,8 @@ async function runDeepMarketScan(force = false) {
 
         marketAnalysisReport.buyData = newBuyData;
         marketAnalysisReport.sellData = newSellData;
+        marketAnalysisReport.sectors = sectorList;
+        marketAnalysisReport.instFlow = instTotals;
         marketAnalysisReport.updateTime = new Date();
         marketAnalysisReport.dataType = currentType;
         marketAnalysisReport.status = 'READY';

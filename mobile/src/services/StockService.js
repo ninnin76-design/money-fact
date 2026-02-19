@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { KIS_CONFIG } from '../constants/Config';
+import { KIS_CONFIG, SERVER_URL } from '../constants/Config';
 import { AuthService } from './AuthService';
 
 export const StockService = {
