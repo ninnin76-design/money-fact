@@ -71,40 +71,57 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
 
 const TOKEN_FILE = path.join(__dirname, 'real_token_cache.json');
 
+let tokenRequestPromise = null;
+
 async function getAccessToken() {
     // 1. Try to read from file first
     if (fs.existsSync(TOKEN_FILE)) {
         try {
             const saved = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
             const expiry = new Date(saved.expiry);
-            if (new Date() < expiry) {
+            // proactive refresh if < 10 mins remaining
+            if (new Date(new Date().getTime() + 10 * 60 * 1000) < expiry) {
                 return saved.token;
             }
         } catch (e) { }
     }
 
-    // 2. Request New Token with Retry Logic
-    try {
-        console.log("[Token] Requesting NEW token from KIS...");
-        const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
-            grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
-        });
-        const newToken = res.data.access_token;
-        const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 60) * 1000);
-
-        fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
-        console.log("[Token] New token saved/refreshed.");
-        return newToken;
-    } catch (e) {
-        console.error("[Token] Failed to get token:", e.response?.data || e.message);
-        // If 403 (Rate Limit), wait 65s and retry once
-        if (e.response?.status === 403) {
-            console.log("[Token] Rate Limit Hit! Waiting 65s for retry...");
-            await new Promise(r => setTimeout(r, 65000));
-            return getAccessToken(); // Recursive retry once
-        }
-        return null;
+    // 2. Return existing promise if request pending
+    if (tokenRequestPromise) {
+        console.log("[Token] Waiting for pending token request...");
+        return tokenRequestPromise;
     }
+
+    // 3. Request New Token with Retry Logic
+    tokenRequestPromise = (async () => {
+        try {
+            console.log("[Token] Requesting NEW token from KIS...");
+            const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
+                grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
+            });
+            const newToken = res.data.access_token;
+            const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 60) * 1000);
+
+            fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
+            console.log("[Token] New token saved/refreshed.");
+            return newToken;
+        } catch (e) {
+            console.error("[Token] Failed to get token:", e.response?.data || e.message);
+            // If 403 (Rate Limit), wait 65s and retry once
+            if (e.response?.status === 403) {
+                console.log("[Token] Rate Limit Hit! Waiting 65s for retry...");
+                await new Promise(r => setTimeout(r, 65000));
+                // Clear promise before recursive call to allow new request
+                tokenRequestPromise = null;
+                return getAccessToken();
+            }
+            return null;
+        } finally {
+            tokenRequestPromise = null;
+        }
+    })();
+
+    return tokenRequestPromise;
 }
 
 // --- Shared Token Endpoint (For 5 Users Sharing 1 Token) ---
@@ -422,6 +439,11 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
     const mode = req.query.mode || 'buy';
     const data = (mode === 'buy') ? marketAnalysisReport.buyData[key] : marketAnalysisReport.sellData[key];
     res.json({ output: data || [], updateTime: marketAnalysisReport.updateTime, dataType: marketAnalysisReport.dataType });
+});
+
+// [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
+app.get('/api/snapshot', (req, res) => {
+    res.json(marketAnalysisReport);
 });
 
 const ALL_STOCKS = require('./popular_stocks');

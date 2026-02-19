@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 
 // Services & Components
+import axios from 'axios';
 import { AuthService } from './src/services/AuthService';
 import { StockService } from './src/services/StockService';
 import { StorageService } from './src/services/StorageService';
@@ -310,6 +311,66 @@ function MainApp() {
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
+
+    // [코다리 부장 터치] 밤에 새로 깔았을 때는 서버 스냅샷을 한 방에 받아오는 게 최고!
+    // 48개 종목 개별 호출 대신 서버가 이미 분석해둔 완성 데이터를 0.5초 만에 받아옵니다!
+    if (forceFetch) {
+      try {
+        const { SERVER_URL } = require('./src/constants/Config');
+        const snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 15000 });
+        if (snapshotRes.data && snapshotRes.data.status === 'READY') {
+          const snap = snapshotRes.data;
+          // 서버 스냅샷의 연속매매 데이터를 종목 리스트로 변환
+          const serverStocks = [];
+          const allBuy = { ...(snap.buyData || {}) };
+          const allSell = { ...(snap.sellData || {}) };
+
+          // buyData에서 종목 추출 (외국인+기관 합산)
+          const seenCodes = new Set();
+          Object.values(allBuy).forEach(list => {
+            (list || []).forEach(item => {
+              if (!seenCodes.has(item.code)) {
+                seenCodes.add(item.code);
+                serverStocks.push({
+                  name: item.name, code: item.code, price: parseInt(item.price || 0),
+                  fStreak: item.streak || 0, iStreak: 0, sentiment: 50 + (item.streak || 0) * 10,
+                  vwap: 0, isHiddenAccumulation: false
+                });
+              }
+            });
+          });
+          Object.values(allSell).forEach(list => {
+            (list || []).forEach(item => {
+              if (!seenCodes.has(item.code)) {
+                seenCodes.add(item.code);
+                serverStocks.push({
+                  name: item.name, code: item.code, price: parseInt(item.price || 0),
+                  fStreak: -(item.streak || 0), iStreak: 0, sentiment: 50 - (item.streak || 0) * 10,
+                  vwap: 0, isHiddenAccumulation: false
+                });
+              }
+            });
+          });
+
+          if (serverStocks.length > 0) {
+            setAnalyzedStocks(serverStocks);
+            const timeStr = snap.updateTime
+              ? new Date(snap.updateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : '서버 캐시';
+            setLastUpdate(timeStr);
+            // 스냅샷 캐싱
+            const snapshot = { stocks: serverStocks, sectors: sectors, instFlow: detailedInstFlow, updateTime: timeStr };
+            AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
+            setLoading(false);
+            isRefreshing.current = false;
+            return; // 서버 데이터로 충분! 개별 KIS 호출 불필요!
+          }
+        }
+      } catch (e) {
+        console.log('[Snapshot] Server snapshot unavailable, falling back to KIS direct...', e.message);
+      }
+    }
+
     const results = [];
     // Analyze both user stocks and default market watch stocks
     const base = targetStocks || myStocks;
