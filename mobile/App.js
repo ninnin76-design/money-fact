@@ -116,19 +116,23 @@ if (Platform.OS !== 'web') {
           const isHiddenAcc = StockService.checkHiddenAccumulation(data);
 
           const currentStatus = `${fStreak}|${iStreak}`;
-          if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
+          if (!history[stock.code]) {
+            history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '', streakDate: '' };
+          }
 
-          // 1. Streak Alert (Status Change)
-          if (history[stock.code].streak !== currentStatus) {
-            if (Math.abs(fStreak) >= 3 || Math.abs(iStreak) >= 3) {
+          // 1. Streak Alert (Once per day unless status flips significantly)
+          // Only alert if streaks are severe (>=3) AND (different status OR first time today)
+          if ((Math.abs(fStreak) >= 3 || Math.abs(iStreak) >= 3)) {
+            if (history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today) {
               const type = fStreak >= 3 || iStreak >= 3 ? "🎯 매수 기회" : "⚠️ 매도 경고";
               await Notifications.scheduleNotificationAsync({
                 content: { title: `Money Fact: ${stock.name}`, body: `${stock.name} ${type} 기류 포착 (${fStreak}/${iStreak})` },
                 trigger: null,
               });
+              history[stock.code].streak = currentStatus;
+              history[stock.code].streakDate = today;
               hasNewData = true;
             }
-            history[stock.code].streak = currentStatus;
           }
 
           // 2. Value Buy Zone Alert (Once per day)
@@ -151,6 +155,33 @@ if (Platform.OS !== 'web') {
             hasNewData = true;
           }
         }
+      }
+
+      // --- [New] Check Watch List for Suspicious Accumulation (All Stocks) ---
+      // Filter out stocks already in my list to avoid duplicate checks
+      const watchList = MARKET_WATCH_STOCKS.filter(ws => !myStocks.some(ms => ms.code === ws.code));
+
+      // Limit check to avoid timeout (check first 10 or randomize, but here we do all watch list ~30 items)
+      for (const stock of watchList) {
+        try {
+          const data = await StockService.getInvestorData(stock.code);
+          if (data && data.length > 0) {
+            const isHiddenAcc = StockService.checkHiddenAccumulation(data);
+
+            if (isHiddenAcc) {
+              if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
+
+              if (history[stock.code].hiddenDate !== today) {
+                await Notifications.scheduleNotificationAsync({
+                  content: { title: "🤫 [시장감시] 조용한 매집 포착", body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!` },
+                  trigger: null,
+                });
+                history[stock.code].hiddenDate = today;
+                hasNewData = true;
+              }
+            }
+          }
+        } catch (e) { }
       }
 
       if (hasNewData) {
@@ -212,10 +243,21 @@ function MainApp() {
     const stocks = await StorageService.loadMyStocks();
     setMyStocks(stocks);
 
-    // [코다리 부장 터치] 앱 켤 때 일단 저장해놨던 마지막 데이터를 먼저 싹~ 보여줍니다!
+    // [코다리 부장 터치] 앱 켤 때 섹터, 수급 금액까지 전재산(Full Snapshot)을 한 번에 복원합니다!
     const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
     if (cached) {
-      setAnalyzedStocks(JSON.parse(cached));
+      try {
+        const fullData = JSON.parse(cached);
+        // 옛날 방식(배열만 저장)과 새 방식(객체 저장) 모두 대응하는 지능형 복구!
+        if (Array.isArray(fullData)) {
+          setAnalyzedStocks(fullData);
+        } else {
+          setAnalyzedStocks(fullData.stocks || []);
+          if (fullData.sectors) setSectors(fullData.sectors);
+          if (fullData.instFlow) setDetailedInstFlow(fullData.instFlow);
+          if (fullData.updateTime) setLastUpdate(fullData.updateTime);
+        }
+      } catch (e) { }
     }
 
     const key = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_NICKNAME);
@@ -259,8 +301,12 @@ function MainApp() {
   const refreshData = async (targetStocks, silent = false) => {
     if (isRefreshing.current) return;
 
-    // [코다리 부장 터치] 장종료 시간대에는 서버에 물어보지 않고 조용히 패스~
-    if (!StockService.isMarketOpen() && analyzedStocks.length > 0) return;
+    // [코다리 부장 터치] 장종료 시간이라도 데이터가 아예 없다면(새로 깔았을 때) 한 번은 가져오게 허용!
+    const hasData = analyzedStocks.length > 0;
+    if (!StockService.isMarketOpen() && hasData) return;
+
+    // 데이터가 없는 밤이라면 force 모드로 억지로라도 데이터를 긁어옵니다.
+    const forceFetch = !StockService.isMarketOpen() && !hasData;
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
@@ -284,8 +330,8 @@ function MainApp() {
       await new Promise(resolve => setTimeout(resolve, 50));
       try {
         const [data, livePrice] = await Promise.all([
-          StockService.getInvestorData(stock.code),
-          StockService.getCurrentPrice(stock.code)
+          StockService.getInvestorData(stock.code, forceFetch),
+          StockService.getCurrentPrice(stock.code, forceFetch)
         ]);
 
         if (data && data.length > 0) {
@@ -362,7 +408,7 @@ function MainApp() {
     });
 
     if (updatedSectors.length > 0) {
-      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 9));
+      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
     }
     // Round inst sub-types to billion KRW
     const roundedInstTotals = {
@@ -373,11 +419,17 @@ function MainApp() {
     setDetailedInstFlow(roundedInstTotals);
 
     if (tickerTexts.length > 2) setTickerItems(tickerTexts);
-    setLastUpdate(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-
-    // [코다리 부장 터치] 방금 분석한 따끈따끈한 데이터를 나중(새벽)을 위해 메모리에 저장!
+    const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLastUpdate(timeStr);
+    // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
     if (results.length > 0) {
-      AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(results));
+      const snapshot = {
+        stocks: results,
+        sectors: updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
+        instFlow: roundedInstTotals,
+        updateTime: timeStr
+      };
+      AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
     }
 
     setLoading(false);
@@ -717,7 +769,7 @@ function MainApp() {
           <View style={styles.card}>
             <Text style={styles.label}>알림 설정</Text>
             <View style={styles.settingRow}>
-              <Text style={styles.settingText}>3일 연속 수급 발생 시 푸시</Text>
+              <Text style={styles.settingText}>종합 알림 (내 종목 이탈 / 시장 매집 / 세력평단 찬스)</Text>
               <Switch
                 value={pushEnabled}
                 onValueChange={async (val) => {
