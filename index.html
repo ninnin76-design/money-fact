@@ -324,7 +324,7 @@
 <body>
     <div id="app-container">
         <div class="hero-banner">
-            <div class="hero-text">Money Fact</div>
+            <div class="hero-text">Money Fact <span style="font-size: 14px; opacity: 0.7;">v2.2</span></div>
         </div>
 
         <div class="mode-tabs">
@@ -340,6 +340,16 @@
 
         <div id="stock-list-container" class="stock-list">
             <!-- 리스트가 여기 렌더링 됩니다 -->
+        </div>
+
+        <!-- [코다리 부장 터치] 앱 다운로드 유도 섹션 -->
+        <div
+            style="position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; padding: 16px 20px; border-top: 1px solid #E5E8EB; box-shadow: 0 -4px 12px rgba(0,0,0,0.05); z-index: 100;">
+            <a href="./server/MoneyFact_v2_2.apk"
+                style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #191F28; color: #fff; text-decoration: none; padding: 14px; border-radius: 12px; font-weight: 700; font-size: 15px;"
+                download>
+                📱 머니 팩트 전용 앱 설치하기 (v2.2)
+            </a>
         </div>
     </div>
 
@@ -371,13 +381,14 @@
             listEl.innerHTML = '<p style="text-align:center; padding:40px; color:#8B95A1; font-weight:600;">데이터를 불러오는 중...</p>';
 
             try {
-                // 상용 주소 대신 같은 서버의 API 호출
-                const res = await fetch(`/api/analysis/supply/5/${investor}?mode=${mode}`);
+                // [코다리 부장 터치] 깃허브 페이지에서도 돌아가게끔 실서버 주소로 연결!
+                const API_BASE = 'https://money-fact-server.onrender.com';
+                const res = await fetch(`${API_BASE}/api/analysis/supply/5/${investor}?mode=${mode}`);
                 const data = await res.json();
                 stocks = data.output || [];
                 renderList();
             } catch (e) {
-                listEl.innerHTML = '<p style="text-align:center; padding:40px; color:red;">데이터 연결 오류</p>';
+                listEl.innerHTML = '<p style="text-align:center; padding:40px; color:red;">서버 연결 오류 (잠시 후 다시 시도)</p>';
             }
         }
 
@@ -409,7 +420,8 @@
             loader.style.display = 'flex';
 
             try {
-                const res = await fetch('/api/portfolio/recommend', {
+                const API_BASE = 'https://money-fact-server.onrender.com';
+                const res = await fetch(`${API_BASE}/api/portfolio/recommend`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

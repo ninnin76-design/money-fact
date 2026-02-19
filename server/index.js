@@ -431,7 +431,13 @@ async function runDeepMarketScan(force = false) {
     } catch (e) { console.error("Worker Error", e.message); }
 }
 
-// runDeepMarketScan(true); // Removed immediate call to prevent token issuance on every server wake-up/static request
+// [코다리 부장 터치] 서버가 켜질 때 데이터가 너무 오래됐거나 없으면 즉시 한 번 구워줍니다!
+const shouldScanNow = !marketAnalysisReport.updateTime || (new Date() - new Date(marketAnalysisReport.updateTime) > 60 * 60 * 1000);
+if (shouldScanNow) {
+    console.log("[Server] Data stale or missing. Starting immediate market scan...");
+    runDeepMarketScan(true);
+}
+
 setInterval(runDeepMarketScan, 15 * 60 * 1000);
 
 app.get('/api/analysis/supply/:period/:investor', (req, res) => {
