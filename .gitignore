@@ -17,3 +17,10 @@ temp_response.json
 
 # local profile
 chrome_profile_notebooklm/
+
+# Token & Cache
+*token_cache*.json
+real_token_cache.json
+db.json
+sync_data.json
+

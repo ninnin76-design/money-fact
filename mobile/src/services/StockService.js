@@ -212,7 +212,7 @@ export const StockService = {
         return { fStreak, iStreak, sentiment };
     },
 
-    checkHiddenAccumulation(dailyData) {
+    checkHiddenAccumulation(dailyData, streakThreshold = 3) {
         if (!dailyData || dailyData.length < 5) return false;
 
         // Check volatility for last 5 days (< 3% average)
@@ -234,8 +234,8 @@ export const StockService = {
 
         const { fStreak, iStreak } = this.analyzeSupply(dailyData);
 
-        // Hidden if Volatility is low but either F or I is buying for 3+ days
-        return avgVol < 3 && (fStreak >= 3 || iStreak >= 3);
+        // Hidden if Volatility is low but either F or I is buying for streakThreshold+ days
+        return avgVol < 3 && (fStreak >= streakThreshold || iStreak >= streakThreshold);
     },
 
     calculateVWAP(dailyData, days = 5) {
