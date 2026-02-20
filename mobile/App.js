@@ -9,7 +9,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, CloudUpload, Download, User, X
+  AlertTriangle, Settings, RefreshCcw, CloudUpload, Download, User, X, Save
 } from 'lucide-react-native';
 
 // Services & Components
@@ -380,12 +380,15 @@ function MainApp() {
   const refreshData = async (targetStocks, silent = false) => {
     if (isRefreshing.current) return;
 
-    // [코다리 부장 터치] 장종료 시간이라도 데이터가 아예 없다면(새로 깔았을 때) 한 번은 가져오게 허용!
-    const hasData = analyzedStocks.length > 0;
-    if (!StockService.isMarketOpen() && hasData) return;
+    // [코다리 부장 터치] 장외 시간(오후 8시 ~ 익일 오전 8시)에는 새로운 데이터를 요청하지 않고 현재 화면을 고정합니다!
+    const hasAnyData = analyzedStocks.length > 0 || sectors.length > 0;
+    if (!StockService.isMarketOpen() && hasAnyData) {
+      // console.log("Off-hours: Holding current data.");
+      return;
+    }
 
-    // 데이터가 없는 밤이라면 force 모드로 억지로라도 데이터를 긁어옵니다.
-    const forceFetch = !StockService.isMarketOpen() && !hasData;
+    // 데이터가 아예 없는 밤(새로 깔았을 때)이라면 딱 한 번만 서버 스냅샷을 긁어옵니다.
+    const forceFetch = !StockService.isMarketOpen() && !hasAnyData;
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
@@ -561,7 +564,9 @@ function MainApp() {
       return { name, flow };
     });
 
-    if (updatedSectors.length > 0) {
+    // [코다리 부장 터치] 밤 늦게 API가 0을 던져줘도, 화면의 섹터 데이터를 0으로 덮어쓰지 않고 유지합니다!
+    const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
+    if (updatedSectors.length > 0 && totalFlow > 0) {
       setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
     }
     // Round inst sub-types to billion KRW

@@ -502,16 +502,21 @@ async function runDeepMarketScan(force = false) {
         });
 
         const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
+        const totalSectorFlow = sectorList.reduce((acc, s) => acc + Math.abs(s.flow), 0);
 
         investors.forEach(inv => {
             newBuyData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
             newSellData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
         });
 
+        // [코다리 부장 터치] 밤 늦게 데이터가 0으로 들어와도, 낮의 뜨거웠던 자금 흐름 데이터를 삭제하지 않고 보존합니다!
         marketAnalysisReport.buyData = newBuyData;
         marketAnalysisReport.sellData = newSellData;
-        marketAnalysisReport.sectors = sectorList;
-        marketAnalysisReport.instFlow = instTotals;
+
+        if (totalSectorFlow > 0) {
+            marketAnalysisReport.sectors = sectorList;
+            marketAnalysisReport.instFlow = instTotals;
+        }
         marketAnalysisReport.updateTime = new Date();
         marketAnalysisReport.dataType = currentType;
         marketAnalysisReport.status = 'READY';
