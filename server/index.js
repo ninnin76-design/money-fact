@@ -315,7 +315,30 @@ async function runDeepMarketScan(force = false) {
                         params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
                     });
                     const daily = invRes.data.output || [];
-                    if (daily.length > 0) { // Changed > 5 to > 0 to see any data
+
+                    // [코다리 부장 터치] 장중(Idea 3)이라면 잠정치를 슥삭 가져와서 0을 채워줍니다!
+                    if (isMarketOpen && daily.length > 0) {
+                        const d0 = daily[0];
+                        // 장중엔 보통 0으로 나오므로, 그때만 잠정치 API를 한 번 더 찌릅니다.
+                        if (parseInt(d0.frgn_ntby_qty || 0) === 0 && parseInt(d0.orgn_ntby_qty || 0) === 0) {
+                            try {
+                                const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
+                                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+                                });
+                                const prov = provRes.data.output;
+                                if (prov) {
+                                    // 잠정치로 오늘 데이터를 덮어씌워 계산에 반영!
+                                    d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
+                                    d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0';
+                                }
+                            } catch (provErr) {
+                                // 잠정치 실패해도 조용히 넘어갑니다.
+                            }
+                        }
+                    }
+
+                    if (daily.length > 0) {
                         hits++;
                         const currentPrice = daily[0].stck_clpr;
                         const currentRate = daily[0].prdy_ctrt;
