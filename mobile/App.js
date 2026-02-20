@@ -536,8 +536,8 @@ function MainApp() {
           // Ticker logic for MY stocks only
           const isMyStock = base.some(bs => bs.code === stock.code);
           if (isMyStock) {
-            if (analysis.fStreak >= 3) tickerTexts.push(`🚀 ${stock.name}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
-            if (analysis.iStreak >= 3) tickerTexts.push(`🏛️ ${stock.name}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
+            if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stock.name}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
+            if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stock.name}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
             const price = parseInt(data[0].stck_clpr || 0);
             if (vwap > 0 && price < vwap * 0.97) tickerTexts.push(`💎 ${stock.name}: 세력평단 대비 저평가 구간 진입!`);
             if (hidden) tickerTexts.push(`🤫 ${stock.name}: 수상한 매집 정황 포착!`);
