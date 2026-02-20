@@ -202,7 +202,7 @@ app.get('/api/alerts/opportunities', async (req, res) => {
         Object.keys(buyData).forEach(key => {
             const items = buyData[key] || [];
             items.forEach(item => {
-                if (item.streak >= 3) {
+                if (item.streak >= 2) {
                     opportunities.push({
                         ...item,
                         investor: key.split('_')[1],

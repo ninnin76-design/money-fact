@@ -112,21 +112,23 @@ if (Platform.OS !== 'web') {
       for (const stock of myStocks) {
         const data = await StockService.getInvestorData(stock.code);
         if (data && data.length > 0) {
+          // [코다리 부장 터치] 백그라운드에서도 사용자 설정값(민감도)을 존중합니다!
+          const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
+          const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
+          const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
+          const buyLimit = parseInt(buyLimitRaw) || 3;
+          const sellLimit = parseInt(sellLimitRaw) || 3;
+          const accumLimit = parseInt(accumLimitRaw) || 3;
+
           const { fStreak, iStreak } = StockService.analyzeSupply(data);
           const currentPrice = parseInt(data[0].stck_clpr || 0);
-          const vwap = StockService.calculateVWAP(data, 3);
-          const isHiddenAcc = StockService.checkHiddenAccumulation(data);
+          const vwap = StockService.calculateVWAP(data, buyLimit);
+          const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
 
           const currentStatus = `${fStreak}|${iStreak}`;
           if (!history[stock.code]) {
             history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '', streakDate: '' };
           }
-
-          // [코다리 부장 터치] 백그라운드에서도 사용자 설정값(민감도)을 존중합니다!
-          const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
-          const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
-          const buyLimit = parseInt(buyLimitRaw) || 3;
-          const sellLimit = parseInt(sellLimitRaw) || 3;
 
           // 1. Streak Alert
           const isBuySignal = fStreak >= buyLimit || iStreak >= buyLimit;
@@ -176,7 +178,9 @@ if (Platform.OS !== 'web') {
         try {
           const data = await StockService.getInvestorData(stock.code);
           if (data && data.length > 0) {
-            const isHiddenAcc = StockService.checkHiddenAccumulation(data);
+            const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
+            const accumLimit = parseInt(accumLimitRaw) || 3;
+            const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
 
             if (isHiddenAcc) {
               if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
@@ -486,7 +490,7 @@ function MainApp() {
 
         if (data && data.length > 0) {
           const analysis = StockService.analyzeSupply(data);
-          const vwap = StockService.calculateVWAP(data, 3);
+          const vwap = StockService.calculateVWAP(data, settingBuyStreak);
           const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak);
           const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
           const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
@@ -925,7 +929,13 @@ function MainApp() {
             };
             return getVal(b) - getVal(a);
           }).map(s => (
-            <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
+            <StockCard
+              key={s.code}
+              stock={s}
+              onPress={() => { setSelectedStock(s); setDetailModal(true); }}
+              buyLimit={settingBuyStreak}
+              sellLimit={settingSellStreak}
+            />
           ))}
           {filtered.length === 0 && !loading && <Text style={styles.emptyText}>조건에 맞는 종목이 없습니다.</Text>}
           {loading && <ActivityIndicator size="small" color="#3182f6" style={{ marginTop: 20 }} />}
@@ -947,6 +957,8 @@ function MainApp() {
               stock={s}
               onPress={() => { setSelectedStock(s); setDetailModal(true); }}
               onDelete={() => handleDeleteStock(s.code)}
+              buyLimit={settingBuyStreak}
+              sellLimit={settingSellStreak}
             />
           ))}
           {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
@@ -1257,21 +1269,21 @@ function MainApp() {
                       let analysis = "";
 
                       // 1. Foreigner & Institution Trend Detail
-                      let fTrend = fStreak >= 3 ? `🌍 외인 ${fStreak}일 연속 매집` : (fStreak <= -3 ? `🌍 외인 ${Math.abs(fStreak)}일 연속 매도` : "🌍 외인 수급 중립");
-                      let iTrend = iStreak >= 3 ? `🏛️ 기관 ${iStreak}일 연속 매집` : (iStreak <= -3 ? `🏛️ 기관 ${Math.abs(iStreak)}일 연속 매도` : "🏛️ 기관 수급 중립");
+                      let fTrend = fStreak >= settingBuyStreak ? `🌍 외인 ${fStreak}일 연속 매집` : (fStreak <= -settingSellStreak ? `🌍 외인 ${Math.abs(fStreak)}일 연속 매도` : "🌍 외인 수급 중립");
+                      let iTrend = iStreak >= settingBuyStreak ? `🏛️ 기관 ${iStreak}일 연속 매집` : (iStreak <= -settingSellStreak ? `🏛️ 기관 ${Math.abs(iStreak)}일 연속 매도` : "🏛️ 기관 수급 중립");
 
                       analysis += `${fTrend}\n${iTrend}\n\n`;
 
                       // 1-2. Strategic Advice (Synthesis)
-                      if (fStreak >= 3 && iStreak >= 3) {
+                      if (fStreak >= settingBuyStreak && iStreak >= settingBuyStreak) {
                         analysis += `🔥 [강력 매수 관점] 외인과 기관이 의기투합하여 물량을 쓸어담는 중입니다. 시세 분출의 가능성이 매우 높습니다.`;
-                      } else if (fStreak >= 3 && iStreak <= -3) {
+                      } else if (fStreak >= settingBuyStreak && iStreak <= -settingSellStreak) {
                         analysis += `⚔️ [힘겨루기 구간] 외국인은 사고 있지만 기관이 그 물량을 퍼붓고 있습니다. 외국인의 매수세가 기관의 매도세를 압도하는지 확인하며 분할 접근을 권장합니다.`;
-                      } else if (fStreak <= -3 && iStreak >= 3) {
+                      } else if (fStreak <= -settingSellStreak && iStreak >= settingBuyStreak) {
                         analysis += `⚔️ [힘겨루기 구간] 기관은 하방을 지지하며 사고 있으나 외국인이 차익 실현 중입니다. 기관의 방어선 지지 여부가 핵심입니다.`;
-                      } else if (fStreak >= 3 || iStreak >= 3) {
+                      } else if (fStreak >= settingBuyStreak || iStreak >= settingBuyStreak) {
                         analysis += `📈 [긍정적 관점] 한쪽 주체의 수급만으로도 시세를 견인할 수 있는 모멘텀이 형성되고 있습니다.`;
-                      } else if (fStreak <= -3 && iStreak <= -3) {
+                      } else if (fStreak <= -settingSellStreak && iStreak <= -settingSellStreak) {
                         analysis += `⚠️ [위험 관리] 외인과 기관 모두가 등을 돌린 상태입니다. 바닥 확인 전까지는 성급한 진입을 자제해야 합니다.`;
                       } else {
                         analysis += `⚖️ [관망 모드] 뚜렷한 주도 주체가 없어 박스권 흐름이 예상됩니다. 일방향 수급이 터질 때까지 대기하세요.`;

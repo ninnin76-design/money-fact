@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2 } from 'lucide-react-native';
 
-const StockCard = ({ stock, onPress, onDelete }) => {
+const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) => {
     const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation } = stock;
 
     const getStreakText = (streak) => {
-        if (streak >= 3) return { text: `${streak}일 연속 매수`, color: '#ff4d4d', icon: <TrendingUp size={12} color="#ff4d4d" /> };
-        if (streak <= -3) return { text: `${Math.abs(streak)}일 연속 매도`, color: '#3182f6', icon: <TrendingDown size={12} color="#3182f6" /> };
+        if (streak >= buyLimit) return { text: `${streak}일 연속 매수`, color: '#ff4d4d', icon: <TrendingUp size={12} color="#ff4d4d" /> };
+        if (streak <= -sellLimit) return { text: `${Math.abs(streak)}일 연속 매도`, color: '#3182f6', icon: <TrendingDown size={12} color="#3182f6" /> };
         return null;
     };
 
