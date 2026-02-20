@@ -122,11 +122,19 @@ if (Platform.OS !== 'web') {
             history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '', streakDate: '' };
           }
 
-          // 1. Streak Alert (Once per day unless status flips significantly)
-          // Only alert if streaks are severe (>=3) AND (different status OR first time today)
-          if ((Math.abs(fStreak) >= 3 || Math.abs(iStreak) >= 3)) {
+          // [코다리 부장 터치] 백그라운드에서도 사용자 설정값(민감도)을 존중합니다!
+          const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
+          const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
+          const buyLimit = parseInt(buyLimitRaw) || 3;
+          const sellLimit = parseInt(sellLimitRaw) || 3;
+
+          // 1. Streak Alert
+          const isBuySignal = fStreak >= buyLimit || iStreak >= buyLimit;
+          const isSellSignal = fStreak <= -sellLimit || iStreak <= -sellLimit;
+
+          if (isBuySignal || isSellSignal) {
             if (history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today) {
-              const type = fStreak >= 3 || iStreak >= 3 ? "🎯 매수 기회" : "⚠️ 매도 경고";
+              const type = isBuySignal ? "🎯 매수 기회" : "⚠️ 매도 경고";
               await Notifications.scheduleNotificationAsync({
                 content: { title: `Money Fact: ${stock.name}`, body: `${stock.name} ${type} 기류 포착 (${fStreak}/${iStreak})` },
                 trigger: null,
@@ -225,6 +233,10 @@ function MainApp() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const isRefreshing = useRef(false);
 
+  // [코다리 부장 터치] 감지 민감도 설정 (기본값: 3일)
+  const [settingBuyStreak, setSettingBuyStreak] = useState(3);
+  const [settingSellStreak, setSettingSellStreak] = useState(3);
+
   // Sample Sectors
   const [sectors, setSectors] = useState([
     { name: '반도체', flow: 0 },
@@ -267,6 +279,11 @@ function MainApp() {
 
     const notif = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_ENABLED);
     setPushEnabled(notif !== 'false');
+
+    const buySet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
+    if (buySet) setSettingBuyStreak(parseInt(buySet) || 3);
+    const sellSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
+    if (sellSet) setSettingSellStreak(parseInt(sellSet) || 3);
 
     setIsMarketOpen(StockService.isMarketOpen());
 
@@ -314,7 +331,11 @@ function MainApp() {
       await axios.post(`${SERVER_URL}/api/push/register`, {
         pushToken: pushTokenString,
         syncKey: syncKey || 'anonymous',
-        stocks: stocksToSend
+        stocks: stocksToSend,
+        settings: {
+          buyStreak: settingBuyStreak,
+          sellStreak: settingSellStreak
+        }
       });
       // console.log("Server Push Registered:", pushEnabled ? "ACTIVE" : "INACTIVE");
 
@@ -331,7 +352,7 @@ function MainApp() {
       }, 2000); // Debounce heavily
       return () => clearTimeout(timer);
     }
-  }, [pushEnabled, myStocks, syncKey]);
+  }, [pushEnabled, myStocks, syncKey, settingBuyStreak, settingSellStreak]);
 
   const setupBackground = async () => {
     if (Platform.OS === 'web') return;
@@ -763,20 +784,24 @@ function MainApp() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>나의 매집 의심 종목</Text>
-          {analyzedStocks.filter(s => s.isHiddenAccumulation).map(s => (
-            <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
-          ))}
-          {analyzedStocks.filter(s => s.isHiddenAccumulation).length === 0 && <Text style={styles.emptyText}>현재 조용히 매집 중인 종목이 없습니다.</Text>}
+          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {settingBuyStreak}일↑)</Text>
+          {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak))
+            .map(s => (
+              <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
+            ))}
+          {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak)).length === 0
+            && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
         </ScrollView>
       );
     }
     if (tab === 'list') {
       const filtered = analyzedStocks.filter(s => {
         const isBuy = tradingType === 'BUY';
-        if (investorType === 'FOREIGN') return isBuy ? s.fStreak >= 3 : s.fStreak <= -3;
-        if (investorType === 'INSTITUTION') return isBuy ? s.iStreak >= 3 : s.iStreak <= -3;
-        return isBuy ? (s.fStreak >= 3 || s.iStreak >= 3) : (s.fStreak <= -3 || s.iStreak <= -3);
+        const limit = isBuy ? settingBuyStreak : settingSellStreak;
+
+        if (investorType === 'FOREIGN') return isBuy ? s.fStreak >= limit : s.fStreak <= -limit;
+        if (investorType === 'INSTITUTION') return isBuy ? s.iStreak >= limit : s.iStreak <= -limit;
+        return isBuy ? (s.fStreak >= limit || s.iStreak >= limit) : (s.fStreak <= -limit || s.iStreak <= -limit);
       });
 
       return (
@@ -784,6 +809,9 @@ function MainApp() {
           <MarketStatusHeader />
           <Text style={styles.sectionTitle}>
             {isMarketOpen ? "실시간 수급 연속 매매" : "금일 수급 연속 매매 TOP"}
+            <Text style={{ fontSize: 13, color: '#888', fontWeight: 'normal' }}>
+              {` (기준: ${tradingType === 'BUY' ? settingBuyStreak : settingSellStreak}일↑)`}
+            </Text>
           </Text>
 
           <View style={styles.mainFilterRow}>
@@ -898,6 +926,67 @@ function MainApp() {
                 trackColor={{ true: '#3182f6' }}
               />
             </View>
+
+            {pushEnabled && (
+              <View style={{ marginTop: 20 }}>
+                <Text style={[styles.label, { fontSize: 14, marginBottom: 10 }]}>🔔 감지 민감도 설정</Text>
+
+                <View style={styles.settingRow}>
+                  <Text style={styles.settingText}>🎯 연속 매수 감지 (기본 3일)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const next = Math.max(3, settingBuyStreak - 1);
+                        setSettingBuyStreak(next);
+                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
+                      }}
+                      style={styles.controlBtn}
+                    >
+                      <Text style={styles.controlBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontWeight: 'bold', fontSize: 16, width: 20, textAlign: 'center' }}>{settingBuyStreak}</Text>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const next = Math.min(10, settingBuyStreak + 1);
+                        setSettingBuyStreak(next);
+                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
+                      }}
+                      style={styles.controlBtn}
+                    >
+                      <Text style={styles.controlBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={[styles.settingRow, { marginTop: 15 }]}>
+                  <Text style={styles.settingText}>⚠️ 연속 매도 감지 (기본 3일)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const next = Math.max(3, settingSellStreak - 1);
+                        setSettingSellStreak(next);
+                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
+                      }}
+                      style={styles.controlBtn}
+                    >
+                      <Text style={styles.controlBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontWeight: 'bold', fontSize: 16, width: 20, textAlign: 'center' }}>{settingSellStreak}</Text>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const next = Math.min(10, settingSellStreak + 1);
+                        setSettingSellStreak(next);
+                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
+                      }}
+                      style={styles.controlBtn}
+                    >
+                      <Text style={styles.controlBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={[styles.descText, { marginTop: 10 }]}>* 설정한 일수 이상 연속될 때만 알림을 보냅니다.</Text>
+              </View>
+            )}
           </View>
         </View>
       );
@@ -1331,6 +1420,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     marginRight: 8,
+  },
+  controlBtn: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#333',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  controlBtnText: {
+    color: '#fff', fontSize: 18, fontWeight: 'bold'
   },
   filterBtnText: {
     color: '#fff',
