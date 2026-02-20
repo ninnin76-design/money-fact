@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Constants from 'expo-constants';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
   TextInput, Modal, StatusBar, ActivityIndicator, Dimensions, Alert,
@@ -288,6 +289,50 @@ function MainApp() {
     return () => clearInterval(timer);
   }, [tab, myStocks]);
 
+  // [코다리 부장 터치] 서버 푸시 등록 로직! (설정 ON일 때만 제대로 등록)
+  const registerForServerPush = async () => {
+    if (Platform.OS === 'web') return;
+
+    try {
+      // 1. Check existing permission
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') return;
+
+      // 2. Get Push Token
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+      const pushTokenString = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+
+      // 3. Send to Server (Only if enabled!)
+      // 설정이 OFF면 빈 리스트를 보내서 서버가 알림을 안 쏘게 만듭니다!
+      const stocksToSend = pushEnabled ? myStocks : [];
+
+      await axios.post(`${SERVER_URL}/api/push/register`, {
+        pushToken: pushTokenString,
+        syncKey: syncKey || 'anonymous',
+        stocks: stocksToSend
+      });
+      // console.log("Server Push Registered:", pushEnabled ? "ACTIVE" : "INACTIVE");
+
+    } catch (e) {
+      // console.log("Push reg failed:", e);
+    }
+  };
+
+  // 설정이나 종목이 바뀌면 서버에 최신 정보를 다시 알려줍니다!
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        registerForServerPush();
+      }, 2000); // Debounce heavily
+      return () => clearTimeout(timer);
+    }
+  }, [pushEnabled, myStocks, syncKey]);
+
   const setupBackground = async () => {
     if (Platform.OS === 'web') return;
     try {
@@ -296,6 +341,8 @@ function MainApp() {
         stopOnTerminate: false,
         startOnBoot: true,
       });
+      // 앱 켜질 때도 한 번 등록 시도
+      registerForServerPush();
     } catch (e) { }
   };
 
