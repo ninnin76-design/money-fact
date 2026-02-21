@@ -298,6 +298,13 @@ function MainApp() {
 
     // Stage 2: Deferred detailed analysis
     setTimeout(() => {
+      // [코다리 부장] 개선: 장외 시간(밤/주말)이고 이미 캐시된 데이터가 있다면 새로고침을 생략합니다.
+      // 이렇게 하면 앱을 껐다 켜도 한투 API를 찌르지 않아 토큰 발행을 아낄 수 있습니다!
+      const hasAnyData = analyzedStocks.length > 0 || sectors.length > 0;
+      if (!StockService.isMarketOpen() && hasAnyData) {
+        // console.log("앱 시작: 장외 시간이므로 캐시 데이터 유지.");
+        return;
+      }
       refreshData(stocks);
     }, 500);
 
