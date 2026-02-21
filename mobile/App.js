@@ -300,9 +300,10 @@ function MainApp() {
     setTimeout(() => {
       // [코다리 부장] 개선: 장외 시간(밤/주말)이고 이미 캐시된 데이터가 있다면 새로고침을 생략합니다.
       // 이렇게 하면 앱을 껐다 켜도 한투 API를 찌르지 않아 토큰 발행을 아낄 수 있습니다!
-      const hasAnyData = analyzedStocks.length > 0 || sectors.length > 0;
-      if (!StockService.isMarketOpen() && hasAnyData) {
-        // console.log("앱 시작: 장외 시간이므로 캐시 데이터 유지.");
+      // ⚠️ 주의: sectors는 초기값이 6개(flow:0)라 length로 체크하면 항상 true!
+      //    캐시된 데이터가 실제로 존재하는지는 cached 변수로 정확히 판단합니다.
+      if (!StockService.isMarketOpen() && cached) {
+        // console.log("앱 시작: 장외 시간이고 캐시 데이터 있으므로 유지.");
         return;
       }
       refreshData(stocks);
@@ -388,7 +389,9 @@ function MainApp() {
     if (isRefreshing.current) return;
 
     // [코다리 부장 터치] 장외 시간(오후 8시 ~ 익일 오전 8시)에는 새로운 데이터를 요청하지 않고 현재 화면을 고정합니다!
-    const hasAnyData = analyzedStocks.length > 0 || sectors.length > 0;
+    // ⚠️ sectors는 초기값이 6개(flow:0)라 length로 체크하면 항상 true!
+    //    실제 flow 데이터가 있는 섹터가 있는지, 또는 분석된 종목이 있는지로 판단합니다.
+    const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
     const isUserAction = !!targetStocks;
 
     if (!StockService.isMarketOpen() && hasAnyData && !isUserAction) {
@@ -398,6 +401,7 @@ function MainApp() {
 
     // 데이터가 아예 없는 밤(새로 깔았을 때)이거나 유저가 직접 종목을 가져왔을 때는 강제로 한 번 조회합니다.
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
+    // console.log(`[refreshData] market=${StockService.isMarketOpen()}, hasData=${hasAnyData}, userAction=${isUserAction}, force=${forceFetch}`);
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
