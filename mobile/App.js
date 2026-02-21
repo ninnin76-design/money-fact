@@ -9,7 +9,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, CloudUpload, Download, User, X, Save
+  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud
 } from 'lucide-react-native';
 
 // Services & Components
@@ -382,20 +382,24 @@ function MainApp() {
 
     // [코다리 부장 터치] 장외 시간(오후 8시 ~ 익일 오전 8시)에는 새로운 데이터를 요청하지 않고 현재 화면을 고정합니다!
     const hasAnyData = analyzedStocks.length > 0 || sectors.length > 0;
-    if (!StockService.isMarketOpen() && hasAnyData) {
+    const isUserAction = !!targetStocks;
+
+    if (!StockService.isMarketOpen() && hasAnyData && !isUserAction) {
       // console.log("Off-hours: Holding current data.");
       return;
     }
 
-    // 데이터가 아예 없는 밤(새로 깔았을 때)이라면 딱 한 번만 서버 스냅샷을 긁어옵니다.
-    const forceFetch = !StockService.isMarketOpen() && !hasAnyData;
+    // 데이터가 아예 없는 밤(새로 깔았을 때)이거나 유저가 직접 종목을 가져왔을 때는 강제로 한 번 조회합니다.
+    const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
 
+    let snapshotStocks = [];
+
     // [코다리 부장 터치] 밤에 새로 깔았을 때는 서버 스냅샷을 한 방에 받아오는 게 최고!
-    // 48개 종목 개별 호출 대신 서버가 이미 분석해둔 완성 데이터를 0.5초 만에 받아옵니다!
-    if (forceFetch) {
+    // 다만 유저 액션(가져오기 등)일 경우엔 한투 API 조회를 보장하기 위해 바로 리턴하지 않습니다.
+    if (forceFetch && !isUserAction && !hasAnyData) {
       try {
         const snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 20000 });
         if (snapshotRes.data) {
@@ -403,18 +407,16 @@ function MainApp() {
           const allBuy = snap.buyData || {};
           const allSell = snap.sellData || {};
 
-          const hasAnyData = Object.values(allBuy).some(l => l && l.length > 0) ||
+          const hasServerData = Object.values(allBuy).some(l => l && l.length > 0) ||
             Object.values(allSell).some(l => l && l.length > 0);
 
-          if (hasAnyData) {
-            const serverStocks = [];
+          if (hasServerData) {
             const seenCodes = new Set();
-
             const processServerList = (list, isBuy) => {
               (list || []).forEach(item => {
                 if (!seenCodes.has(item.code)) {
                   seenCodes.add(item.code);
-                  serverStocks.push({
+                  snapshotStocks.push({
                     name: item.name, code: item.code, price: parseInt(item.price || 0),
                     fStreak: item.fStreak || (isBuy ? (item.streak || 0) : -(item.streak || 0)),
                     iStreak: item.iStreak || 0,
@@ -428,9 +430,7 @@ function MainApp() {
             Object.values(allBuy).forEach(l => processServerList(l, true));
             Object.values(allSell).forEach(l => processServerList(l, false));
 
-            if (serverStocks.length > 0) {
-              setAnalyzedStocks(serverStocks);
-
+            if (snapshotStocks.length > 0) {
               // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
               if (snap.sectors) setSectors(snap.sectors);
               if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
@@ -445,29 +445,25 @@ function MainApp() {
 
               // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
               const localSnapshot = {
-                stocks: serverStocks,
+                stocks: snapshotStocks,
                 sectors: snap.sectors || [],
                 instFlow: snap.instFlow || { pnsn: 0, ivtg: 0, ins: 0 },
                 scanStats: snap.scanStats || null,
                 updateTime: timeStr
               };
               AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
-
-              setLoading(false);
-              isRefreshing.current = false;
-              return;
             }
           }
         }
       } catch (e) {
         console.log('[Snapshot] Failed:', e.message);
-        // 에러 나도 로딩은 꺼줘야 리스트가 보일 기회라도 얻습니다!
-        setLoading(false);
-        isRefreshing.current = false;
       }
     }
 
-    const results = [];
+    const results = [...snapshotStocks];
+    // 기존 스냅샷이 있으면 이미 있는 종목은 KIS에 재조회하지 않도록 방어 (단, 유저 관심종목은 무조건 조회)
+    const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
+
     // Analyze both user stocks and default market watch stocks
     const base = targetStocks || myStocks;
     const combined = [...base];
@@ -484,6 +480,12 @@ function MainApp() {
     const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
 
     for (const stock of combined) {
+      // 기존 스냅샷이 있으면 이미 있는 종목은 KIS에 재조회하지 않도록 방어 (단, 유저 관심종목은 무조건 조회)
+      const isMyStock = base.some(bs => bs.code === stock.code);
+      if (snapshotExistingCodes.has(stock.code) && !isMyStock) {
+        continue;
+      }
+
       await new Promise(resolve => setTimeout(resolve, 50));
       try {
         const [data, livePrice] = await Promise.all([
@@ -522,14 +524,21 @@ function MainApp() {
             }
           }
 
-          results.push({
+          const newStockData = {
             ...stock,
             name: stockName,
             ...analysis,
             vwap,
             isHiddenAccumulation: hidden,
             price: currentPrice
-          });
+          };
+
+          const existingIdx = results.findIndex(r => r.code === stock.code);
+          if (existingIdx >= 0) {
+            results[existingIdx] = newStockData;
+          } else {
+            results.push(newStockData);
+          }
 
           if (stock.sector) {
             sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuy;
@@ -541,19 +550,24 @@ function MainApp() {
           instTotals.ins += insBuy;
 
           // Ticker logic for MY stocks only
-          const isMyStock = base.some(bs => bs.code === stock.code);
           if (isMyStock) {
-            if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stock.name}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
-            if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stock.name}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
+            if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
+            if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
             const price = parseInt(data[0].stck_clpr || 0);
-            if (vwap > 0 && price < vwap * 0.97) tickerTexts.push(`💎 ${stock.name}: 세력평단 대비 저평가 구간 진입!`);
-            if (hidden) tickerTexts.push(`🤫 ${stock.name}: 수상한 매집 정황 포착!`);
+            if (vwap > 0 && price < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
+            if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
           }
         } else {
-          results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
+          const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false };
+          const existingIdx = results.findIndex(r => r.code === stock.code);
+          if (existingIdx >= 0) results[existingIdx] = emptyStock;
+          else results.push(emptyStock);
         }
       } catch (e) {
-        results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true });
+        const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true };
+        const existingIdx = results.findIndex(r => r.code === stock.code);
+        if (existingIdx >= 0) results[existingIdx] = errorStock;
+        else results.push(errorStock);
       }
     }
     setAnalyzedStocks(results);
@@ -757,14 +771,16 @@ function MainApp() {
 
   const handleSaveSettings = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, settingBuyStreak.toString());
-      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, settingSellStreak.toString());
-      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, settingAccumStreak.toString());
+      if (settingBuyStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, settingBuyStreak.toString());
+      if (settingSellStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, settingSellStreak.toString());
+      if (settingAccumStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, settingAccumStreak.toString());
 
       // 실시간 수급 데이터 다시 분석하도록 유도
       refreshData(myStocks);
       // 서버 푸시 설정도 즉시 갱신
-      registerForServerPush();
+      if (typeof registerForServerPush === 'function') {
+        registerForServerPush();
+      }
 
       Alert.alert('성공', '민감도 설정이 안전하게 저장되었습니다.');
     } catch (e) {
@@ -981,7 +997,7 @@ function MainApp() {
 
           <View style={styles.premiumCard}>
             <View style={styles.cardHeader}>
-              <CloudUpload size={20} color="#3182f6" />
+              <UploadCloud size={20} color="#3182f6" />
               <Text style={styles.cardHeaderTitle}>데이터 백업 및 동기화</Text>
             </View>
 
@@ -1003,7 +1019,7 @@ function MainApp() {
 
             <View style={styles.premiumButtonGroup}>
               <TouchableOpacity style={styles.primaryActionBtn} onPress={handleBackup}>
-                <CloudUpload size={16} color="#fff" />
+                <UploadCloud size={16} color="#fff" />
                 <Text style={styles.actionBtnText}>백업하기</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.secondaryActionBtn} onPress={handleRestore}>
@@ -1051,7 +1067,7 @@ function MainApp() {
 
                 <View style={styles.sensitivityRow}>
                   <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1} adjustsFontSizeToFit>🎯 매수 포착 기준</Text>
+                    <Text style={styles.sensitivityLabel} numberOfLines={1}>🎯 매수 포착 기준</Text>
                     <Text style={styles.sensitivityDesc}>{settingBuyStreak}일 이상 연속 매수 시 알림</Text>
                   </View>
                   <View style={styles.stepperContainer}>
@@ -1081,7 +1097,7 @@ function MainApp() {
 
                 <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
                   <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1} adjustsFontSizeToFit>⚠️ 매도 경고 기준</Text>
+                    <Text style={styles.sensitivityLabel} numberOfLines={1}>⚠️ 매도 경고 기준</Text>
                     <Text style={styles.sensitivityDesc}>{settingSellStreak}일 이상 연속 매도 시 알림</Text>
                   </View>
                   <View style={styles.stepperContainer}>
@@ -1111,7 +1127,7 @@ function MainApp() {
 
                 <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
                   <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1} adjustsFontSizeToFit>🤫 매집 포착 기준</Text>
+                    <Text style={styles.sensitivityLabel} numberOfLines={1}>🤫 매집 포착 기준</Text>
                     <Text style={styles.sensitivityDesc}>{settingAccumStreak}일 이상 매집 정황 시 알림</Text>
                   </View>
                   <View style={styles.stepperContainer}>
@@ -1139,8 +1155,12 @@ function MainApp() {
                   </View>
                 </View>
 
+                <Text style={[styles.premiumDescText, { marginTop: 16, color: '#ff9800', fontWeight: '600' }]}>
+                  * 장마감 시간(20:00 ~ 익일 08:00) 중 변경된 설정은 익일 장 시작 시 데이터에 정식 반영됩니다.
+                </Text>
+
                 <TouchableOpacity
-                  style={[styles.primaryActionBtn, { marginTop: 24 }]}
+                  style={[styles.primaryActionBtn, { marginTop: 12 }]}
                   onPress={handleSaveSettings}
                 >
                   <Save size={16} color="#fff" />
@@ -1412,8 +1432,10 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#888',
-    fontSize: 12,
+    fontSize: 13,
     marginBottom: 8,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   input: {
     backgroundColor: '#1a232b',

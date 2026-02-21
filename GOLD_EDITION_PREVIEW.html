@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Fact Gold Edition Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #11181e;
+            --card-bg: #1a232b;
+            --primary: #3182f6;
+            --text-main: #ffffff;
+            --text-dim: #888888;
+            --text-dark: #666666;
+            --btn-bg: #333333;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #000;
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .phone-frame {
+            width: 375px;
+            height: 812px;
+            background-color: var(--bg-color);
+            border-radius: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            border: 8px solid #222;
+        }
+
+        .phone-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .header {
+            margin-bottom: 24px;
+        }
+
+        .title {
+            color: var(--text-main);
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            width: 20px;
+            height: 20px;
+            background-color: var(--primary);
+            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cloud-upload"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>') no-repeat center;
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cloud-upload"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>') no-repeat center;
+        }
+
+        .card-title {
+            color: var(--text-main);
+            font-size: 16px;
+            font-weight: 700;
+            margin-left: 10px;
+        }
+
+        .label {
+            color: var(--text-main);
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .input {
+            flex: 1;
+            background: #11181e;
+            border-radius: 12px;
+            padding: 14px;
+            color: #fff;
+            border: none;
+            font-size: 14px;
+        }
+
+        .check-btn {
+            background-color: var(--primary);
+            color: #fff;
+            padding: 0 16px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .desc {
+            color: var(--text-dark);
+            font-size: 11px;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+        }
+
+        .btn-secondary {
+            background-color: var(--btn-bg);
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .toggle-text {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .toggle-main {
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .toggle-sub {
+            color: var(--text-dim);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .switch {
+            width: 44px;
+            height: 24px;
+            background-color: var(--primary);
+            border-radius: 12px;
+            position: relative;
+        }
+
+        .switch::after {
+            content: '';
+            position: absolute;
+            right: 2px;
+            top: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border-radius: 50%;
+        }
+
+        .divider {
+            height: 1px;
+            background-color: rgba(255, 255, 255, 0.05);
+            margin: 20px 0;
+        }
+
+        .sensitivity-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .badge {
+            background-color: rgba(49, 130, 246, 0.15);
+            padding: 4px 8px;
+            border-radius: 6px;
+            color: var(--primary);
+            font-size: 10px;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .sensitivity-item {
+            display: flex;
+            align-items: center;
+            background-color: #11181e;
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+        }
+
+        .sens-info {
+            flex: 1;
+        }
+
+        .sens-label {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .sens-desc {
+            color: var(--text-dark);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .stepper {
+            display: flex;
+            align-items: center;
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 4px;
+        }
+
+        .step-btn {
+            width: 32px;
+            height: 32px;
+            background-color: var(--btn-bg);
+            border-radius: 8px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .step-val {
+            width: 36px;
+            text-align: center;
+            color: #fff;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-bottom: 40px;
+        }
+
+        .footer-t1 {
+            color: #444;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .footer-t2 {
+            color: #333;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="phone-frame">
+        <div class="phone-content" style="padding-top: 0;">
+            <!-- Simulated Ticker Space -->
+            <div
+                style="height: 30px; background: #1a232b; margin-top: 40px; display: flex; align-items: center; padding: 0 20px;">
+                <span style="color: #3182f6; font-size: 11px; font-weight: bold;">전체 시장 매수세가 강해지고 있습니다...</span>
+            </div>
+
+            <!-- Radar Scan Status -->
+            <div
+                style="margin: 16px 24px; padding: 16px; background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border-radius: 16px; border: 1px solid rgba(49,130,246,0.2);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 14px;">📡</span>
+                    <span style="color: #3182f6; font-size: 12px; font-weight: 800;">하이브리드 레이더 가동 중</span>
+                    <span
+                        style="margin-left: auto; color: #00c471; font-size: 10px; font-weight: 700; background: rgba(0,196,113,0.1); padding: 2px 8px; border-radius: 10px;">●
+                        LIVE</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: #8b95a1; font-size: 11px;">
+                    <span>전종목 스캔: <b style="color: #fff;">2,882</b>개</span>
+                    <span>후보 감지: <b style="color: #fcc419;">347</b>개</span>
+                    <span>정밀 분석: <b style="color: #3182f6;">347</b>개</span>
+                </div>
+            </div>
+
+            <div class="header" style="margin-top: 30px; padding: 0 24px;">
+                <div class="title">설정 및 관리</div>
+                <div class="subtitle">데이터를 안전하게 관리하고 알림을 최적화하세요.</div>
+            </div>
+
+            <div style="padding: 0 24px;">
+                <!-- Card 1 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"></div>
+                        <div class="card-title">데이터 백업 및 동기화</div>
+                    </div>
+
+                    <label class="label">나만의 백업 키 (닉네임)</label>
+                    <div class="input-row">
+                        <div class="input">대표님_비밀키</div>
+                        <div class="check-btn">중복 확인</div>
+                    </div>
+                    <div class="desc">* 기기를 변경해도 키(닉네임)만 있으면 데이터를 그대로 가져옵니다.</div>
+
+                    <div class="btn-group">
+                        <div class="btn btn-primary">백업하기</div>
+                        <div class="btn btn-secondary">불러오기</div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"
+                            style="mask-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M12.22 2h-.44a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2z%22></path><circle cx=%2212%22 cy=%2212%22 r=%223%22></circle></svg>'); -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M12.22 2h-.44a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2z%22></path><circle cx=%2212%22 cy=%2212%22 r=%223%22></circle></svg>');">
+                        </div>
+                        <div class="card-title">알림 및 실시간 감지</div>
+                    </div>
+
+                    <div class="toggle-row">
+                        <div class="toggle-text">
+                            <div class="toggle-main">스마트 푸시 알림</div>
+                            <div class="toggle-sub">내 종목의 이탈 신호와 시장의 매집 정황을 알려드립니다.</div>
+                        </div>
+                        <div class="switch"></div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="sensitivity-header">
+                        <div class="badge">PRO 기능</div>
+                        <div class="card-title" style="margin-left: 0;">감지 민감도 개별 설정</div>
+                    </div>
+
+                    <div class="sensitivity-item">
+                        <div class="sens-info">
+                            <div class="sens-label">🎯 매수 포착 기준</div>
+                            <div class="sens-desc">2일~30일 자유롭게 설정 가능</div>
+                        </div>
+                        <div class="stepper">
+                            <div class="step-btn">-</div>
+                            <div class="step-val">5</div>
+                            <div class="step-btn">+</div>
+                        </div>
+                    </div>
+
+                    <div class="sensitivity-item">
+                        <div class="sens-info">
+                            <div class="sens-label">⚠️ 매도 경고 기준</div>
+                            <div class="sens-desc">단기(2일)부터 장기(30일)까지 설정</div>
+                        </div>
+                        <div class="stepper">
+                            <div class="step-btn">-</div>
+                            <div class="step-val">3</div>
+                            <div class="step-btn">+</div>
+                        </div>
+                    </div>
+
+                    <div class="sensitivity-item">
+                        <div class="sens-info">
+                            <div class="sens-label">🤫 매집 포착 기준</div>
+                            <div class="sens-desc">원하는 기간만큼 정밀 매집 감지</div>
+                        </div>
+                        <div class="stepper">
+                            <div class="step-btn">-</div>
+                            <div class="step-val">3</div>
+                            <div class="step-btn">+</div>
+                        </div>
+                    </div>
+
+                    <div class="btn btn-primary" style="margin-top: 20px;">
+                        <span style="font-size: 14px;">💾</span>
+                        <span style="margin-left: 6px;">설정 저장 및 적용하기</span>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <div class="footer-t1">Money Fact Gold Edition</div>
+                    <div class="footer-t2">Copyright 2026 Money Fact. All rights reserved.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
