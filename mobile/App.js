@@ -1262,160 +1262,152 @@ function MainApp() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Stock Details Modal */}
-      <Modal visible={detailModal} transparent animationType="slide">
-        <View style={styles.modalBg}>
-          <View style={styles.modalContentLarge}>
-            {selectedStock && (
-              <>
-                <View style={styles.modalHeaderClose}>
-                  <TouchableOpacity onPress={() => setDetailModal(false)}>
-                    <X size={24} color="#888" />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.detailHeader}>
-                  <Text style={styles.modalTitleLarge}>{selectedStock.name}</Text>
-                  <Text style={styles.modalPriceLarge}>{selectedStock.price.toLocaleString()}원</Text>
-                </View>
-
-                <View style={styles.divider} />
-
-                {(() => {
-                  const getScore = (streak) => {
-                    if (streak >= 3) return 2;
-                    if (streak > 0) return 1;
-                    if (streak <= -3) return -2;
-                    if (streak < 0) return -1;
-                    return 0;
-                  };
-                  const fScore = getScore(selectedStock.fStreak || 0);
-                  const iScore = getScore(selectedStock.iStreak || 0);
-                  const totalScore = fScore + iScore;
-
-                  let blocks = '';
-                  if (totalScore > 0) blocks = '🟥'.repeat(totalScore) + '⬜'.repeat(4 - totalScore);
-                  else if (totalScore < 0) blocks = '🟦'.repeat(Math.abs(totalScore)) + '⬜'.repeat(4 - Math.abs(totalScore));
-                  else blocks = '⬜⬜⬜⬜';
-
-                  let patternTag = null;
-                  let patternColor = '#888';
-
-                  if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) { patternTag = '🔥 동반쌍끌이'; patternColor = '#ff4d4d'; }
-                  else if ((selectedStock.fStreak === 1 && selectedStock.iStreak >= 1) || (selectedStock.iStreak === 1 && selectedStock.fStreak >= 1)) { patternTag = '✨ 변곡점 발생'; patternColor = '#ffb84d'; }
-                  else if (selectedStock.isHiddenAccumulation) { patternTag = '🤫 히든 매집'; patternColor = '#00ff00'; }
-                  else if (iScore >= 2 && fScore <= 0) { patternTag = '🏢 기관 주도'; patternColor = '#3182f6'; }
-                  else if (fScore >= 2 && iScore <= 0) { patternTag = '🌎 외인 주도'; patternColor = '#c431f6'; }
-                  else if (totalScore <= -3) { patternTag = '❄️ 동반 이탈'; patternColor = '#888'; }
-
-                  return (
-                    <View style={{ marginBottom: 20 }}>
-                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>💡 금일 수급 강도 및 패턴</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#16202b', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-                        <Text style={{ fontSize: 20, letterSpacing: 2 }}>{blocks}</Text>
-                        {patternTag && (
-                          <View style={{ marginLeft: 16, backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ color: patternColor, fontWeight: '800', fontSize: 13 }}>{patternTag}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })()}
-
-                <View style={styles.detailRow}>
-                  <Thermometer temperature={selectedStock.sentiment} label="투자 심리 온도" />
-                  <View style={styles.detailStats}>
-                    <Text style={styles.statLabel}>세력 평단가(VWAP)</Text>
-                    <Text style={styles.statValue}>
-                      {selectedStock.vwap > 0 ? `${selectedStock.vwap.toLocaleString()}원` : '분석 중...'}
-                    </Text>
-                    {selectedStock.vwap > 0 && (
-                      <Text style={[styles.statDiff, { color: selectedStock.price < selectedStock.vwap ? '#00ff00' : '#ff4d4d' }]}>
-                        {selectedStock.price < selectedStock.vwap
-                          ? `세력보다 ${(100 - (selectedStock.price / selectedStock.vwap) * 100).toFixed(1)}% 저렴!`
-                          : '세력보다 비싼 구간'}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.analysisBox}>
-                  <Text style={styles.analysisTitle}>📊 외인/기관 연속 수급 차트</Text>
-
-                  <View style={{ marginBottom: 15 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={{ color: '#888', width: 45, fontSize: 12 }}>외국인</Text>
-                      <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
-                        {selectedStock.fStreak > 0 && <View style={{ width: `${Math.min(selectedStock.fStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
-                        {selectedStock.fStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.fStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
-                      </View>
-                      <Text style={{ color: selectedStock.fStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
-                        {selectedStock.fStreak > 0 ? '+' : (selectedStock.fStreak < 0 ? '-' : '')}{Math.abs(selectedStock.fStreak || 0)}일
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ color: '#888', width: 45, fontSize: 12 }}>기관</Text>
-                      <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
-                        {selectedStock.iStreak > 0 && <View style={{ width: `${Math.min(selectedStock.iStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
-                        {selectedStock.iStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.iStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
-                      </View>
-                      <Text style={{ color: selectedStock.iStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
-                        {selectedStock.iStreak > 0 ? '+' : (selectedStock.iStreak < 0 ? '-' : '')}{Math.abs(selectedStock.iStreak || 0)}일
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.analysisTitle}>🔍 수급 집중 상세 분석</Text>
-                  <Text style={styles.analysisText}>
-                    {(() => {
-                      const { fStreak, iStreak, price, vwap, isHiddenAccumulation } = selectedStock;
-                      let analysis = "";
-
-                      // 1. Foreigner & Institution Trend Detail
-                      let fTrend = fStreak >= settingBuyStreak ? `🌍 외인 ${fStreak}일 연속 매집` : (fStreak <= -settingSellStreak ? `🌍 외인 ${Math.abs(fStreak)}일 연속 매도` : "🌍 외인 수급 중립");
-                      let iTrend = iStreak >= settingBuyStreak ? `🏛️ 기관 ${iStreak}일 연속 매집` : (iStreak <= -settingSellStreak ? `🏛️ 기관 ${Math.abs(iStreak)}일 연속 매도` : "🏛️ 기관 수급 중립");
-
-                      analysis += `${fTrend}\n${iTrend}\n\n`;
-
-                      // 1-2. Strategic Advice (Synthesis)
-                      if (fStreak >= settingBuyStreak && iStreak >= settingBuyStreak) {
-                        analysis += `🔥 [강력 매수 관점] 외인과 기관이 의기투합하여 물량을 쓸어담는 중입니다. 시세 분출의 가능성이 매우 높습니다.`;
-                      } else if (fStreak >= settingBuyStreak && iStreak <= -settingSellStreak) {
-                        analysis += `⚔️ [힘겨루기 구간] 외국인은 사고 있지만 기관이 그 물량을 퍼붓고 있습니다. 외국인의 매수세가 기관의 매도세를 압도하는지 확인하며 분할 접근을 권장합니다.`;
-                      } else if (fStreak <= -settingSellStreak && iStreak >= settingBuyStreak) {
-                        analysis += `⚔️ [힘겨루기 구간] 기관은 하방을 지지하며 사고 있으나 외국인이 차익 실현 중입니다. 기관의 방어선 지지 여부가 핵심입니다.`;
-                      } else if (fStreak >= settingBuyStreak || iStreak >= settingBuyStreak) {
-                        analysis += `📈 [긍정적 관점] 한쪽 주체의 수급만으로도 시세를 견인할 수 있는 모멘텀이 형성되고 있습니다.`;
-                      } else if (fStreak <= -settingSellStreak && iStreak <= -settingSellStreak) {
-                        analysis += `⚠️ [위험 관리] 외인과 기관 모두가 등을 돌린 상태입니다. 바닥 확인 전까지는 성급한 진입을 자제해야 합니다.`;
-                      } else {
-                        analysis += `⚖️ [관망 모드] 뚜렷한 주도 주체가 없어 박스권 흐름이 예상됩니다. 일방향 수급이 터질 때까지 대기하세요.`;
-                      }
-
-                      // 2. VWAP & Safety Margin
-                      if (vwap > 0) {
-                        const margin = ((vwap / price - 1) * 100).toFixed(1);
-                        if (price < vwap) analysis += `\n\n💎 현재 주가는 세력 평균 단가(${vwap.toLocaleString()}원)보다 약 ${margin}% 저렴한 저평가 구간에 위치하여 가격 매력도가 높습니다. `;
-                        else analysis += `\n\n📊 현재 세력 평단 대비 프리미엄이 붙은 구간이므로, 눌림목 형성 시 분할 매수로 접근하는 것이 유리합니다. `;
-                      }
-
-                      // 3. Hidden Accumulation
-                      if (isHiddenAccumulation) analysis += `\n\n🤫 특이사항: 주가 변동성을 죽인 채 조용히 물량을 확보하는 '매집 정황'이 포착되었습니다. `;
-
-                      return analysis;
-                    })()}
-                  </Text>
-                </View>
-
-                <TouchableOpacity style={styles.modalBtn} onPress={() => setDetailModal(false)}>
-                  <Text style={styles.modalBtnText}>확인</Text>
-                </TouchableOpacity>
-              </>
-            )}
+      {/* Full Screen Detail Modal */}
+      <Modal visible={detailModal} transparent={false} animationType="slide">
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+          <StatusBar barStyle="light-content" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+            <TouchableOpacity onPress={() => setDetailModal(false)} style={{ flexDirection: 'row', alignItems: 'center' }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ color: '#3182f6', fontSize: 16, fontWeight: 'bold' }}>← 돌아가기</Text>
+            </TouchableOpacity>
           </View>
+
+          {selectedStock && (
+            <ScrollView style={styles.scroll}>
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>{selectedStock.name}</Text>
+                <Text style={{ color: '#aaa', fontSize: 18, marginTop: 4 }}>{selectedStock.price?.toLocaleString()}원</Text>
+              </View>
+              <View style={styles.divider} />
+
+              <View style={styles.analysisBox}>
+                <Text style={styles.analysisTitle}>📊 외인/기관 연속 수급 차트</Text>
+                <View style={{ marginBottom: 5 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ color: '#888', width: 45, fontSize: 12 }}>외국인</Text>
+                    <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
+                      {selectedStock.fStreak > 0 && <View style={{ width: `${Math.min(selectedStock.fStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
+                      {selectedStock.fStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.fStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
+                    </View>
+                    <Text style={{ color: selectedStock.fStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
+                      {selectedStock.fStreak > 0 ? '+' : (selectedStock.fStreak < 0 ? '-' : '')}{Math.abs(selectedStock.fStreak || 0)}일
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ color: '#888', width: 45, fontSize: 12 }}>기관</Text>
+                    <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
+                      {selectedStock.iStreak > 0 && <View style={{ width: `${Math.min(selectedStock.iStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
+                      {selectedStock.iStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.iStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
+                    </View>
+                    <Text style={{ color: selectedStock.iStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
+                      {selectedStock.iStreak > 0 ? '+' : (selectedStock.iStreak < 0 ? '-' : '')}{Math.abs(selectedStock.iStreak || 0)}일
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {(() => {
+                const getScore = (streak) => {
+                  if (streak >= 3) return 2;
+                  if (streak > 0) return 1;
+                  if (streak <= -3) return -2;
+                  if (streak < 0) return -1;
+                  return 0;
+                };
+                const fScore = getScore(selectedStock.fStreak || 0);
+                const iScore = getScore(selectedStock.iStreak || 0);
+                const totalScore = fScore + iScore;
+
+                let blocks = '';
+                if (totalScore > 0) blocks = '🟥'.repeat(totalScore) + '⬜'.repeat(4 - totalScore);
+                else if (totalScore < 0) blocks = '🟦'.repeat(Math.abs(totalScore)) + '⬜'.repeat(4 - Math.abs(totalScore));
+                else blocks = '⬜⬜⬜⬜';
+
+                let patternTag = null;
+                let patternColor = '#888';
+
+                if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) { patternTag = '🔥 동반쌍끌이'; patternColor = '#ff4d4d'; }
+                else if ((selectedStock.fStreak === 1 && selectedStock.iStreak >= 1) || (selectedStock.iStreak === 1 && selectedStock.fStreak >= 1)) { patternTag = '✨ 변곡점 발생'; patternColor = '#ffb84d'; }
+                else if (selectedStock.isHiddenAccumulation) { patternTag = '🤫 히든 매집'; patternColor = '#00ff00'; }
+                else if (iScore >= 2 && fScore <= 0) { patternTag = '🏢 기관 주도'; patternColor = '#3182f6'; }
+                else if (fScore >= 2 && iScore <= 0) { patternTag = '🌎 외인 주도'; patternColor = '#c431f6'; }
+                else if (totalScore <= -3) { patternTag = '❄️ 동반 이탈'; patternColor = '#888'; }
+
+                return (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>💡 금일 수급 강도 및 패턴</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#16202b', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                      <Text style={{ fontSize: 20, letterSpacing: 2 }}>{blocks}</Text>
+                      {patternTag && (
+                        <View style={{ marginLeft: 16, backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                          <Text style={{ color: patternColor, fontWeight: '800', fontSize: 13 }}>{patternTag}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()}
+
+              <View style={styles.detailRow}>
+                <Thermometer temperature={selectedStock.sentiment} label="투자 심리 온도" />
+                <View style={styles.detailStats}>
+                  <Text style={styles.statLabel}>세력 평단가(VWAP)</Text>
+                  <Text style={styles.statValue}>
+                    {selectedStock.vwap > 0 ? `${selectedStock.vwap.toLocaleString()}원` : '분석 중...'}
+                  </Text>
+                  {selectedStock.vwap > 0 && (
+                    <Text style={[styles.statDiff, { color: selectedStock.price < selectedStock.vwap ? '#00ff00' : '#ff4d4d' }]}>
+                      {selectedStock.price < selectedStock.vwap
+                        ? `세력보다 ${(100 - (selectedStock.price / selectedStock.vwap) * 100).toFixed(1)}% 저렴!`
+                        : '세력보다 비싼 구간'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.analysisBox}>
+                <Text style={styles.analysisTitle}>🔍 수급 집중 상세 분석</Text>
+                <Text style={styles.analysisText}>
+                  {(() => {
+                    const { fStreak, iStreak, price, vwap, isHiddenAccumulation } = selectedStock;
+                    let analysis = "";
+
+                    let fTrend = fStreak >= settingBuyStreak ? `🌍 외인 ${fStreak}일 연속 매집` : (fStreak <= -settingSellStreak ? `🌍 외인 ${Math.abs(fStreak)}일 연속 매도` : "🌍 외인 수급 중립");
+                    let iTrend = iStreak >= settingBuyStreak ? `🏛️ 기관 ${iStreak}일 연속 매집` : (iStreak <= -settingSellStreak ? `🏛️ 기관 ${Math.abs(iStreak)}일 연속 매도` : "🏛️ 기관 수급 중립");
+
+                    analysis += `${fTrend}\n${iTrend}\n\n`;
+
+                    if (fStreak >= settingBuyStreak && iStreak >= settingBuyStreak) {
+                      analysis += `🔥 [강력 매수 관점] 외인과 기관이 의기투합하여 물량을 쓸어담는 중입니다. 시세 분출의 가능성이 매우 높습니다.`;
+                    } else if (fStreak >= settingBuyStreak && iStreak <= -settingSellStreak) {
+                      analysis += `⚔️ [힘겨루기 구간] 외국인은 사고 있지만 기관이 그 물량을 퍼붓고 있습니다. 외국인의 매수세가 기관의 매도세를 압도하는지 확인하며 분할 접근을 권장합니다.`;
+                    } else if (fStreak <= -settingSellStreak && iStreak >= settingBuyStreak) {
+                      analysis += `⚔️ [힘겨루기 구간] 기관은 하방을 지지하며 사고 있으나 외국인이 차익 실현 중입니다. 기관의 방어선 지지 여부가 핵심입니다.`;
+                    } else if (fStreak >= settingBuyStreak || iStreak >= settingBuyStreak) {
+                      analysis += `📈 [긍정적 관점] 한쪽 주체의 수급만으로도 시세를 견인할 수 있는 모멘텀이 형성되고 있습니다.`;
+                    } else if (fStreak <= -settingSellStreak && iStreak <= -settingSellStreak) {
+                      analysis += `⚠️ [위험 관리] 외인과 기관 모두가 등을 돌린 상태입니다. 바닥 확인 전까지는 성급한 진입을 자제해야 합니다.`;
+                    } else {
+                      analysis += `⚖️ [관망 모드] 뚜렷한 주도 주체가 없어 박스권 흐름이 예상됩니다. 일방향 수급이 터질 때까지 대기하세요.`;
+                    }
+
+                    if (vwap > 0) {
+                      const margin = ((vwap / price - 1) * 100).toFixed(1);
+                      if (price < vwap) analysis += `\n\n💎 현재 주가는 세력 평균 단가(${vwap.toLocaleString()}원)보다 약 ${margin}% 저렴한 저평가 구간에 위치하여 가격 매력도가 높습니다. `;
+                      else analysis += `\n\n📊 현재 세력 평단 대비 프리미엄이 붙은 구간이므로, 눌림목 형성 시 분할 매수로 접근하는 것이 유리합니다. `;
+                    }
+
+                    if (isHiddenAccumulation) analysis += `\n\n🤫 특이사항: 주가 변동성을 죽인 채 조용히 물량을 확보하는 '매집 정황'이 포착되었습니다. `;
+
+                    return analysis;
+                  })()}
+                </Text>
+              </View>
+              <View style={{ height: 100 }} />
+            </ScrollView>
+          )}
         </View>
       </Modal>
-
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#3182f6" />
