@@ -87,12 +87,17 @@ const StockPriceChart = ({ data }) => {
 
   const width = Dimensions.get('window').width - 72;
   const height = 150;
-  const padding = 10;
+  const padding = 15;
 
-  // 최신순 -> 과거순으로 오므로 뒤집어서 그립니다.
-  const prices = data.map(d => parseInt(d.stck_clpr || 0)).filter(p => p > 0).reverse().slice(-20);
-  if (prices.length < 2) return <Text style={{ color: '#666', fontSize: 12 }}>데이터 부족</Text>;
+  // 최신순 -> 과거순으로 오므로 뒤집어서 그립니다. 최소 0 이상인 값만 유효.
+  const historyData = [...data]
+    .filter(d => parseInt(d.stck_clpr || 0) > 0)
+    .reverse()
+    .slice(-20);
 
+  if (historyData.length < 2) return <Text style={{ color: '#666', fontSize: 12 }}>데이터 부족</Text>;
+
+  const prices = historyData.map(d => parseInt(d.stck_clpr));
   const max = Math.max(...prices);
   const min = Math.min(...prices);
   const range = max - min || 1;
@@ -105,13 +110,28 @@ const StockPriceChart = ({ data }) => {
 
   const d = `M ${points}`;
 
+  const formatStrDate = (str) => {
+    if (!str || str.length !== 8) return str;
+    return `${str.substring(4, 6)}/${str.substring(6, 8)}`;
+  };
+
+  const startDate = formatStrDate(historyData[0].stck_bsop_date);
+  const endDate = formatStrDate(historyData[historyData.length - 1].stck_bsop_date);
+  const startPrice = prices[0];
+  const endPrice = prices[prices.length - 1];
+
   return (
     <View style={{ marginVertical: 15, alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width, marginBottom: 4 }}>
+        <Text style={{ color: '#888', fontSize: 10 }}>최고 {max.toLocaleString()}원</Text>
+        <Text style={{ color: '#888', fontSize: 10 }}>최저 {min.toLocaleString()}원</Text>
+      </View>
       <Svg width={width} height={height}>
         <G>
           {/* 가이드 라인 */}
           <Line x1="0" y1={padding} x2={width} y2={padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
           <Line x1="0" y1={height - padding} x2={width} y2={height - padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          <Line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="4,4" />
 
           <Path
             d={d}
@@ -124,14 +144,20 @@ const StockPriceChart = ({ data }) => {
           {/* 포인트 점 (마지막) */}
           <Rect
             x={(prices.length - 1) / (prices.length - 1) * (width - padding * 2) + padding - 3}
-            y={height - ((prices[prices.length - 1] - min) / range) * (height - padding * 2) - padding - 3}
+            y={height - ((endPrice - min) / range) * (height - padding * 2) - padding - 3}
             width="6" height="6" fill="#3182f6" rx="3"
           />
         </G>
       </Svg>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width, marginTop: 4 }}>
-        <Text style={{ color: '#666', fontSize: 10 }}>20일 전</Text>
-        <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>{prices[prices.length - 1].toLocaleString()}원</Text>
+        <View>
+          <Text style={{ color: '#666', fontSize: 10 }}>{startDate}</Text>
+          <Text style={{ color: '#666', fontSize: 10, marginTop: 2 }}>{startPrice.toLocaleString()}원</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>{endDate}</Text>
+          <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>{endPrice.toLocaleString()}원</Text>
+        </View>
       </View>
     </View>
   );
