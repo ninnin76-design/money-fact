@@ -12,7 +12,8 @@ const expo = new Expo();
 const PUSH_TOKENS_FILE = path.join(__dirname, 'push_tokens.json');
 const PUSH_HISTORY_FILE = path.join(__dirname, 'push_history.json');
 let pushTokens = [];
-let pushHistory = {}; // { token: 'YYYY-MM-DD' }
+// pushHistory structure: { "token": { "YYYY-MM-DD": { "code_pattern": true, "code_pattern": true } } }
+let pushHistory = {};
 
 if (fs.existsSync(PUSH_TOKENS_FILE)) {
     try { pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); } catch (e) { }
@@ -531,22 +532,44 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar] ===== 스냅샷 저장 완료! 매수 감지: ${Object.values(newBuyData).reduce((a, b) => a + b.length, 0)}건, 매도 감지: ${Object.values(newSellData).reduce((a, b) => a + b.length, 0)}건 =====`);
 
         // --- SERVER PUSH: 사용자별 맞춤 알림 발송 ---
-        if (pushTokens.length > 0) {
-            console.log(`[Push] ${pushTokens.length}명의 등록 사용자에게 알림 확인 중...`);
+        // --- SERVER PUSH: 사용자별 맞춤 알림 발송 (핵심 변곡 시간대 4번) ---
+        // 발송 타겟 시간 (근사치, 15분 주기이므로 넓게 잡음)
+        // 1. 아침 (9:00 ~ 9:25) - 시가 추이
+        // 2. 점심 (13:00 ~ 13:25) - 오후장 방향성
+        // 3. 종가 (15:00 ~ 15:25) - 종가 배팅
+        // 4. 저녁 (18:00 ~ 18:25) - 장외/단일가 수급 결산
+        let isPushTime = false;
+        if (isMarketOpen || hour === 18) {
+            const mList = [
+                { h: 9, m1: 0, m2: 25 },
+                { h: 13, m1: 0, m2: 25 },
+                { h: 15, m1: 0, m2: 25 },
+                { h: 18, m1: 0, m2: 25 }
+            ];
+            const currentMins = kstDate.getUTCMinutes();
+            isPushTime = mList.some(t => hour === t.h && currentMins >= t.m1 && currentMins <= t.m2);
+        }
+
+        if (pushTokens.length > 0 && isPushTime) {
+            console.log(`[Push] 타겟 시간 도달! ${pushTokens.length}명의 등록 사용자에게 4대 핵심 패턴 알림 확인 중...`);
             const pushMessages = [];
             const todayStr = kstDate.toISOString().split('T')[0];
 
             for (const tokenEntry of pushTokens) {
-                if (pushHistory[tokenEntry.token] === todayStr) continue;
                 if (!Expo.isExpoPushToken(tokenEntry.token)) continue;
+                // Initialize today's history for this token
+                if (!pushHistory[tokenEntry.token]) pushHistory[tokenEntry.token] = {};
+                if (!pushHistory[tokenEntry.token][todayStr]) pushHistory[tokenEntry.token][todayStr] = {};
+
                 const userStocks = tokenEntry.stocks || [];
                 if (userStocks.length === 0) continue;
 
-                const dangerAlerts = [];
-                const buyAlerts = [];
-                const accumAlerts = [];
-
                 const userSettings = tokenEntry.settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 };
+                const tokenDailyHistory = pushHistory[tokenEntry.token][todayStr];
+
+                const userAlerts = [];
+                let highestPriority = 4; // 1: 이탈, 2: 쌍끌이, 3: 변곡, 4: 매집
+                let pushTitle = '📊 Money Fact 알림';
 
                 for (const us of userStocks) {
                     const stockData = historyData.get(us.code);
@@ -555,39 +578,99 @@ async function runDeepMarketScan(force = false) {
                     const foreign = analyzeStreak(stockData.daily, '2');
                     const inst = analyzeStreak(stockData.daily, '1');
 
-                    if (foreign.sellStreak >= userSettings.sellStreak) dangerAlerts.push(`${us.name} 외인 ${foreign.sellStreak}일 매도`);
-                    if (inst.sellStreak >= userSettings.sellStreak) dangerAlerts.push(`${us.name} 기관 ${inst.sellStreak}일 매도`);
-                    if (foreign.buyStreak >= userSettings.buyStreak) buyAlerts.push(`${us.name} 외인 ${foreign.buyStreak}일 매수`);
-                    if (inst.buyStreak >= userSettings.buyStreak) buyAlerts.push(`${us.name} 기관 ${inst.buyStreak}일 매수`);
+                    const fBuy = foreign.buyStreak;
+                    const fSell = foreign.sellStreak;
+                    const iBuy = inst.buyStreak;
+                    const iSell = inst.sellStreak;
 
-                    if (foreign.buyStreak >= userSettings.accumStreak || inst.buyStreak >= userSettings.accumStreak) {
-                        accumAlerts.push(`${us.name} 매집 정황(${Math.max(foreign.buyStreak, inst.buyStreak)}일↑)`);
+                    // 종가 등락 정보 추출
+                    const isPriceStable = Math.abs(parseFloat(stockData.rate)) <= 2;
+
+                    let msg = null;
+                    let patternKey = 'none'; // 기본 상태 (특이사항 없음)
+                    let priority = 99;
+
+                    // 1순위: 동반 이탈 🚨
+                    if (fSell >= userSettings.sellStreak && iSell >= userSettings.sellStreak) {
+                        patternKey = 'escape';
+                        if (tokenDailyHistory[us.code] !== patternKey) {
+                            msg = `❄️ [동반 이탈 경고] ${us.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
+                            priority = 1;
+                        }
                     }
-                }
+                    // 2순위: 동반 쌍끌이 🔥
+                    else if (fBuy >= 1 && iBuy >= 1 && (fBuy + iBuy) >= userSettings.buyStreak) {
+                        patternKey = 'bull';
+                        if (tokenDailyHistory[us.code] !== patternKey) {
+                            msg = `🔥 [동반 쌍끌이 포착] ${us.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출 임박.`;
+                            priority = 2;
+                        }
+                    }
+                    // 3순위: 변곡점 발생 ✨
+                    else if ((fBuy === 1 && iSell >= userSettings.sellStreak) || (iBuy === 1 && fSell >= userSettings.sellStreak)) {
+                        patternKey = 'turn';
+                        if (tokenDailyHistory[us.code] !== patternKey) {
+                            msg = `✨ [변곡점 발생] ${us.name}: 긴 매도세를 멈추고 수급이 상방으로 꺾였습니다.`;
+                            priority = 3;
+                        }
+                    }
+                    // 4순위: 히든 매집 🤫
+                    else if (isPriceStable && (fBuy >= userSettings.accumStreak || iBuy >= userSettings.accumStreak)) {
+                        patternKey = 'hidden';
+                        if (tokenDailyHistory[us.code] !== patternKey) {
+                            msg = `🤫 [히든 매집] ${us.name}: 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다.`;
+                            priority = 4;
+                        }
+                    }
 
-                if (dangerAlerts.length > 0 || buyAlerts.length > 0 || accumAlerts.length > 0) {
-                    const combinedBody = [...dangerAlerts, ...buyAlerts, ...accumAlerts].join('\n');
-                    let pushTitle = '📊 Money Fact 알림';
-                    if (dangerAlerts.length > 0) pushTitle = '🚨 수급 이탈 알림!';
-                    else if (accumAlerts.length > 0) pushTitle = '🤫 매집 포착 알림!';
-                    else if (buyAlerts.length > 0) pushTitle = '🎯 매수 기회 알림!';
+                    // [코다리 부장] 상태 갱신 점검: 이전 기록(어느 시간대든)과 현재 상태가 다르면 덮어쓰고 알림! 
+                    if (tokenDailyHistory[us.code] !== patternKey) {
+                        tokenDailyHistory[us.code] = patternKey; // 최신 상태 낙인 쾅!
+
+                        // 'none' 상태로 변한 것은 알림 주지 않고, 유의미한 패턴으로 변했을 때만 알림
+                        if (msg && patternKey !== 'none') {
+                            userAlerts.push(msg);
+                            if (priority < highestPriority) {
+                                highestPriority = priority;
+                            }
+                        }
+                    }
+                } // End user stocks loop
+
+                if (userAlerts.length > 0) {
+                    if (highestPriority === 1) pushTitle = '🚨 수급 이탈 알림!';
+                    else if (highestPriority === 2) pushTitle = '🔥 특급 쌍끌이 시그널!';
+                    else if (highestPriority === 3) pushTitle = '✨ 변곡점 포착!';
+                    else if (highestPriority === 4) pushTitle = '🤫 히든 매집 포착!';
+
+                    // 시간대별 맞춤 타이틀 적용
+                    if (hour === 15) pushTitle = `[종가 배팅] ${pushTitle}`;
+                    else if (hour === 18) pushTitle = `[오늘의 수급 결산] ${pushTitle}`;
+
+                    // Limit to 3 messages per push so it doesn't get cut off entirely
+                    const limitedAlerts = userAlerts.slice(0, 3);
+                    if (userAlerts.length > 3) limitedAlerts.push(`...외 ${userAlerts.length - 3}건`);
 
                     pushMessages.push({
                         to: tokenEntry.token,
                         title: pushTitle,
-                        body: combinedBody,
+                        body: limitedAlerts.join('\n'),
                         sound: 'default',
                         priority: 'high',
-                        data: { type: dangerAlerts.length > 0 ? 'danger' : 'alert' }
+                        data: { type: 'pattern_alert' }
                     });
-                    pushHistory[tokenEntry.token] = todayStr;
                 }
-            }
+            } // End user tokens loop
 
             if (pushMessages.length > 0) {
                 await sendPushNotifications(pushMessages);
                 savePushHistory();
+            } else {
+                console.log(`[Push] 패턴 조건 충족 종목이 없거나 이미 발송 완료.`);
             }
+        } else if (pushTokens.length > 0) {
+            // Not push time
+            console.log(`[Push] 사용자 스캔 생략 (지정된 알림 시간이 아님)`);
         }
 
         console.log(`[Radar] ====== 2단계 하이브리드 레이더 임무 완료! ======`);

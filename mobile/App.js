@@ -9,8 +9,9 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud
+  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart
 } from 'lucide-react-native';
+import { Svg, Path, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 
 // Services & Components
 import axios from 'axios';
@@ -79,6 +80,62 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 LogBox.ignoreAllLogs();
+
+// --- [코다리 부장] 심플 주식 차트 컴포넌트 ---
+const StockPriceChart = ({ data }) => {
+  if (!data || data.length < 2) return null;
+
+  const width = Dimensions.get('window').width - 72;
+  const height = 150;
+  const padding = 10;
+
+  // 최신순 -> 과거순으로 오므로 뒤집어서 그립니다.
+  const prices = data.map(d => parseInt(d.stck_clpr || 0)).filter(p => p > 0).reverse().slice(-20);
+  if (prices.length < 2) return <Text style={{ color: '#666', fontSize: 12 }}>데이터 부족</Text>;
+
+  const max = Math.max(...prices);
+  const min = Math.min(...prices);
+  const range = max - min || 1;
+
+  const points = prices.map((p, i) => {
+    const x = (i / (prices.length - 1)) * (width - padding * 2) + padding;
+    const y = height - ((p - min) / range) * (height - padding * 2) - padding;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const d = `M ${points}`;
+
+  return (
+    <View style={{ marginVertical: 15, alignItems: 'center' }}>
+      <Svg width={width} height={height}>
+        <G>
+          {/* 가이드 라인 */}
+          <Line x1="0" y1={padding} x2={width} y2={padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          <Line x1="0" y1={height - padding} x2={width} y2={height - padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+
+          <Path
+            d={d}
+            fill="none"
+            stroke="#3182f6"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {/* 포인트 점 (마지막) */}
+          <Rect
+            x={(prices.length - 1) / (prices.length - 1) * (width - padding * 2) + padding - 3}
+            y={height - ((prices[prices.length - 1] - min) / range) * (height - padding * 2) - padding - 3}
+            width="6" height="6" fill="#3182f6" rx="3"
+          />
+        </G>
+      </Svg>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width, marginTop: 4 }}>
+        <Text style={{ color: '#666', fontSize: 10 }}>20일 전</Text>
+        <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>{prices[prices.length - 1].toLocaleString()}원</Text>
+      </View>
+    </View>
+  );
+};
 
 // --- Notification Config ---
 Notifications.setNotificationHandler({
@@ -228,6 +285,7 @@ function MainApp() {
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState(null);
+  const [selectedStockHistory, setSelectedStockHistory] = useState([]);
   const [detailModal, setDetailModal] = useState(false);
   const [investorType, setInvestorType] = useState('INSTITUTION'); // INSTITUTION, FOREIGN, ALL
   const [tradingType, setTradingType] = useState('BUY'); // BUY, SELL
@@ -236,6 +294,7 @@ function MainApp() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(true);
   const isRefreshing = useRef(false);
+  const [fetchingDetail, setFetchingDetail] = useState(false);
 
   // [코다리 부장 터치] 감지 민감도 설정 (기본값: 3일)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
@@ -818,6 +877,23 @@ function MainApp() {
     );
   };
 
+  const handleOpenDetail = async (stock) => {
+    setSelectedStock(stock);
+    setSelectedStockHistory([]);
+    setDetailModal(true);
+    setFetchingDetail(true);
+    try {
+      const history = await StockService.getInvestorData(stock.code, true);
+      if (history) {
+        setSelectedStockHistory(history);
+      }
+    } catch (e) {
+      console.log("Detail fetch failed:", e);
+    } finally {
+      setFetchingDetail(false);
+    }
+  };
+
   const MarketStatusHeader = () => (
     <View style={[styles.marketHeader, isMarketOpen ? styles.marketOpenBg : styles.marketClosedBg]}>
       <View style={styles.marketInfo}>
@@ -895,7 +971,7 @@ function MainApp() {
           <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {settingAccumStreak}일↑)</Text>
           {analyzedStocks.filter(s => s.isHiddenAccumulation)
             .map(s => (
-              <StockCard key={s.code} stock={s} onPress={() => { setSelectedStock(s); setDetailModal(true); }} />
+              <StockCard key={s.code} stock={s} onPress={() => handleOpenDetail(s)} />
             ))}
           {analyzedStocks.filter(s => s.isHiddenAccumulation).length === 0
             && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
@@ -964,7 +1040,7 @@ function MainApp() {
             <StockCard
               key={s.code}
               stock={s}
-              onPress={() => { setSelectedStock(s); setDetailModal(true); }}
+              onPress={() => handleOpenDetail(s)}
               buyLimit={settingBuyStreak}
               sellLimit={settingSellStreak}
             />
@@ -987,7 +1063,7 @@ function MainApp() {
             <StockCard
               key={s.code}
               stock={s}
-              onPress={() => { setSelectedStock(s); setDetailModal(true); }}
+              onPress={() => handleOpenDetail(s)}
               onDelete={() => handleDeleteStock(s.code)}
               buyLimit={settingBuyStreak}
               sellLimit={settingSellStreak}
@@ -1273,15 +1349,35 @@ function MainApp() {
           </View>
 
           {selectedStock && (
-            <ScrollView style={styles.scroll}>
+            <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>{selectedStock.name}</Text>
-                <Text style={{ color: '#aaa', fontSize: 18, marginTop: 4 }}>{selectedStock.price?.toLocaleString()}원</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View>
+                    <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>{selectedStock.name}</Text>
+                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 4 }}>{selectedStock.code}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{selectedStock.price?.toLocaleString()}원</Text>
+                  </View>
+                </View>
               </View>
+
               <View style={styles.divider} />
 
               <View style={styles.analysisBox}>
-                <Text style={styles.analysisTitle}>📊 외인/기관 연속 수급 차트</Text>
+                <Text style={styles.analysisTitle}>📈 주가 변동 추이 (최근 20일)</Text>
+                {fetchingDetail ? (
+                  <View style={{ height: 180, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator color="#3182f6" />
+                    <Text style={{ color: '#666', fontSize: 12, marginTop: 8 }}>차트 데이터를 불러오는 중...</Text>
+                  </View>
+                ) : (
+                  <StockPriceChart data={selectedStockHistory} />
+                )}
+              </View>
+
+              <View style={styles.analysisBox}>
+                <Text style={styles.analysisTitle}>📊 외인/기관 연속 수급 현황</Text>
                 <View style={{ marginBottom: 5 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <Text style={{ color: '#888', width: 45, fontSize: 12 }}>외국인</Text>
@@ -1403,7 +1499,6 @@ function MainApp() {
                   })()}
                 </Text>
               </View>
-              <View style={{ height: 100 }} />
             </ScrollView>
           )}
         </View>
