@@ -11,7 +11,7 @@ import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
   AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart
 } from 'lucide-react-native';
-import { Svg, Path, G, Line, Rect, Text as SvgText } from 'react-native-svg';
+import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
 // Services & Components
 import axios from 'axios';
@@ -81,83 +81,192 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 LogBox.ignoreAllLogs();
 
-// --- [코다리 부장] 심플 주식 차트 컴포넌트 ---
+// --- [코다리 부장] 프리미엄 캔들 스틱 + 이동평균선 + 거래량 차트 ---
 const StockPriceChart = ({ data }) => {
-  if (!data || data.length < 2) return null;
+  if (!data || data.length < 5) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>차트 데이터 분석 중...</Text>;
 
-  const width = Dimensions.get('window').width - 72;
-  const height = 150;
-  const padding = 15;
+  const screenWidth = Dimensions.get('window').width;
+  const width = screenWidth - 40;
+  const mainHeight = 220;
+  const chartHeight = 150; // 캔들 영역
+  const volHeight = 40;  // 거래량 영역
+  const paddingRight = 45; // 가격축 공간
+  const paddingBottom = 20; // 날짜축 공간
+  const paddingTop = 15;
 
-  // 최신순 -> 과거순으로 오므로 뒤집어서 그립니다. 최소 0 이상인 값만 유효.
-  const historyData = [...data]
+  // 데이터 가공 (과거 -> 최신)
+  const history = [...data]
     .filter(d => parseInt(d.stck_clpr || 0) > 0)
     .reverse()
-    .slice(-20);
+    .slice(-45); // 약 45일치 노출 (이미지 스타일)
 
-  if (historyData.length < 2) return <Text style={{ color: '#666', fontSize: 12 }}>데이터 부족</Text>;
+  if (history.length < 5) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>데이터 로드 중...</Text>;
 
-  const prices = historyData.map(d => parseInt(d.stck_clpr));
-  const max = Math.max(...prices);
-  const min = Math.min(...prices);
-  const range = max - min || 1;
+  const o = history.map(d => parseInt(d.stck_oprc || d.stck_clpr));
+  const h = history.map(d => parseInt(d.stck_hgpr || d.stck_clpr));
+  const l = history.map(d => parseInt(d.stck_lwpr || d.stck_clpr));
+  const c = history.map(d => parseInt(d.stck_clpr));
+  const v = history.map(d => parseInt(d.acml_vol || 0));
 
-  const points = prices.map((p, i) => {
-    const x = (i / (prices.length - 1)) * (width - padding * 2) + padding;
-    const y = height - ((p - min) / range) * (height - padding * 2) - padding;
-    return `${x},${y}`;
-  }).join(' ');
-
-  const d = `M ${points}`;
-
-  const formatStrDate = (str) => {
-    if (!str || str.length !== 8) return str;
-    return `${str.substring(4, 6)}/${str.substring(6, 8)}`;
+  // 이동평균선 계산 함수
+  const calcMA = (period) => {
+    return c.map((_, idx) => {
+      if (idx < period - 1) return null;
+      const slice = c.slice(idx - period + 1, idx + 1);
+      return slice.reduce((acc, val) => acc + val, 0) / period;
+    });
   };
 
-  const startDate = formatStrDate(historyData[0].stck_bsop_date);
-  const endDate = formatStrDate(historyData[historyData.length - 1].stck_bsop_date);
-  const startPrice = prices[0];
-  const endPrice = prices[prices.length - 1];
+  const ma5 = calcMA(5);
+  const ma20 = calcMA(20);
+  const ma60 = calcMA(60);
+
+  // 스케일 계산
+  const priceMax = Math.max(...h) * 1.02;
+  const priceMin = Math.min(...l) * 0.98;
+  const priceRange = priceMax - priceMin || 1;
+  const volMax = Math.max(...v) || 1;
+
+  const getX = (i) => (i / (history.length - 1)) * (width - paddingRight);
+  const getY = (price) => chartHeight - ((price - priceMin) / priceRange) * (chartHeight - paddingTop) - 5;
+  const getVolY = (vol) => mainHeight - (vol / volMax) * volHeight;
+
+  // 캔들 및 거래량 렌더링
+  const candleNodes = history.map((item, i) => {
+    const isUp = c[i] >= o[i];
+    const color = isUp ? '#ff4d4d' : '#3182f6';
+    const candleWidth = (width - paddingRight) / history.length * 0.7;
+    const x = getX(i);
+
+    // 캔들 몸통
+    const bodyTop = getY(Math.max(o[i], c[i]));
+    const bodyBottom = getY(Math.min(o[i], c[i]));
+    const bodyHeight = Math.max(Math.abs(bodyTop - bodyBottom), 1);
+
+    // 심 (Wick)
+    const highY = getY(h[i]);
+    const lowY = getY(l[i]);
+
+    return (
+      <G key={`candle-${i}`}>
+        {/* 심 */}
+        <Line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth="1" />
+        {/* 몸통 */}
+        <Rect
+          x={x - candleWidth / 2}
+          y={bodyTop}
+          width={candleWidth}
+          height={bodyHeight}
+          fill={color}
+        />
+        {/* 거래량 바 (하단) */}
+        <Rect
+          x={x - candleWidth / 2}
+          y={getVolY(v[i])}
+          width={candleWidth}
+          height={(v[i] / volMax) * volHeight}
+          fill={color}
+          opacity="0.6"
+        />
+      </G>
+    );
+  });
+
+  // 이평선 Path 생성
+  const generatePath = (maData, color) => {
+    const d = maData.map((p, i) => {
+      if (p === null) return '';
+      return `${i === 0 || maData[i - 1] === null ? 'M' : 'L'} ${getX(i)} ${getY(p)}`;
+    }).join(' ');
+    return <Path d={d} fill="none" stroke={color} strokeWidth="1.2" />;
+  };
+
+  // 최고/최저가 좌표 찾기
+  const maxIdx = h.indexOf(Math.max(...h));
+  const minIdx = l.indexOf(Math.min(...l));
+
+  const formatPrice = (p) => p.toLocaleString();
 
   return (
-    <View style={{ marginVertical: 15, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width, marginBottom: 4 }}>
-        <Text style={{ color: '#888', fontSize: 10 }}>최고 {max.toLocaleString()}원</Text>
-        <Text style={{ color: '#888', fontSize: 10 }}>최저 {min.toLocaleString()}원</Text>
+    <View style={{ marginVertical: 10, paddingLeft: 10 }}>
+      {/* 범례 */}
+      <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+          <View style={{ width: 8, height: 2, backgroundColor: '#c5f631', marginRight: 4 }} />
+          <Text style={{ color: '#ccc', fontSize: 10 }}>5</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+          <View style={{ width: 8, height: 2, backgroundColor: '#ff4d4d', marginRight: 4 }} />
+          <Text style={{ color: '#ccc', fontSize: 10 }}>20</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 8, height: 2, backgroundColor: '#a855f7', marginRight: 4 }} />
+          <Text style={{ color: '#ccc', fontSize: 10 }}>60</Text>
+        </View>
       </View>
-      <Svg width={width} height={height}>
-        <G>
-          {/* 가이드 라인 */}
-          <Line x1="0" y1={padding} x2={width} y2={padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-          <Line x1="0" y1={height - padding} x2={width} y2={height - padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-          <Line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="4,4" />
 
-          <Path
-            d={d}
-            fill="none"
-            stroke="#3182f6"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* 포인트 점 (마지막) */}
-          <Rect
-            x={(prices.length - 1) / (prices.length - 1) * (width - padding * 2) + padding - 3}
-            y={height - ((endPrice - min) / range) * (height - padding * 2) - padding - 3}
-            width="6" height="6" fill="#3182f6" rx="3"
-          />
+      <Svg width={width} height={mainHeight}>
+        <G>
+          {/* AI Character Badge (Mimicking image) */}
+          <G x={10} y={15}>
+            <Rect x="0" y="0" width="30" height="15" rx="7.5" fill="rgba(49, 130, 246, 0.9)" />
+            <TextSVG x="15" y="10.5" fill="#fff" fontSize="8" fontWeight="bold" textAnchor="middle">AI</TextSVG>
+          </G>
+          {/* 가이드 라인 (수평) */}
+          {[0.25, 0.5, 0.75].map(ratio => (
+            <Line
+              key={`grid-${ratio}`}
+              x1="0" y1={chartHeight * ratio} x2={width - paddingRight} y2={chartHeight * ratio}
+              stroke="rgba(255,255,255,0.05)" strokeWidth="1"
+            />
+          ))}
+
+          {/* 하단 구분선 (거래량 위) */}
+          <Line x1="0" y1={chartHeight + 10} x2={width - paddingRight} y2={chartHeight + 10} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+
+          {candleNodes}
+
+          {generatePath(ma5, '#c5f631')}
+          {generatePath(ma20, '#ff4d4d')}
+          {generatePath(ma60, '#a855f7')}
+
+          {/* 최고가 주석 */}
+          <G>
+            <Line x1={getX(maxIdx)} y1={getY(h[maxIdx])} x2={getX(maxIdx)} y2={getY(h[maxIdx]) - 15} stroke="#ff4d4d" strokeWidth="1" />
+            <TextSVG
+              x={getX(maxIdx)} y={getY(h[maxIdx]) - 20}
+              fill="#ff4d4d" fontSize="9" fontWeight="bold" textAnchor="middle"
+            >
+              {formatPrice(h[maxIdx])}
+            </TextSVG>
+          </G>
+
+          {/* 최저가 주석 */}
+          <G>
+            <Line x1={getX(minIdx)} y1={getY(l[minIdx])} x2={getX(minIdx)} y2={getY(l[minIdx]) + 15} stroke="#3182f6" strokeWidth="1" />
+            <TextSVG
+              x={getX(minIdx)} y={getY(l[minIdx]) + 25}
+              fill="#3182f6" fontSize="9" fontWeight="bold" textAnchor="middle"
+            >
+              {formatPrice(l[minIdx])}
+            </TextSVG>
+          </G>
+
+          {/* 우측 가격 라벨 */}
+          <TextSVG x={width - paddingRight + 5} y={getY(priceMax)} fill="#666" fontSize="9">{formatPrice(Math.round(priceMax))}</TextSVG>
+          <TextSVG x={width - paddingRight + 5} y={getY(priceMin)} fill="#666" fontSize="9">{formatPrice(Math.round(priceMin))}</TextSVG>
+
+          {/* 현재가 강조 라벨 (우측) */}
+          <Rect x={width - paddingRight + 2} y={getY(c[c.length - 1]) - 7} width={paddingRight - 2} height={14} fill="#3182f6" rx="2" />
+          <TextSVG x={width - paddingRight + 5} y={getY(c[c.length - 1]) + 3} fill="#fff" fontSize="9" fontWeight="bold">
+            {formatPrice(c[c.length - 1])}
+          </TextSVG>
         </G>
       </Svg>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width, marginTop: 4 }}>
-        <View>
-          <Text style={{ color: '#666', fontSize: 10 }}>{startDate}</Text>
-          <Text style={{ color: '#666', fontSize: 10, marginTop: 2 }}>{startPrice.toLocaleString()}원</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>{endDate}</Text>
-          <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>{endPrice.toLocaleString()}원</Text>
-        </View>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width - paddingRight, marginTop: 4 }}>
+        <Text style={{ color: '#666', fontSize: 10 }}>{history[0].stck_bsop_date.substring(4, 6)}/{history[0].stck_bsop_date.substring(6, 8)}</Text>
+        <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>LIVE</Text>
       </View>
     </View>
   );

@@ -86,6 +86,7 @@ export const StockService = {
                     stck_clpr: priceItem.stck_clpr,
                     stck_hgpr: priceItem.stck_hgpr,
                     stck_lwpr: priceItem.stck_lwpr,
+                    stck_oprc: priceItem.stck_oprc,
                     acml_vol: priceItem.acml_vol // Crucial for VWAP
                 };
             }
