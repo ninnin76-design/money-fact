@@ -1280,6 +1280,48 @@ function MainApp() {
 
                 <View style={styles.divider} />
 
+                {(() => {
+                  const getScore = (streak) => {
+                    if (streak >= 3) return 2;
+                    if (streak > 0) return 1;
+                    if (streak <= -3) return -2;
+                    if (streak < 0) return -1;
+                    return 0;
+                  };
+                  const fScore = getScore(selectedStock.fStreak || 0);
+                  const iScore = getScore(selectedStock.iStreak || 0);
+                  const totalScore = fScore + iScore;
+
+                  let blocks = '';
+                  if (totalScore > 0) blocks = '🟥'.repeat(totalScore) + '⬜'.repeat(4 - totalScore);
+                  else if (totalScore < 0) blocks = '🟦'.repeat(Math.abs(totalScore)) + '⬜'.repeat(4 - Math.abs(totalScore));
+                  else blocks = '⬜⬜⬜⬜';
+
+                  let patternTag = null;
+                  let patternColor = '#888';
+
+                  if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) { patternTag = '🔥 동반쌍끌이'; patternColor = '#ff4d4d'; }
+                  else if ((selectedStock.fStreak === 1 && selectedStock.iStreak >= 1) || (selectedStock.iStreak === 1 && selectedStock.fStreak >= 1)) { patternTag = '✨ 변곡점 발생'; patternColor = '#ffb84d'; }
+                  else if (selectedStock.isHiddenAccumulation) { patternTag = '🤫 히든 매집'; patternColor = '#00ff00'; }
+                  else if (iScore >= 2 && fScore <= 0) { patternTag = '🏢 기관 주도'; patternColor = '#3182f6'; }
+                  else if (fScore >= 2 && iScore <= 0) { patternTag = '🌎 외인 주도'; patternColor = '#c431f6'; }
+                  else if (totalScore <= -3) { patternTag = '❄️ 동반 이탈'; patternColor = '#888'; }
+
+                  return (
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>💡 금일 수급 강도 및 패턴</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#16202b', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                        <Text style={{ fontSize: 20, letterSpacing: 2 }}>{blocks}</Text>
+                        {patternTag && (
+                          <View style={{ marginLeft: 16, backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                            <Text style={{ color: patternColor, fontWeight: '800', fontSize: 13 }}>{patternTag}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })()}
+
                 <View style={styles.detailRow}>
                   <Thermometer temperature={selectedStock.sentiment} label="투자 심리 온도" />
                   <View style={styles.detailStats}>
@@ -1298,6 +1340,31 @@ function MainApp() {
                 </View>
 
                 <View style={styles.analysisBox}>
+                  <Text style={styles.analysisTitle}>📊 외인/기관 연속 수급 차트</Text>
+
+                  <View style={{ marginBottom: 15 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ color: '#888', width: 45, fontSize: 12 }}>외국인</Text>
+                      <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
+                        {selectedStock.fStreak > 0 && <View style={{ width: `${Math.min(selectedStock.fStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
+                        {selectedStock.fStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.fStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
+                      </View>
+                      <Text style={{ color: selectedStock.fStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
+                        {selectedStock.fStreak > 0 ? '+' : (selectedStock.fStreak < 0 ? '-' : '')}{Math.abs(selectedStock.fStreak || 0)}일
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ color: '#888', width: 45, fontSize: 12 }}>기관</Text>
+                      <View style={{ flex: 1, height: 12, backgroundColor: '#333', borderRadius: 6, overflow: 'hidden', flexDirection: 'row' }}>
+                        {selectedStock.iStreak > 0 && <View style={{ width: `${Math.min(selectedStock.iStreak * 10, 100)}%`, backgroundColor: '#ff4d4d', height: '100%' }} />}
+                        {selectedStock.iStreak < 0 && <View style={{ width: `${Math.min(Math.abs(selectedStock.iStreak) * 10, 100)}%`, backgroundColor: '#3182f6', height: '100%', marginLeft: 'auto' }} />}
+                      </View>
+                      <Text style={{ color: selectedStock.iStreak > 0 ? '#ff4d4d' : '#3182f6', width: 45, textAlign: 'right', fontSize: 12, fontWeight: 'bold' }}>
+                        {selectedStock.iStreak > 0 ? '+' : (selectedStock.iStreak < 0 ? '-' : '')}{Math.abs(selectedStock.iStreak || 0)}일
+                      </Text>
+                    </View>
+                  </View>
+
                   <Text style={styles.analysisTitle}>🔍 수급 집중 상세 분석</Text>
                   <Text style={styles.analysisText}>
                     {(() => {

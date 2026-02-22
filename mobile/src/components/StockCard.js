@@ -5,6 +5,52 @@ import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2 } fr
 const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) => {
     const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation } = stock;
 
+    // --- 수급박스 양음블럭 & 패턴 로직 ---
+    const getScore = (streak) => {
+        if (streak >= 3) return 2;
+        if (streak > 0) return 1;
+        if (streak <= -3) return -2;
+        if (streak < 0) return -1;
+        return 0;
+    };
+
+    const fScore = getScore(fStreak || 0);
+    const iScore = getScore(iStreak || 0);
+    const totalScore = fScore + iScore;
+
+    let blocks = '';
+    if (totalScore > 0) {
+        blocks = '🟥'.repeat(totalScore) + '⬜'.repeat(4 - totalScore);
+    } else if (totalScore < 0) {
+        blocks = '🟦'.repeat(Math.abs(totalScore)) + '⬜'.repeat(4 - Math.abs(totalScore));
+    } else {
+        blocks = '⬜⬜⬜⬜';
+    }
+
+    let patternTag = null;
+    let patternColor = '#888';
+
+    if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) {
+        patternTag = '🔥 동반쌍끌이';
+        patternColor = '#ff4d4d';
+    } else if ((fStreak === 1 && iStreak >= 1) || (iStreak === 1 && fStreak >= 1)) {
+        patternTag = '✨ 변곡점 발생';
+        patternColor = '#ffb84d';
+    } else if (isHiddenAccumulation) {
+        patternTag = '🤫 히든 매집';
+        patternColor = '#00ff00';
+    } else if (iScore >= 2 && fScore <= 0) {
+        patternTag = '🏢 기관 주도';
+        patternColor = '#3182f6';
+    } else if (fScore >= 2 && iScore <= 0) {
+        patternTag = '🌎 외인 주도';
+        patternColor = '#c431f6';
+    } else if (totalScore <= -3) {
+        patternTag = '❄️ 동반 이탈';
+        patternColor = '#888';
+    }
+    // ---------------------------------
+
     const getStreakText = (streak) => {
         if (streak >= buyLimit) return { text: `${streak}일 연속 매수`, color: '#ff4d4d', icon: <TrendingUp size={12} color="#ff4d4d" /> };
         if (streak <= -sellLimit) return { text: `${Math.abs(streak)}일 연속 매도`, color: '#3182f6', icon: <TrendingDown size={12} color="#3182f6" /> };
@@ -18,7 +64,15 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) =>
         <TouchableOpacity style={styles.card} onPress={onPress}>
             <View style={styles.cardContent}>
                 <View style={styles.left}>
-                    <Text style={styles.name}>{name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.name}>{name}</Text>
+                        <View style={{ marginLeft: 8, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={styles.blocksText}>{blocks}</Text>
+                        </View>
+                    </View>
+                    {patternTag && (
+                        <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
+                    )}
                     <Text style={styles.price}>{price?.toLocaleString()}원</Text>
                 </View>
 
@@ -33,11 +87,6 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) =>
                         <View style={styles.badge}>
                             {iInfo.icon}
                             <Text style={[styles.badgeText, { color: iInfo.color }]}>기관 {iInfo.text}</Text>
-                        </View>
-                    )}
-                    {isHiddenAccumulation && (
-                        <View style={[styles.badge, styles.hiddenBadge]}>
-                            <Text style={styles.hiddenText}>🤫 매집 의심</Text>
                         </View>
                     )}
                     <View style={styles.sentimentBox}>
@@ -83,10 +132,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    blocksText: {
+        fontSize: 10,
+        letterSpacing: 1,
+    },
+    patternTag: {
+        fontSize: 11,
+        fontWeight: '800',
+        marginTop: 6,
+    },
     price: {
         color: '#aaa',
         fontSize: 14,
-        marginTop: 2,
+        marginTop: 4,
     },
     right: {
         alignItems: 'flex-end',
