@@ -4,22 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Money Fact - 프리미엄 수급 가이드</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&family=Jua&display=swap"
+    <title>머니 팩트(Money Fact) v3.0 - 세력 수급의 모든 것</title>
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="외국인과 기관의 수급을 실시간으로 추적하는 프리미엄 주식 분석 도구. 양음블럭, 수급패턴, 세력 평단가로 압도적인 투자 승률을 경험하세요.">
+    <meta property="og:title" content="머니 팩트(Money Fact) v3.0">
+    <meta property="og:description" content="세력의 흔적을 수익으로 바꾸는 필승 전략. 지금 바로 다운로드하세요.">
+
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&family=Jua&display=swap"
         rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --primary: #3182f6;
-            --primary-light: #e8f3ff;
-            --secondary: #f04452;
-            --secondary-light: #fff0f1;
-            --accent: #00c471;
-            --dark: #191f28;
-            --gray: #8b95a1;
-            --bg: #f9fafb;
-            --radius-lg: 24px;
-            --radius-sm: 12px;
+            --primary: #fcc419;
+            /* Gold */
+            --blue: #3182f6;
+            /* Toss Blue */
+            --red: #f04452;
+            /* Aggressive Red */
+            --dark-bg: #0b1219;
+            --card-bg: #16202b;
+            --text-main: #ffffff;
+            --text-sub: #adb5bd;
+            --radius: 20px;
         }
 
         * {
@@ -32,508 +38,403 @@
 
         body {
             font-family: 'Pretendard', sans-serif;
-            background-color: var(--bg);
-            color: #333d4b;
+            background-color: var(--dark-bg);
+            color: var(--text-main);
             line-height: 1.6;
-            letter-spacing: -0.03em;
-        }
-
-        h1,
-        h2,
-        h3,
-        h4 {
-            font-family: 'Jua', sans-serif;
-            color: var(--dark);
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 500px;
+            max-width: 480px;
             margin: 0 auto;
-            background: white;
             min-height: 100vh;
+            padding-bottom: 120px;
             position: relative;
-            box-shadow: 0 0 40px rgba(0, 0, 0, 0.03);
         }
 
-        /* Hero */
+        /* Hero Section */
         .hero {
-            background: linear-gradient(180deg, var(--dark) 0%, #2d3644 100%);
-            color: white;
-            padding: 60px 24px 40px;
+            padding: 50px 24px;
             text-align: center;
-            border-bottom-left-radius: var(--radius-lg);
-            border-bottom-right-radius: var(--radius-lg);
+            background: radial-gradient(circle at top, #1c2b3a 0%, var(--dark-bg) 70%);
             position: relative;
-            overflow: hidden;
-        }
-
-        .hero::after {
-            content: '✨';
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 2rem;
-            opacity: 0.2;
         }
 
         .hero h1 {
-            font-size: 3.2rem;
-            margin-bottom: 8px;
-            background: linear-gradient(90deg, #fff, var(--primary));
+            font-family: 'Jua', sans-serif;
+            font-size: 3.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
             -webkit-background-clip: text;
-            background-clip: text;
             -webkit-text-fill-color: transparent;
+            text-shadow: 0 10px 20px rgba(252, 196, 25, 0.2);
         }
 
         .hero p {
             font-size: 1.1rem;
-            opacity: 0.9;
-            margin-bottom: 24px;
-            font-weight: 400;
+            color: var(--text-sub);
+            font-weight: 500;
+            margin-bottom: 30px;
         }
 
-        .hero-img {
-            width: 85%;
-            border-radius: var(--radius-sm);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-            transition: transform 0.3s ease;
+        .hero-mockup {
+            width: 90%;
+            margin: 0 auto;
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+            animation: float 4s ease-in-out infinite;
         }
 
-        /* Section Styling */
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        /* Main Content */
         .content {
-            padding: 32px 20px 100px;
+            padding: 0 20px;
         }
 
-        section {
-            margin-bottom: 48px;
-        }
-
-        .section-tag {
-            display: inline-block;
-            background: var(--primary-light);
-            color: var(--primary);
-            padding: 4px 12px;
-            border-radius: 100px;
-            font-size: 0.75rem;
-            font-weight: 800;
-            margin-bottom: 8px;
-        }
-
-        .section-title {
-            font-size: 1.6rem;
-            margin-bottom: 24px;
+        .section-header {
+            margin: 40px 0 20px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        /* Cards */
+        .section-header i {
+            color: var(--primary);
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        /* Card System */
         .card {
-            background: #fff;
-            border: 1px solid #f2f4f6;
-            border-radius: var(--radius-lg);
+            background: var(--card-bg);
+            border-radius: var(--radius);
             padding: 24px;
             margin-bottom: 16px;
-            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s;
         }
 
-        .card:active {
-            transform: scale(0.98);
+        .card:hover {
+            border-color: rgba(252, 196, 25, 0.3);
         }
 
-        .card.impact {
-            background: var(--primary-light);
-            border: none;
-        }
-
-        .card-header {
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-
-        .card-header h3 {
-            font-size: 1.25rem;
-        }
-
-        .badge {
-            font-size: 0.7rem;
-            font-weight: 800;
-            background: var(--primary);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 6px;
+            gap: 8px;
         }
 
         .card-desc {
+            color: var(--text-sub);
             font-size: 0.95rem;
-            color: #4e5968;
             margin-bottom: 16px;
         }
 
-        .feature-list {
-            list-style: none;
-        }
-
-        .feature-list li {
-            margin-bottom: 12px;
-            display: flex;
-            gap: 10px;
-            font-size: 0.9rem;
-            align-items: flex-start;
-        }
-
-        .feature-list li i {
-            color: var(--primary);
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        /* Stock Grid for Elite 60 */
-        /* Detailed Elite Table */
-        .elite-table-container {
-            margin-top: 20px;
-            overflow-x: auto;
-            border-radius: var(--radius-sm);
-            border: 1px solid #f2f4f6;
-        }
-
-        .elite-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-            text-align: left;
-        }
-
-        .elite-table th {
-            background: #f9fafb;
-            padding: 12px;
-            color: var(--gray);
-            font-weight: 800;
-            border-bottom: 1px solid #f2f4f6;
-            font-size: 0.75rem;
-        }
-
-        .elite-table td {
-            padding: 12px;
-            border-bottom: 1px solid #f9fafb;
-            vertical-align: top;
-        }
-
-        .elite-table .sector-col {
-            width: 90px;
-            font-weight: 800;
-            color: var(--primary);
-            background: #fcfdfe;
-        }
-
-        .elite-table .stocks-col {
-            color: #4e5968;
-            line-height: 1.5;
-            font-size: 0.8rem;
-        }
-
-        .elite-table .count-col {
-            width: 40px;
-            text-align: center;
-            font-weight: 800;
-            color: var(--gray);
-        }
-
-        .my-stock-note {
-            margin-top: 16px;
-            background: var(--primary-light);
-            padding: 12px 16px;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: var(--primary);
-            font-weight: 700;
-            font-size: 0.85rem;
-        }
-
-        /* Special Visuals */
-        .notif-demo {
-            background: #fff;
-            border: 1px solid #eee;
-            border-radius: 16px;
+        /* Visual Elements */
+        .visual-block {
+            background: rgba(0, 0, 0, 0.2);
             padding: 16px;
-            margin-top: 16px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            margin-top: 10px;
         }
 
-        .notif-row {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #f9f9f9;
-            margin-bottom: 12px;
-        }
-
-        .notif-row:last-child {
-            border: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .notif-icon {
-            width: 36px;
-            height: 36px;
-            background: #f2f4f6;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .notif-text b {
-            display: block;
-            font-size: 0.9rem;
-            margin-bottom: 2px;
-        }
-
-        .notif-text span {
-            font-size: 0.8rem;
-            color: var(--gray);
-        }
-
-        /* Sync Box */
-        .sync-visual {
-            background: var(--dark);
-            border-radius: var(--radius-lg);
-            padding: 32px 20px;
-            text-align: center;
-            color: white;
-        }
-
-        .sync-visual h3 {
-            color: var(--primary);
+        .blocks-demo {
             font-size: 1.5rem;
-            margin-bottom: 12px;
-        }
-
-        .sync-key {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px dashed var(--primary);
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            font-family: monospace;
-            font-size: 1.1rem;
-            margin: 16px 0;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
             display: block;
         }
 
-        /* Sticky Footer */
+        .pattern-tag {
+            display: inline-block;
+            background: rgba(252, 196, 25, 0.1);
+            color: var(--primary);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 0.85rem;
+        }
+
+        .streak-bar {
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            margin: 8px 0;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .streak-fill-red {
+            background: var(--red);
+            height: 100%;
+            border-radius: 5px;
+        }
+
+        .streak-fill-blue {
+            background: var(--blue);
+            height: 100%;
+            border-radius: 5px;
+        }
+
+        /* Icon Grid */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .icon-item {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .icon-item i {
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        .icon-item span {
+            display: block;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* Sticky Footer Button */
         .footer-cta {
             position: fixed;
-            bottom: 0;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            width: 100%;
-            max-width: 500px;
-            padding: 16px 20px 32px;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(12px);
+            width: calc(100% - 40px);
+            max-width: 440px;
             z-index: 100;
-            border-top: 1px solid #eee;
         }
 
-        .btn-main {
-            background: var(--primary);
-            color: white;
+        .btn-download {
+            background: linear-gradient(135deg, var(--primary) 0%, #d9a400 100%);
+            color: #000;
             text-align: center;
-            display: block;
-            padding: 18px;
-            border-radius: 100px;
-            font-size: 1.2rem;
-            font-weight: 800;
             text-decoration: none;
-            box-shadow: 0 10px 24px rgba(49, 130, 246, 0.3);
-            transition: all 0.2s;
+            display: block;
+            padding: 22px;
+            border-radius: 100px;
+            font-size: 1.3rem;
+            font-weight: 900;
+            box-shadow: 0 15px 35px rgba(252, 196, 25, 0.4);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
         }
 
-        .btn-main:active {
-            transform: translateY(2px);
-            box-shadow: none;
+        .btn-download:active {
+            transform: scale(0.95) translateY(5px);
+            box-shadow: 0 5px 15px rgba(252, 196, 25, 0.2);
         }
 
-        /* Highlight */
-        .hl {
-            color: var(--primary);
-            font-weight: 700;
+        .btn-download .version {
+            position: absolute;
+            top: 5px;
+            right: 25px;
+            font-size: 0.7rem;
+            opacity: 0.6;
         }
 
-        .danger {
-            color: var(--secondary);
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 40px 24px 60px;
+            color: #555;
+            font-size: 0.8rem;
+        }
+
+        .warning-box {
+            background: rgba(255, 0, 0, 0.05);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            text-align: left;
+            line-height: 1.4;
+        }
+
+        /* Animation */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <!-- Hero -->
+        <!-- Hero Section -->
         <header class="hero">
-            <h1>Money Fact</h1>
-            <p>데이터는 결코 거짓말을 하지 않습니다 ✨</p>
-            <img src="money_fact_manual_hero.png" class="hero-img" alt="Money Fact Preview">
+            <h1 id="hero-title">Money Fact</h1>
+            <p id="hero-subtitle">데이터는 결코 거짓말을 하지 않습니다 ✨</p>
+            <img src="money_fact_v3_hero_mockup_1771752623074.png" class="hero-mockup" alt="Money Fact App Preview">
         </header>
 
         <div class="content">
-            <!-- Algorithm -->
-            <section>
-                <span class="section-tag">AI ANALYSIS</span>
-                <h2 class="section-title">🗝️ 핵심 수급 알고리즘</h2>
+            <!-- 1. 핵심 레이더 -->
+            <div class="section-header reveal">
+                <i data-lucide="zap"></i>
+                <h2>3대 핵심 수급 레이더</h2>
+            </div>
 
-                <div class="card impact">
-                    <div class="card-header">
-                        <span class="badge">STREAK</span>
-                        <h3>연속 수급 추적기</h3>
+            <div class="card reveal">
+                <div class="card-title"><i data-lucide="trending-up" color="#f04452"></i> 연속 매매(Streak)</div>
+                <p class="card-desc">세력이 3일 이상 연속으로 집요하게 매집하는 종목만 골라내어 '진짜 상승장'의 티켓을 선사합니다.</p>
+                <div class="visual-block">
+                    <div class="streak-bar">
+                        <div class="streak-fill-red" style="width: 70%;"></div>
                     </div>
-                    <p class="card-desc">진짜 세력은 흔적을 남깁니다. 내가 설정한 기간(2~30일)에 딱 맞춘 '커스텀 필터링'을 제공합니다.</p>
-                    <ul class="feature-list">
-                        <li><i data-lucide="zap"></i> <span><b>설정한 연속 매집</b> 시 레이더에 즉시 포착됩니다.</span></li>
-                        <li><i data-lucide="refresh-cw"></i> <span><b>끊김 없는 추적</b>: 장중에 데이터가 잠시 안 들어오거나 '0'으로 찍혀도, 세력의
-                                매집 흐름을 끝까지 놓치지 않고 연결합니다.</span></li>
-                    </ul>
+                    <span style="font-size: 0.8rem; color: var(--red);">삼성전자 외국인 5일 연속 매집 중</span>
                 </div>
+            </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <span class="badge" style="background:var(--secondary)">VWAP</span>
-                        <h3 style="color:var(--secondary)">세력 평단가 레이더</h3>
-                    </div>
-                    <p class="card-desc">세력보다 싸게 사는 것이 투자의 기본! 매물대 기반 진짜 원가를 계산합니다.</p>
-                    <ul class="feature-list">
-                        <li><i data-lucide="target" style="color:var(--secondary)"></i> <span><b>커스텀 가중 평균</b>: 단순 가격이
-                                아닌
-                                거래량이 실린 가격을 찾아냅니다.</span></li>
-                        <li><i data-lucide="gem" style="color:var(--secondary)"></i> <span>주가가 VWAP 아래로 내려가면? <b
-                                    class="danger">절호의 매수 찬스!</b></span></li>
-                    </ul>
+            <div class="card reveal">
+                <div class="card-title"><i data-lucide="gem" color="#fcc419"></i> 세력 평단가(VWAP)</div>
+                <p class="card-desc">단순 평균이 아닌 '돈이 실린 진짜 가격'을 계산합니다. 세력보다 싸게 사는 필승 전략을 경험하세요.</p>
+                <div class="pattern-tag" style="background: rgba(49, 130, 246, 0.1); color: var(--blue);">💎 세력보다 5.2%
+                    저렴한 구간</div>
+            </div>
+
+            <div class="card reveal">
+                <div class="card-title"><i data-lucide="eye-off" color="#00ff00"></i> 조용한 매집(Hidden)</div>
+                <p class="card-desc">주가는 잠잠한데 수급만 은밀하게 쏠리는 '폭풍 전야'의 종목을 남들보다 먼저 선점하세요.</p>
+            </div>
+
+            <!-- 2. 신규 기능 (v3.0) -->
+            <div class="section-header reveal">
+                <i data-lucide="sparkles"></i>
+                <h2>v3.0 신규 시각 분석</h2>
+            </div>
+
+            <div class="card reveal">
+                <div class="card-title">🔋 양음블럭 & 수급패턴</div>
+                <p class="card-desc">복잡한 숫자 대신 블록 칸수와 이름표로 오늘 세력의 '작전명'을 1초 만에 파악하세요.</p>
+                <div class="visual-block">
+                    <span class="blocks-demo">🟥🟥🟥🟥</span>
+                    <div class="pattern-tag">🔥 동반 쌍끌이 포착</div>
                 </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <span class="badge" style="background:var(--accent)">HIDDEN</span>
-                        <h3 style="color:var(--accent)">폭풍전야 (Hidden) 매집</h3>
-                    </div>
-                    <p class="card-desc">주가는 조용한데 수급만 은밀하게 쏠리는 종목을 발굴합니다. 🕵️‍♀️</p>
-                    <ul class="feature-list">
-                        <li><i data-lucide="eye-off" style="color:var(--accent)"></i> <span><b>가격 고요함</b>: 5일간 주가 변동 3%
-                                미만의 잠잠한 상태.</span></li>
-                        <li><i data-lucide="trending-up" style="color:var(--accent)"></i> <span><b>은밀한 수급</b>: 가격 변화 없이
-                                수급만 설정한 기간만큼 채워지는 중!</span></li>
-                    </ul>
+                <div class="visual-block" style="margin-top: 12px;">
+                    <span class="blocks-demo">🟥🟥⬜⬜</span>
+                    <div class="pattern-tag" style="color: #ffb84d;">✨ 변곡점 발생</div>
                 </div>
-                <div class="card">
-                    <div class="card-header">
-                        <span class="badge" style="background:#6741d9">UNLIMITED RADAR</span>
-                        <h3 style="color:#6741d9">내 마음대로 무제한 레이더</h3>
+            </div>
+
+            <div class="card reveal">
+                <div class="card-title">📊 실시간 수급박스</div>
+                <p class="card-desc">상세 화면 상단에서 외인/기관의 매집 강도를 직관적인 Bar 차트로 확인하세요.</p>
+                <div class="visual-block">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                        <span>외인</span><span style="color:var(--red)">+7일</span></div>
+                    <div class="streak-bar">
+                        <div class="streak-fill-red" style="width: 70%;"></div>
                     </div>
-                    <p class="card-desc">코스피·코스닥 2,800개 전 종목을 실시간 감시하고, 내가 등록한 종목은 1초 만에 정밀 분석합니다.</p>
-                    <ul class="feature-list">
-                        <li><i data-lucide="shield-check" style="color:#6741d9"></i> <span><b>전 종목 자동 스캔</b>: 15분마다 전체
-                                시장을 훑어 상위 1% 수급 종목을 발굴합니다.</span></li>
-                        <li><i data-lucide="plus-circle" style="color:#6741d9"></i> <span><b>무제한 관심종목</b>: 개수 제한 없이 내가
-                                궁금한 모든 종목을 추가하여 세력의 흔적을 추적하세요.</span></li>
-                        <li><i data-lucide="moon" style="color:#6741d9"></i> <span><b>심야 설정 예약제</b>: 장마감
-                                시간(20:00~08:00)에 변경한 민감도 설정은 익일 장 시작 시 데이터에 정밀하게 반영됩니다.</span></li>
-                    </ul>
-
-                    <div class="my-stock-note">
-                        <i data-lucide="zap"></i>
-                        <span>내가 등록한 <b>관심종목</b>은 시장 주도주와 동일한 알고리즘으로 24시간 철통 감시됩니다.</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Features -->
-            <section>
-                <span class="section-tag">UI & UX</span>
-                <h2 class="section-title">📱 똑똑한 실시간 비서</h2>
-
-                <div class="card">
-                    <div class="card-header">
-                        <i data-lucide="radio" color="#3182f6"></i>
-                        <h3>실시간 수급 전광판</h3>
-                    </div>
-                    <p class="card-desc">상단에 흐르는 티커는 단순한 정보가 아닙니다. 관심종목에 <span class="hl">🚀 설정한 기간 연속 매수</span>, <span
-                            class="hl">💎 평단가 하회</span> 정황이 포착되면 실시간으로 신호를 줍니다.</p>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <i data-lucide="bell-ring" color="#fcc419"></i>
-                        <h3>정밀 푸시 알림</h3>
-                    </div>
-                    <div class="notif-demo">
-                        <div class="notif-row">
-                            <div class="notif-icon">📈</div>
-                            <div class="notif-text"><b>[수급포착] 삼성전자</b><span>외국인 4일 연속 매집 중!</span></div>
-                        </div>
-                        <div class="notif-row">
-                            <div class="notif-icon">💎</div>
-                            <div class="notif-text"><b>[가격찬스] SK하이닉스</b><span>세력 평단가 진입 (안전마진 확보)</span></div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Backup -->
-            <section>
-                <span class="section-tag">DATA SAFETY</span>
-                <h2 class="section-title">☁️ 기기를 바꿔도 그대로</h2>
-                <div class="sync-visual">
-                    <h3>퍼스널 데이터 싱크</h3>
-                    <p style="margin-bottom: 20px;">나만의 고유 키를 설정하세요. 기기를 바꿔도<br>내 관심종목이 마법처럼 복원됩니다. ✨</p>
-
                     <div
-                        style="background: rgba(49, 130, 246, 0.1); border: 1px dashed var(--primary); padding: 20px; border-radius: var(--radius-sm); margin-bottom: 24px;">
-                        <span
-                            style="font-family: monospace; font-size: 1.2rem; color: var(--primary); display: block; margin-bottom: 8px;">MY_UNIQUE_NICKNAME</span>
-                        <div style="font-size: 0.8rem; color: #adb5bd; text-align: left; line-height: 1.5;">
-                            • 중복 확인 후 사용 가능한 키로 백업해 주세요 ✅<br>
-                            • 기기를 변경해도 키(닉네임)만 있으면 데이터를 그대로 가져옵니다 📱
-                        </div>
+                        style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 8px; margin-bottom: 4px;">
+                        <span>기관</span><span style="color:var(--blue)">-3일</span></div>
+                    <div class="streak-bar" style="justify-content: flex-end;">
+                        <div class="streak-fill-blue" style="width: 30%;"></div>
                     </div>
-
-                    <p style="font-size:0.85rem; opacity:0.7;">🛡️ Firebase Cloud 기반 보안 백업 시스템</p>
                 </div>
-            </section>
+            </div>
+
+            <!-- 3. 기타 비서 기능 -->
+            <div class="icon-grid reveal">
+                <div class="icon-item">
+                    <i data-lucide="layout-grid"></i>
+                    <span>섹터 TOP 6</span>
+                </div>
+                <div class="icon-item">
+                    <i data-lucide="bell"></i>
+                    <span>스마트 푸시</span>
+                </div>
+                <div class="icon-item">
+                    <i data-lucide="moon"></i>
+                    <span>야간 시세 연동</span>
+                </div>
+                <div class="icon-item">
+                    <i data-lucide="cloud"></i>
+                    <span>데이터 싱크</span>
+                </div>
+            </div>
 
             <footer>
-                <p style="text-align:center; font-size:0.8rem; color:var(--gray); padding-bottom: 20px;">
-                    본 정보는 투자 참고용이며, 최종 책임은 본인에게 있습니다.<br>
-                    데이터 출처: 한국투자증권 Open API
-                </p>
+                <div class="warning-box">
+                    <b>※ 투자 유의사항</b><br>
+                    본 서비스의 정보는 참고 자료일 뿐이며, 투자 책임은 본인에게 있습니다. 원금 손실 위험이 있으니 신중히 결정하세요.
+                </div>
+                <p style="margin-top: 20px;">© 2026 Money Fact. All rights reserved.</p>
             </footer>
         </div>
 
-        <!-- Sticky CTA -->
-        <div class="footer-cta">
-            <a href="./MoneyFact_v3_0.apk" class="btn-main" download>
-                지금 설치하고 비서 고용하기 (v3.0)
+        <!-- Sticky Download CTA -->
+        <div class="footer-cta" id="download-cta">
+            <a href="./MoneyFact_v3_0.apk" class="btn-download" id="download-btn" download>
+                지금 무료 다운로드
+                <span class="version">v3.0 Gold Edition</span>
             </a>
         </div>
     </div>
 
     <script>
+        // Initialize Lucide Icons
         lucide.createIcons();
-        // Subtle entrance animation for image
-        document.addEventListener('DOMContentLoaded', () => {
-            const img = document.querySelector('.hero-img');
-            img.style.opacity = '0';
-            img.style.transform = 'translateY(20px)';
-            setTimeout(() => {
-                img.style.transition = 'all 1s ease';
-                img.style.opacity = '1';
-                img.style.transform = 'translateY(0)';
-            }, 300);
+
+        // Scroll Reveal Animation
+        const sections = document.querySelectorAll('.reveal');
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        sections.forEach(section => {
+            observer.observe(section);
         });
+
+        // Pulsing effect for the download button
+        setInterval(() => {
+            const btn = document.getElementById('download-btn');
+            btn.style.boxShadow = '0 15px 45px rgba(252, 196, 25, 0.6)';
+            setTimeout(() => {
+                btn.style.boxShadow = '0 15px 35px rgba(252, 196, 25, 0.4)';
+            }, 500);
+        }, 2000);
     </script>
 </body>
 
