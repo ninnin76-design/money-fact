@@ -1012,21 +1012,21 @@ function MainApp() {
               <Text style={styles.cardHeaderTitle}>데이터 백업 및 동기화</Text>
             </View>
 
-            <Text style={styles.label}>나만의 백업 키 (닉네임)</Text>
+            <Text style={styles.label}>나만의 고유Key (Backup Key)</Text>
             <View style={styles.premiumInputRow}>
               <TextInput
                 style={styles.premiumInput}
                 value={syncKey}
                 onChangeText={setSyncKey}
-                placeholder="사용할 닉네임을 입력하세요"
+                placeholder="사용할 고유Key를 입력하세요"
                 placeholderTextColor="#666"
               />
               <TouchableOpacity style={styles.premiumCheckBtn} onPress={handleCheckDuplicate}>
                 <Text style={styles.premiumCheckBtnText}>중복 확인</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.premiumDescText}>*중복 확인후 사용 가능한 키로 백업해 주세요</Text>
-            <Text style={styles.premiumDescText}>*기기를 변경해도 키(닉네임)만 있으면 관심종목 데이터를 그대로 가져옵니다.</Text>
+            <Text style={styles.premiumDescText}>*중복 확인후 사용 가능한 고유Key로 백업해 주세요</Text>
+            <Text style={styles.premiumDescText}>*기기를 변경해도 고유Key만 있으면 관심종목 데이터를 완벽히 복원합니다.</Text>
 
             <View style={styles.premiumButtonGroup}>
               <TouchableOpacity style={styles.primaryActionBtn} onPress={handleBackup}>
