@@ -9,7 +9,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart
+  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2
 } from 'lucide-react-native';
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
