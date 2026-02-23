@@ -66,12 +66,13 @@ export const AuthService = {
                 }, { timeout: 10000 });
 
                 const newToken = res.data.access_token;
-                // Limit to 6 hours for stability as per NotebookLM
-                const actualExpiresIn = Math.min(res.data.expires_in, 21600);
+                // Force a 23 hour expiry fallback regardless of expires_in
+                const expiresInSec = res.data.expires_in ? parseInt(res.data.expires_in, 10) : 86400;
+                const actualExpiresIn = Math.min(expiresInSec, 86400);
                 const newExpiry = new Date(new Date().getTime() + (actualExpiresIn - 300) * 1000);
 
                 memToken = newToken;
-                memExpiry = newExpiry;
+                memExpiry = isNaN(newExpiry.getTime()) ? new Date(new Date().getTime() + 23 * 3600 * 1000) : newExpiry;
                 await AsyncStorage.setItem(STORAGE_KEYS.KIS_TOKEN, JSON.stringify({ token: newToken, expiry: newExpiry }));
                 console.log('[Auth] Success: NEW KIS Token issued (Valid until:', newExpiry.toLocaleTimeString(), ')');
                 return newToken;

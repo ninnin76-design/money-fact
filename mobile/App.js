@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
   TextInput, Modal, StatusBar, ActivityIndicator, Dimensions, Alert,
-  Platform, Switch, LogBox, KeyboardAvoidingView
+  Platform, Switch, LogBox, KeyboardAvoidingView, Share, Linking
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -317,45 +317,46 @@ if (Platform.OS !== 'web') {
           const vwap = StockService.calculateVWAP(data, buyLimit);
           const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
 
-          const currentStatus = `${fStreak}|${iStreak}`;
+          // 1. Streak Alert 🚨🔥✨
+          const isEscapeSignal = fStreak <= -sellLimit && iStreak <= -sellLimit;
+          const isBullSignal = fStreak >= 1 && iStreak >= 1 && (fStreak + iStreak) >= buyLimit;
+          const isTurnSignal = (fStreak === 1 && iStreak <= -sellLimit) || (iStreak === 1 && fStreak <= -sellLimit);
+
+          let currentStatus = 'none';
+          if (isEscapeSignal) currentStatus = 'escape';
+          else if (isBullSignal) currentStatus = 'bull';
+          else if (isTurnSignal) currentStatus = 'turn';
+          else if (isHiddenAcc) currentStatus = 'hidden';
+
           if (!history[stock.code]) {
-            history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '', streakDate: '' };
+            history[stock.code] = { streak: '', hiddenDate: '', streakDate: '' };
           }
 
-          // 1. Streak Alert
-          const isBuySignal = fStreak >= buyLimit || iStreak >= buyLimit;
-          const isSellSignal = fStreak <= -sellLimit || iStreak <= -sellLimit;
+          if (currentStatus !== 'none' && history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today) {
+            let title = `Money Fact: ${stock.name}`;
+            let bodyStr = "";
 
-          if (isBuySignal || isSellSignal) {
-            if (history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today) {
-              const type = isBuySignal ? "🎯 매수 기회" : "⚠️ 매도 경고";
-              await Notifications.scheduleNotificationAsync({
-                content: { title: `Money Fact: ${stock.name}`, body: `${stock.name} ${type} 기류 포착 (${fStreak}/${iStreak})` },
-                trigger: null,
-              });
-              history[stock.code].streak = currentStatus;
-              history[stock.code].streakDate = today;
-              hasNewData = true;
+            if (currentStatus === 'escape') {
+              bodyStr = `❄️ [동반 이탈 경고] ${stock.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
+              title = "🚨 수급 이탈 알림!";
+            } else if (currentStatus === 'bull') {
+              bodyStr = `🔥 [동반 쌍끌이 포착] ${stock.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
+              title = "🔥 특급 쌍끌이 시그널!";
+            } else if (currentStatus === 'turn') {
+              bodyStr = `✨ [변곡점 발생] ${stock.name}: 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
+              title = "✨ 변곡점 포착!";
+            } else if (currentStatus === 'hidden') {
+              bodyStr = `🤫 [히든 매집] ${stock.name}: 주가는 고요하지만 세력은 은밀히 물량을 확보 중입니다. 소문나기 전에 확인하세요.`;
+              title = "🤫 히든 매집 포착!";
             }
-          }
 
-          // 2. Value Buy Zone Alert (Once per day)
-          if (vwap > 0 && currentPrice < vwap * 0.95 && history[stock.code].vwapDate !== today) {
             await Notifications.scheduleNotificationAsync({
-              content: { title: "💸 세력보다 싸게 살 기회!", body: `${stock.name}: 세력평단(${vwap.toLocaleString()}원)보다 5% 이상 저렴!` },
+              content: { title, body: bodyStr },
               trigger: null,
             });
-            history[stock.code].vwapDate = today;
-            hasNewData = true;
-          }
 
-          // 3. Hidden Accumulation Alert (Once per day)
-          if (isHiddenAcc && history[stock.code].hiddenDate !== today) {
-            await Notifications.scheduleNotificationAsync({
-              content: { title: "🤫 조용한 매집 포착", body: `${stock.name}: 주가는 조용하지만 세력이 몰래 사고 있어요.` },
-              trigger: null,
-            });
-            history[stock.code].hiddenDate = today;
+            history[stock.code].streak = currentStatus;
+            history[stock.code].streakDate = today;
             hasNewData = true;
           }
         }
@@ -1390,6 +1391,37 @@ function MainApp() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+
+          {/* 📖 설명서 & 공유하기 */}
+          <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 12, padding: 16, backgroundColor: '#0d1b2a', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.2)' }}>
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', marginBottom: 12 }}>📖 머니 팩트 가이드</Text>
+            <Text style={{ color: '#8b95a1', fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
+              앱의 모든 기능을 200% 활용하는 프리미엄 전략 가이드를 확인하세요. 카카오톡으로 친구에게 공유하면 함께 수익을 낼 수 있습니다!
+            </Text>
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182f6', paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 10, justifyContent: 'center' }}
+              onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
+            >
+              <LineChart size={16} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginLeft: 8 }}>전략 가이드 보기</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE500', paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center' }}
+              onPress={async () => {
+                try {
+                  await Share.share({
+                    title: '💰 머니 팩트(Money Fact) - 세력 수급의 모든 것',
+                    message: '🚀 외국인·기관의 수급을 실시간 추적하는 프리미엄 주식 분석 앱!\n\n📊 전략 가이드 & 다운로드:\nhttps://ninnin76-design.github.io/money-fact/\n\n세력의 흔적을 수익으로 바꾸세요! 💰',
+                  });
+                } catch (e) { }
+              }}
+            >
+              <UploadCloud size={16} color="#3B1E1E" />
+              <Text style={{ color: '#3B1E1E', fontSize: 14, fontWeight: '700', marginLeft: 8 }}>카카오톡으로 공유하기</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Version Info */}

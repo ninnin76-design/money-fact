@@ -590,35 +590,37 @@ async function runDeepMarketScan(force = false) {
                     let patternKey = 'none'; // 기본 상태 (특이사항 없음)
                     let priority = 99;
 
-                    // 1순위: 동반 이탈 🚨
-                    if (fSell >= userSettings.sellStreak && iSell >= userSettings.sellStreak) {
+                    // 1. 동반 이탈 🚨
+                    const isEscapeSignal = fSell >= userSettings.sellStreak && iSell >= userSettings.sellStreak;
+                    // 2. 동반 쌍끌이 🔥
+                    const isBullSignal = fBuy >= 1 && iBuy >= 1 && (fBuy + iBuy) >= userSettings.buyStreak;
+                    // 3. 변곡점 발생 ✨
+                    const isTurnSignal = (fBuy === 1 && iSell >= userSettings.sellStreak) || (iBuy === 1 && fSell >= userSettings.sellStreak);
+                    // 4. 히든 매집 🤫
+                    const isHiddenAcc = isPriceStable && (fBuy >= userSettings.accumStreak || iBuy >= userSettings.accumStreak);
+
+                    if (isEscapeSignal) {
                         patternKey = 'escape';
                         if (tokenDailyHistory[us.code] !== patternKey) {
                             msg = `❄️ [동반 이탈 경고] ${us.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
                             priority = 1;
                         }
-                    }
-                    // 2순위: 동반 쌍끌이 🔥
-                    else if (fBuy >= 1 && iBuy >= 1 && (fBuy + iBuy) >= userSettings.buyStreak) {
+                    } else if (isBullSignal) {
                         patternKey = 'bull';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `🔥 [동반 쌍끌이 포착] ${us.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출 임박.`;
+                            msg = `🔥 [동반 쌍끌이 포착] ${us.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
                             priority = 2;
                         }
-                    }
-                    // 3순위: 변곡점 발생 ✨
-                    else if ((fBuy === 1 && iSell >= userSettings.sellStreak) || (iBuy === 1 && fSell >= userSettings.sellStreak)) {
+                    } else if (isTurnSignal) {
                         patternKey = 'turn';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `✨ [변곡점 발생] ${us.name}: 긴 매도세를 멈추고 수급이 상방으로 꺾였습니다.`;
+                            msg = `✨ [변곡점 발생] ${us.name}: 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
                             priority = 3;
                         }
-                    }
-                    // 4순위: 히든 매집 🤫
-                    else if (isPriceStable && (fBuy >= userSettings.accumStreak || iBuy >= userSettings.accumStreak)) {
+                    } else if (isHiddenAcc) {
                         patternKey = 'hidden';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `🤫 [히든 매집] ${us.name}: 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다.`;
+                            msg = `🤫 [히든 매집] ${us.name}: 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다. 소문나기 전에 확인하세요.`;
                             priority = 4;
                         }
                     }
@@ -991,4 +993,19 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
 app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Deep Scan Server Online on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Deep Scan Server Online on port ${PORT}`);
+
+    // [코다리 부장 터치] 어플을 켜지 않아도 서버가 알아서 푸시를 날리도록 15분 주기로 스캔 가동!
+    setInterval(() => {
+        runDeepMarketScan(false);
+    }, 15 * 60 * 1000);
+
+    // Render 서버 절전 모드 방지용 자체 핑 (14분 주기)
+    setInterval(() => {
+        axios.get('https://money-fact-server.onrender.com/').catch(() => { });
+    }, 14 * 60 * 1000);
+
+    // 구동 시 1회 즉시 스캔
+    setTimeout(() => runDeepMarketScan(false), 5000);
+});
