@@ -429,6 +429,7 @@ function MainApp() {
   const [isMarketOpen, setIsMarketOpen] = useState(StockService.isMarketOpen());
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [manualModal, setManualModal] = useState(false);
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -1414,7 +1415,7 @@ function MainApp() {
         <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>GOLD</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://ninnin76-design.github.io/money-fact/')}
+            onPress={() => setManualModal(true)}
             style={{ padding: 8 }}
           >
             <BookOpen size={22} color="#fff" />
@@ -1663,6 +1664,66 @@ function MainApp() {
               </View>
             </ScrollView>
           )}
+        </View>
+      </Modal>
+
+      {/* Full Screen Manual Modal */}
+      <Modal visible={manualModal} transparent={false} animationType="slide">
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+          <StatusBar barStyle="light-content" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+            <TouchableOpacity onPress={() => setManualModal(false)} style={{ flexDirection: 'row', alignItems: 'center' }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ color: '#3182f6', fontSize: 16, fontWeight: 'bold' }}>← 돌아가기</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 16 }}>머니 팩트 프리미엄 가이드</Text>
+          </View>
+
+          <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}>
+            <View style={{ marginVertical: 20 }}>
+              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 12 }}>💰 머니 팩트(Money Fact) v3.4</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
+                "데이터는 결코 거짓말을 하지 않습니다. 세력의 흔적을 수익으로 바꾸세요."{"\n\n"}
+                머니 팩트는 복잡한 주식 시장에서 외국인과 기관의 실시간 수급을 추적하여 승률 높은 타점을 제시하는 똑똑한 투자 비서입니다. 각 기능을 완벽하게 숙달하여 수익을 극대화해 보세요!
+              </Text>
+
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>🏛️ 1. 대쉬보드 (Dashboard)</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 섹터 TOP 6:</Text> 실시간 자금 유입이 가장 활발한 상위 6개 업종을 브리핑합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📡 하이브리드 레이더:</Text> 전 종목을 빠르게 스캔하고 정밀 분석하여 후보군을 압축합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🤫 매집 의심 종목 (추천):</Text> 주가는 횡보하지만 세력이 은밀하게 물량을 모으고 있는 종목을 추천합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🌡️ 시장 심리 온도계:</Text> 외국인과 기관의 합산 매수/매도 강도를 '온도계'로 직관적으로 표시합니다.
+              </Text>
+
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⚡ 2. 연속 매매 (Continuous List)</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📈 매수/매도 포착:</Text> 설정 일수 이상 연속 매수하거나 연속 매도(탈출 신호) 중인 종목을 필터링합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>👥 주체별 심층분석:</Text> '기관 전용', '외인 전용', 또는 '전체' 리스트를 스위칭할 수 있습니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🔋 양음블럭 시스템:</Text> 리스트에서 블록 칸수를 통해 수급의 강성과 에너지를 1초 만에 파악합니다.
+              </Text>
+
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⭐ 3. 관심 종목 (Watchlist)</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>➕ 철통 감시망:</Text> 내가 선택한 관심종목을 등록 즉시 별도로 전담 모니터링합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 수급 엑스레이:</Text> 종목 상세 화면에서 연속 매집/이탈 일수를 정확한 차트 막대로 확인합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>💎 세력 평단가(VWAP):</Text> 세력이 물량을 모은 원가를 계산하여 지금 가격이 메리트가 있는지 파악합니다.
+              </Text>
+
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⚙️ 4. 설정 (Settings)</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>☁️ 데이터 클라우드:</Text> 나만의 고유Key를 통해 관심종목 데이터를 안전하게 서버에 백업, 언제든 복원합니다.{"\n"}
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🎯 맞춤형 감지 레이더:</Text> 매수, 매도, 매집 알림을 받을 연속 일수를 직접 정밀 타겟팅합니다.
+              </Text>
+
+              <View style={{ backgroundColor: 'rgba(49, 130, 246, 0.1)', padding: 18, borderRadius: 16, marginTop: 10, borderWidth: 1, borderColor: 'rgba(49,130,246,0.2)' }}>
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 6 }}>
+                  성공 투자는 운이 아니라 '데이터'와 '대응'입니다.
+                </Text>
+                <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>
+                  지금 바로 머니 팩트와 함께 주식 시장의 최상위 포식자로 거듭나세요! 🌈✨
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
       {loading && (
