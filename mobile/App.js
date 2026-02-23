@@ -1689,11 +1689,11 @@ function MainApp() {
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{
+              flexGrow: 1,
               paddingBottom: Math.max(insets.bottom + 80, 120),
               paddingHorizontal: 20
             }}
             showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
             bounces={true}
             overScrollMode="always"
           >
