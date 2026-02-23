@@ -1434,7 +1434,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.4 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
