@@ -432,9 +432,9 @@ function MainApp() {
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
-  // [코다리 부장 터치] 감지 민감도 설정 (매집 기본값은 5일!)
-  const [settingBuyStreak, setSettingBuyStreak] = useState(3);
-  const [settingSellStreak, setSettingSellStreak] = useState(3);
+  // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
+  const [settingBuyStreak, setSettingBuyStreak] = useState(5);
+  const [settingSellStreak, setSettingSellStreak] = useState(5);
   const [settingAccumStreak, setSettingAccumStreak] = useState(5);
 
   // Sample Sectors
@@ -483,9 +483,9 @@ function MainApp() {
     setPushEnabled(notif !== 'false');
 
     const buySet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
-    if (buySet) setSettingBuyStreak(parseInt(buySet) || 3);
+    if (buySet) setSettingBuyStreak(parseInt(buySet) || 5);
     const sellSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
-    if (sellSet) setSettingSellStreak(parseInt(sellSet) || 3);
+    if (sellSet) setSettingSellStreak(parseInt(sellSet) || 5);
     const accumSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
     if (accumSet) setSettingAccumStreak(parseInt(accumSet) || 5);
 
@@ -1212,43 +1212,6 @@ function MainApp() {
     if (tab === 'settings') {
       return (
         <ScrollView style={[styles.scroll, { paddingTop: 20 }]} showsVerticalScrollIndicator={false}>
-          {/* 📖 설명서 & 공유하기 (최상단으로 이동) */}
-          <View style={{ marginHorizontal: 16, marginTop: 0, marginBottom: 20, padding: 18, backgroundColor: 'rgba(49, 130, 246, 0.1)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(49,130,246,0.3)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ backgroundColor: '#3182f6', padding: 6, borderRadius: 8 }}>
-                <BookOpen size={16} color="#fff" />
-              </View>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginLeft: 10 }}>머니 팩트 사용 설명서</Text>
-            </View>
-            <Text style={{ color: '#8b95a1', fontSize: 13, marginBottom: 16, lineHeight: 20 }}>
-              수급 매매의 핵심 비기! 전문가의 전략 가이드를 확인하고 주변에도 공유해 보세요.
-            </Text>
-
-            <View style={{ flexDirection: 'row' }}>
-              <TouchableOpacity
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182f6', paddingVertical: 14, borderRadius: 12, marginRight: 8, justifyContent: 'center' }}
-                onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
-              >
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>가이드 보기</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE500', paddingVertical: 14, borderRadius: 12, justifyContent: 'center' }}
-                onPress={async () => {
-                  try {
-                    await Share.share({
-                      title: '💰 머니 팩트(Money Fact)',
-                      message: '🚀 외국인·기관 수급 추적 프리미엄 앱!\n📊 가이드: https://ninnin76-design.github.io/money-fact/',
-                    });
-                  } catch (e) { }
-                }}
-              >
-                <UploadCloud size={16} color="#3B1E1E" />
-                <Text style={{ color: '#3B1E1E', fontSize: 14, fontWeight: '800', marginLeft: 6 }}>앱 공유</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {/* Section: Data sync & Backup */}
           <View style={styles.settingsHeader}>
             <Text style={styles.sectionTitle}>설정 및 관리</Text>
@@ -1451,7 +1414,7 @@ function MainApp() {
         <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>GOLD</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
+            onPress={() => Linking.openURL('https://ninnin76-design.github.io/money-fact/')}
             style={{ padding: 8 }}
           >
             <BookOpen size={22} color="#fff" />
