@@ -432,10 +432,10 @@ function MainApp() {
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
-  // [코다리 부장 터치] 감지 민감도 설정 (기본값: 3일)
+  // [코다리 부장 터치] 감지 민감도 설정 (매집 기본값은 5일!)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
   const [settingSellStreak, setSettingSellStreak] = useState(3);
-  const [settingAccumStreak, setSettingAccumStreak] = useState(3);
+  const [settingAccumStreak, setSettingAccumStreak] = useState(5);
 
   // Sample Sectors
   const [sectors, setSectors] = useState([
@@ -487,7 +487,7 @@ function MainApp() {
     const sellSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
     if (sellSet) setSettingSellStreak(parseInt(sellSet) || 3);
     const accumSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
-    if (accumSet) setSettingAccumStreak(parseInt(accumSet) || 3);
+    if (accumSet) setSettingAccumStreak(parseInt(accumSet) || 5);
 
     setIsMarketOpen(StockService.isMarketOpen());
 
@@ -1212,6 +1212,43 @@ function MainApp() {
     if (tab === 'settings') {
       return (
         <ScrollView style={[styles.scroll, { paddingTop: 20 }]} showsVerticalScrollIndicator={false}>
+          {/* 📖 설명서 & 공유하기 (최상단으로 이동) */}
+          <View style={{ marginHorizontal: 16, marginTop: 0, marginBottom: 20, padding: 18, backgroundColor: 'rgba(49, 130, 246, 0.1)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(49,130,246,0.3)' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ backgroundColor: '#3182f6', padding: 6, borderRadius: 8 }}>
+                <BookOpen size={16} color="#fff" />
+              </View>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginLeft: 10 }}>머니 팩트 사용 설명서</Text>
+            </View>
+            <Text style={{ color: '#8b95a1', fontSize: 13, marginBottom: 16, lineHeight: 20 }}>
+              수급 매매의 핵심 비기! 전문가의 전략 가이드를 확인하고 주변에도 공유해 보세요.
+            </Text>
+
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182f6', paddingVertical: 14, borderRadius: 12, marginRight: 8, justifyContent: 'center' }}
+                onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
+              >
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>가이드 보기</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE500', paddingVertical: 14, borderRadius: 12, justifyContent: 'center' }}
+                onPress={async () => {
+                  try {
+                    await Share.share({
+                      title: '💰 머니 팩트(Money Fact)',
+                      message: '🚀 외국인·기관 수급 추적 프리미엄 앱!\n📊 가이드: https://ninnin76-design.github.io/money-fact/',
+                    });
+                  } catch (e) { }
+                }}
+              >
+                <UploadCloud size={16} color="#3B1E1E" />
+                <Text style={{ color: '#3B1E1E', fontSize: 14, fontWeight: '800', marginLeft: 6 }}>앱 공유</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Section: Data sync & Backup */}
           <View style={styles.settingsHeader}>
             <Text style={styles.sectionTitle}>설정 및 관리</Text>
@@ -1393,36 +1430,7 @@ function MainApp() {
             )}
           </View>
 
-          {/* 📖 설명서 & 공유하기 */}
-          <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 12, padding: 16, backgroundColor: '#0d1b2a', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.2)' }}>
-            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', marginBottom: 12 }}>📖 머니 팩트 가이드</Text>
-            <Text style={{ color: '#8b95a1', fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
-              앱의 모든 기능을 200% 활용하는 프리미엄 전략 가이드를 확인하세요. 카카오톡으로 친구에게 공유하면 함께 수익을 낼 수 있습니다!
-            </Text>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182f6', paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 10, justifyContent: 'center' }}
-              onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
-            >
-              <LineChart size={16} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginLeft: 8 }}>전략 가이드 보기</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE500', paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center' }}
-              onPress={async () => {
-                try {
-                  await Share.share({
-                    title: '💰 머니 팩트(Money Fact) - 세력 수급의 모든 것',
-                    message: '🚀 외국인·기관의 수급을 실시간 추적하는 프리미엄 주식 분석 앱!\n\n📊 전략 가이드 & 다운로드:\nhttps://ninnin76-design.github.io/money-fact/\n\n세력의 흔적을 수익으로 바꾸세요! 💰',
-                  });
-                } catch (e) { }
-              }}
-            >
-              <UploadCloud size={16} color="#3B1E1E" />
-              <Text style={{ color: '#3B1E1E', fontSize: 14, fontWeight: '700', marginLeft: 8 }}>카카오톡으로 공유하기</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Version Info (Moved up to fill the gap) */}
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
@@ -1439,7 +1447,31 @@ function MainApp() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <View style={{ marginTop: insets.top + 20 }}>
+      <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>GOLD</Text></Text>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://github.com/ninnin76-design/money-fact/blob/main/docs/USER_MANUAL.md')}
+            style={{ padding: 8 }}
+          >
+            <BookOpen size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                await Share.share({
+                  title: '💰 머니 팩트(Money Fact)',
+                  message: '🚀 외국인·기관 수급 추적 프리미엄 앱!\n📊 가이드: https://ninnin76-design.github.io/money-fact/',
+                });
+              } catch (e) { }
+            }}
+            style={{ padding: 8, marginLeft: 4 }}
+          >
+            <UploadCloud size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={{ marginTop: 0 }}>
         <Ticker items={tickerItems} />
       </View>
 
