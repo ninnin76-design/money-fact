@@ -1667,61 +1667,104 @@ function MainApp() {
         </View>
       </Modal>
 
-      {/* Full Screen Manual Modal */}
+      {/* Full Screen Manual Modal - Young-ja Manager's Premium Design! */}
       <Modal visible={manualModal} transparent={false} animationType="slide">
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <StatusBar barStyle="light-content" />
-          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-            <TouchableOpacity onPress={() => setManualModal(false)} style={{ flexDirection: 'row', alignItems: 'center' }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={{ color: '#3182f6', fontSize: 16, fontWeight: 'bold' }}>← 돌아가기</Text>
+
+          {/* Header - Sleek & Simple */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+            <TouchableOpacity
+              onPress={() => setManualModal(false)}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49, 130, 246, 0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
+              <Text style={{ color: '#3182f6', fontSize: 14, fontWeight: 'bold' }}>← 돌아가기</Text>
             </TouchableOpacity>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 16 }}>머니 팩트 프리미엄 가이드</Text>
+            <View style={{ flex: 1, alignItems: 'center', marginRight: 60 }}>
+              <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: -0.5 }}>PREMIUM GUIDE</Text>
+            </View>
           </View>
 
-          <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}>
-            <View style={{ marginVertical: 20 }}>
-              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 12 }}>💰 머니 팩트(Money Fact) v3.4</Text>
-              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
-                "데이터는 결코 거짓말을 하지 않습니다. 세력의 흔적을 수익으로 바꾸세요."{"\n\n"}
-                머니 팩트는 복잡한 주식 시장에서 외국인과 기관의 실시간 수급을 추적하여 승률 높은 타점을 제시하는 똑똑한 투자 비서입니다. 각 기능을 완벽하게 숙달하여 수익을 극대화해 보세요!
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Intro Hero */}
+            <View style={{ marginTop: 24, marginBottom: 32 }}>
+              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
+                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4</Text>{"\n"}골드 에디션 활용 백서
               </Text>
-
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>🏛️ 1. 대쉬보드 (Dashboard)</Text>
-              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 섹터 TOP 6:</Text> 실시간 자금 유입이 가장 활발한 상위 6개 업종을 브리핑합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📡 하이브리드 레이더:</Text> 전 종목을 빠르게 스캔하고 정밀 분석하여 후보군을 압축합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🤫 매집 의심 종목 (추천):</Text> 주가는 횡보하지만 세력이 은밀하게 물량을 모으고 있는 종목을 추천합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🌡️ 시장 심리 온도계:</Text> 외국인과 기관의 합산 매수/매도 강도를 '온도계'로 직관적으로 표시합니다.
+              <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
+              <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 24 }}>
+                "세력의 흔적은 숨길 수 없습니다."{"\n"}
+                국내 최고 수준의 수급 엔진이 탑재된 머니 팩트로 시장의 주도주를 선점하는 비기(秘技)를 공개합니다.
               </Text>
+            </View>
 
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⚡ 2. 연속 매매 (Continuous List)</Text>
-              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📈 매수/매도 포착:</Text> 설정 일수 이상 연속 매수하거나 연속 매도(탈출 신호) 중인 종목을 필터링합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>👥 주체별 심층분석:</Text> '기관 전용', '외인 전용', 또는 '전체' 리스트를 스위칭할 수 있습니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🔋 양음블럭 시스템:</Text> 리스트에서 블록 칸수를 통해 수급의 강성과 에너지를 1초 만에 파악합니다.
-              </Text>
+            {/* Feature Cards Loop */}
+            {[
+              {
+                icon: "🏛️", title: "대쉬보드", subtitle: "시장의 흐름을 한눈에",
+                content: [
+                  { label: "섹터 TOP 6", desc: "실시간 자금 유입이 가장 뜨거운 업종 순위" },
+                  { label: "하이브리드 레이더", desc: "전 종목 쾌속 스캔 후 유망주 정밀 압축" },
+                  { label: "매집 의심 종목", desc: "주가는 조용하지만 에너지를 응축 중인 종목" }
+                ]
+              },
+              {
+                icon: "⚡", title: "연속 매매 리스트", subtitle: "결정적 타점의 발견",
+                content: [
+                  { label: "연속 수급 포착", desc: "사용자 설정 일수만큼 꾸준히 사는 종목" },
+                  { label: "주체별 필터링", desc: "외인/기관 입맛에 맞는 리스트 즉시 전환" },
+                  { label: "에너지 양음블럭", desc: "수급의 연속성을 직관적인 블록 수로 파악" }
+                ]
+              },
+              {
+                icon: "⭐", title: "나의 관심 종목", subtitle: "절대 놓치지 않는 감시망",
+                content: [
+                  { label: "실시간 밀착 추적", desc: "등록 즉시 24시간 수급 변동 상시 감시" },
+                  { label: "수급 엑스레이", desc: "종목별 매집/이탈 히스토리를 차트로 확인" },
+                  { label: "세력 평단가(VWAP)", desc: "큰 손들의 매수 원가 대비 현재가 메리트 분석" }
+                ]
+              },
+              {
+                icon: "⚙️", title: "설정 및 백업", subtitle: "나만의 매매 환경 최적화",
+                content: [
+                  { label: "고유Key 클라우드", desc: "기기를 바꿔도 아이디 하나면 관심종목 복구" },
+                  { label: "초정밀 레이더 설정", desc: "5일, 10일 등 나만의 감지 기준 일수 세팅" }
+                ]
+              }
+            ].map((section, idx) => (
+              <View key={idx} style={{ marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{ width: 44, height: 44, backgroundColor: 'rgba(49, 130, 246, 0.1)', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                    <Text style={{ fontSize: 22 }}>{section.icon}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>{section.title}</Text>
+                    <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600', marginTop: 2 }}>{section.subtitle}</Text>
+                  </View>
+                </View>
 
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⭐ 3. 관심 종목 (Watchlist)</Text>
-              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>➕ 철통 감시망:</Text> 내가 선택한 관심종목을 등록 즉시 별도로 전담 모니터링합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 수급 엑스레이:</Text> 종목 상세 화면에서 연속 매집/이탈 일수를 정확한 차트 막대로 확인합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>💎 세력 평단가(VWAP):</Text> 세력이 물량을 모은 원가를 계산하여 지금 가격이 메리트가 있는지 파악합니다.
-              </Text>
-
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 10, marginBottom: 8 }}>⚙️ 4. 설정 (Settings)</Text>
-              <Text style={{ color: '#8b95a1', fontSize: 14, lineHeight: 22, marginBottom: 20 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>☁️ 데이터 클라우드:</Text> 나만의 고유Key를 통해 관심종목 데이터를 안전하게 서버에 백업, 언제든 복원합니다.{"\n"}
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>🎯 맞춤형 감지 레이더:</Text> 매수, 매도, 매집 알림을 받을 연속 일수를 직접 정밀 타겟팅합니다.
-              </Text>
-
-              <View style={{ backgroundColor: 'rgba(49, 130, 246, 0.1)', padding: 18, borderRadius: 16, marginTop: 10, borderWidth: 1, borderColor: 'rgba(49,130,246,0.2)' }}>
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 6 }}>
-                  성공 투자는 운이 아니라 '데이터'와 '대응'입니다.
-                </Text>
-                <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>
-                  지금 바로 머니 팩트와 함께 주식 시장의 최상위 포식자로 거듭나세요! 🌈✨
-                </Text>
+                {section.content.map((item, i) => (
+                  <View key={i} style={{ marginBottom: 12, paddingLeft: 4 }}>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginBottom: 2 }}>• {item.label}</Text>
+                    <Text style={{ color: '#8b95a1', fontSize: 13, lineHeight: 18, marginLeft: 14 }}>{item.desc}</Text>
+                  </View>
+                ))}
               </View>
+            ))}
+
+            {/* Final CTA Card */}
+            <View style={{ marginTop: 12, backgroundColor: '#3182f6', borderRadius: 24, padding: 24, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}>
+                준비되셨나요? 혁신적인 투자의 시작!
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+                운에 맡기는 매매는 이제 그만.{"\n"}데이터가 증명하는 머니 팩트와 가보시죠!
+              </Text>
             </View>
           </ScrollView>
         </View>
@@ -1761,6 +1804,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scroll: {
+    flex: 1,
     padding: 20,
   },
   section: {
