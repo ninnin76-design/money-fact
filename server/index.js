@@ -324,7 +324,29 @@ async function runDeepMarketScan(force = false) {
         const maxWideScan = Math.min(POPULAR_STOCKS.length, 2000); // 최대 2000개까지 스캔
         const alreadyInMap = new Set(candidateMap.keys());
 
-        for (let i = 0; i < maxWideScan; i += batchSize) {
+        for (let i = 0; i < maxWideScan; i++) {
+            const stk = POPULAR_STOCKS[i];
+            if (!stk || alreadyInMap.has(stk.code)) continue;
+            await new Promise(r => setTimeout(r, 120));
+            try {
+                const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
+                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
+                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+                });
+                const d = priceRes.data.output;
+                if (!d) continue;
+
+                const price = parseInt(d.stck_prpr || 0);
+                const changeRate = parseFloat(d.prdy_ctrt || 0);
+                const volume = parseInt(d.acml_vol || 0);
+                const avgVolume = parseInt(d.avrg_vol || 0);
+                if (Math.abs(changeRate) >= 2.5 || volume > 500000) {
+                    addCandidate(stk.code, stk.name);
+                    wideNetHits++;
+                }
+            } catch (e) { }
+        }
+        if (false) { // Dummy to skip old block
             const batch = POPULAR_STOCKS.slice(i, i + batchSize).filter(s => !alreadyInMap.has(s.code));
             if (batch.length === 0) continue;
 
@@ -383,50 +405,56 @@ async function runDeepMarketScan(force = false) {
         const historyData = new Map();
         let hits = 0;
 
-        // 모든 후보를 Deep Scan (배치 10개씩, 120ms 간격)
+        // 모든 후보를 정밀 Deep Scan (종목당 150ms 간격으로 순차 진행)
         const fullList = candidates.slice(0, 800); // 안전 상한: 최대 800개
-        console.log(`[Radar 2단계] 실제 Deep Scan 대상: ${fullList.length}개`);
+        console.log(`[Radar 2단계] 실제 Deep Scan 대상: ${fullList.length}개 순차 분석 시작...`);
 
-        for (let i = 0; i < fullList.length; i += 10) {
-            const chunk = fullList.slice(i, i + 10);
-            await Promise.all(chunk.map(async (stk) => {
-                try {
-                    const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                        headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
-                        params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+        for (let i = 0; i < fullList.length; i++) {
+            const stk = fullList[i];
+
+            // 150ms 간격으로 순차적 요청 (유량 제한 방어)
+            await new Promise(r => setTimeout(r, 150));
+
+            try {
+                const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
+                });
+                const daily = invRes.data.output || [];
+
+                // [코다리 부장 터치] 장중이라면 잠정치를 가져와서 오늘 데이터를 보정합니다!
+                if (isMarketOpen && daily.length > 0) {
+                    const d0 = daily[0];
+                    const fVal = parseInt(d0.frgn_ntby_qty || 0);
+                    const oVal = parseInt(d0.orgn_ntby_qty || 0);
+
+                    // 값이 비어있거나 0인 경우(장중 미지급) 잠정치 조회
+                    if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
+                        try {
+                            const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                                headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
+                                params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+                            });
+                            const prov = provRes.data.output;
+                            if (prov) {
+                                d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
+                                d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0'; // 기관 합계로 보정
+                            }
+                        } catch (provErr) { /* ignore */ }
+                    }
+                }
+
+                if (daily.length > 0) {
+                    hits++;
+                    const currentPrice = daily[0].stck_clpr;
+                    const currentRate = daily[0].prdy_ctrt;
+                    historyData.set(stk.code, {
+                        name: stk.name, price: currentPrice, rate: currentRate, daily
                     });
-                    const daily = invRes.data.output || [];
+                }
+            } catch (e) { /* ignore */ }
 
-                    // [코다리 부장 터치] 장중이라면 잠정치를 가져와서 오늘 데이터를 보정합니다!
-                    if (isMarketOpen && daily.length > 0) {
-                        const d0 = daily[0];
-                        if (parseInt(d0.frgn_ntby_qty || 0) === 0 && parseInt(d0.orgn_ntby_qty || 0) === 0) {
-                            try {
-                                const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
-                                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
-                                });
-                                const prov = provRes.data.output;
-                                if (prov) {
-                                    d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
-                                    d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0';
-                                }
-                            } catch (provErr) { /* 잠정치 실패해도 조용히 넘어갑니다 */ }
-                        }
-                    }
-
-                    if (daily.length > 0) {
-                        hits++;
-                        const currentPrice = daily[0].stck_clpr;
-                        const currentRate = daily[0].prdy_ctrt;
-                        historyData.set(stk.code, {
-                            name: stk.name, price: currentPrice, rate: currentRate, daily
-                        });
-                    }
-                } catch (e) { /* 개별 실패는 무시 */ }
-            }));
-            await new Promise(r => setTimeout(r, 120)); // 유량 제어 (120ms)
-            if (i % 100 === 0 && i > 0) console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
+            if (i % 50 === 0 && i > 0) console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
         }
 
         console.log(`[Radar 2단계] Deep Scan 완료! 성공: ${hits}개 / 대상: ${fullList.length}개`);
@@ -474,9 +502,12 @@ async function runDeepMarketScan(force = false) {
                 for (let j = 0; j < val.daily.length; j++) {
                     const row = val.daily[j];
                     let net = 0;
-                    if (inv === '0') net = parseInt(row.frgn_ntby_qty) + parseInt(row.orgn_ntby_qty);
-                    else if (inv === '2') net = parseInt(row.frgn_ntby_qty);
-                    else if (inv === '1') net = parseInt(row.orgn_ntby_qty);
+                    const fQty = parseInt(row.frgn_ntby_qty || 0) || 0;
+                    const oQty = parseInt(row.orgn_ntby_qty || 0) || 0;
+
+                    if (inv === '0') net = fQty + oQty;
+                    else if (inv === '2') net = fQty;
+                    else if (inv === '1') net = oQty;
 
                     if (net > 0) {
                         buyStreak++;
@@ -712,9 +743,12 @@ function analyzeStreak(daily, inv) {
     for (let j = 0; j < daily.length; j++) {
         const d = daily[j];
         let net = 0;
-        if (inv === '0') net = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
-        else if (inv === '2') net = parseInt(d.frgn_ntby_qty);
-        else if (inv === '1') net = parseInt(d.orgn_ntby_qty);
+        const fQty = parseInt(d.frgn_ntby_qty || 0) || 0;
+        const oQty = parseInt(d.orgn_ntby_qty || 0) || 0;
+
+        if (inv === '0') net = fQty + oQty;
+        else if (inv === '2') net = fQty;
+        else if (inv === '1') net = oQty;
 
         if (net > 0) {
             buyStreak++;

@@ -101,7 +101,7 @@ export const StockService = {
                 const krxToday = mergedList[0];
                 const atsToday = atsInvestor[0];
 
-                const safeSum = (k, a) => (parseInt(k || 0) + parseInt(a || 0)).toString();
+                const safeSum = (k, a) => ((parseInt(k) || 0) + (parseInt(a) || 0)).toString();
 
                 mergedList[0] = {
                     ...krxToday,
@@ -190,7 +190,8 @@ export const StockService = {
             let streakStarted = false;
 
             for (let i = 0; i < dailyData.length; i++) {
-                const val = parseInt(type === 'F' ? dailyData[i].frgn_ntby_qty : dailyData[i].orgn_ntby_qty);
+                const rawVal = type === 'F' ? dailyData[i].frgn_ntby_qty : dailyData[i].orgn_ntby_qty;
+                const val = parseInt(rawVal) || 0;
 
                 if (val > 0) {
                     if (sell > 0) break;

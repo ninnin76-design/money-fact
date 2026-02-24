@@ -624,10 +624,10 @@ function MainApp() {
                 if (!seenCodes.has(item.code)) {
                   seenCodes.add(item.code);
                   snapshotStocks.push({
-                    name: item.name, code: item.code, price: parseInt(item.price || 0),
-                    fStreak: item.fStreak || (isBuy ? (item.streak || 0) : -(item.streak || 0)),
+                    name: item.name, code: item.code, price: parseInt(item.price || 0) || 0,
+                    fStreak: item.fStreak || (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
                     iStreak: item.iStreak || 0,
-                    sentiment: isBuy ? (50 + (item.streak || 0) * 10) : (50 - (item.streak || 0) * 10),
+                    sentiment: isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10),
                     vwap: 0, isHiddenAccumulation: false
                   });
                 }
@@ -693,7 +693,8 @@ function MainApp() {
         continue;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // 250ms delay per stock to stay well within KIS rate limits (20 req/sec)
+      await new Promise(resolve => setTimeout(resolve, 250));
       try {
         const [data, livePrice] = await Promise.all([
           StockService.getInvestorData(stock.code, forceFetch),
@@ -712,9 +713,9 @@ function MainApp() {
           // Prioritize live price (ATS or KRX real-time) over daily close
           let currentPrice = 0;
           if (livePrice && livePrice.stck_prpr) {
-            currentPrice = parseInt(livePrice.stck_prpr);
+            currentPrice = parseInt(livePrice.stck_prpr) || 0;
           } else {
-            currentPrice = parseInt(data[0].stck_clpr || 0);
+            currentPrice = parseInt(data[0].stck_clpr || 0) || 0;
           }
 
           // Auto-fix stock names that were registered by code only
@@ -760,7 +761,7 @@ function MainApp() {
           if (isMyStock) {
             if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
             if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
-            const price = parseInt(data[0].stck_clpr || 0);
+            const price = parseInt(data[0].stck_clpr || 0) || 0;
             if (vwap > 0 && price < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
             if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
           }
