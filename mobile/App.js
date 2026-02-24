@@ -789,7 +789,7 @@ function MainApp() {
     // [코다리 부장 터치] 밤 늦게 API가 0을 던져줘도, 화면의 섹터 데이터를 0으로 덮어쓰지 않고 유지합니다!
     const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
     if (updatedSectors.length > 0 && totalFlow > 0) {
-      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+      setSectors(updatedSectors.sort((a, b) => b.flow - a.flow).slice(0, 6));
     }
     // Round inst sub-types to billion KRW
     const roundedInstTotals = {
@@ -806,7 +806,7 @@ function MainApp() {
     if (results.length > 0) {
       const snapshot = {
         stocks: results,
-        sectors: updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
+        sectors: updatedSectors.sort((a, b) => b.flow - a.flow).slice(0, 6),
         instFlow: roundedInstTotals,
         updateTime: timeStr
       };
@@ -1413,7 +1413,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.3</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.4</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1670,7 +1670,7 @@ function MainApp() {
 
       {/* Full Screen Manual Modal - Young-ja Manager's Premium Design! */}
       <Modal visible={manualModal} transparent={false} animationType="slide">
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.container, { paddingTop: insets.top, flex: 1 }]}>
           <StatusBar barStyle="light-content" />
 
           {/* Header - Sleek & Simple */}
@@ -1688,7 +1688,7 @@ function MainApp() {
           </View>
 
           <ScrollView
-            style={styles.scroll}
+            style={[styles.scroll, { flex: 1 }]}
             contentContainerStyle={{
               paddingBottom: Math.max(insets.bottom + 80, 120)
             }}
@@ -1697,7 +1697,7 @@ function MainApp() {
             {/* Intro Hero */}
             <View style={{ marginTop: 24, marginBottom: 32 }}>
               <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.3</Text>{"\n"}골드 에디션 활용 백서
+                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.4</Text>{"\n"}골드 에디션 활용 백서
               </Text>
               <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
               <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 24 }}>
