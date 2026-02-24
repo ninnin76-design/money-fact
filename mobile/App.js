@@ -1413,7 +1413,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.4</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.5</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1688,16 +1688,19 @@ function MainApp() {
           </View>
 
           <ScrollView
-            style={[styles.scroll, { flex: 1 }]}
+            style={{ flex: 1 }}
             contentContainerStyle={{
-              paddingBottom: Math.max(insets.bottom + 80, 120)
+              paddingHorizontal: 20,
+              paddingTop: 10,
+              paddingBottom: Math.max(insets.bottom + 80, 120),
+              flexGrow: 1
             }}
             showsVerticalScrollIndicator={true}
           >
             {/* Intro Hero */}
             <View style={{ marginTop: 24, marginBottom: 32 }}>
               <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.4</Text>{"\n"}골드 에디션 활용 백서
+                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.5</Text>{"\n"}골드 에디션 활용 백서
               </Text>
               <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
               <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 24 }}>
