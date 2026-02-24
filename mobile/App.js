@@ -1413,7 +1413,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.5</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.6</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1700,218 +1700,38 @@ function MainApp() {
             {/* Intro Hero */}
             <View style={{ marginTop: 24, marginBottom: 32 }}>
               <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.5</Text>{"\n"}골드 에디션 활용 백서
+                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.6</Text>{"\n"}6대 핵심 수급 패턴
               </Text>
               <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
-              <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 24 }}>
-                "세력의 흔적은 숨길 수 없습니다."{"\n"}
-                국내 최고 수준의 수급 엔진이 탑재된 머니 팩트로 시장의 주도주를 선점하는 비기(秘技)를 공개합니다.
+              <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
+                세력의 흔적을 포착하는 결정적 6가지 시그널입니다.
               </Text>
             </View>
 
-            {/* Feature Cards Loop */}
             {[
-              {
-                icon: "🏛️", title: "대쉬보드", subtitle: "시장의 흐름을 한눈에",
-                content: [
-                  { label: "섹터 TOP 6", desc: "실시간 자금 유입이 가장 뜨거운 업종 순위" },
-                  { label: "하이브리드 레이더", desc: "전 종목 쾌속 스캔 후 유망주 정밀 압축" },
-                  { label: "매집 의심 종목", desc: "주가는 조용하지만 에너지를 응축 중인 종목" }
-                ]
-              },
-              {
-                icon: "⚡", title: "연속 매매 리스트", subtitle: "결정적 타점의 발견",
-                content: [
-                  { label: "연속 수급 포착", desc: "사용자 설정 일수만큼 꾸준히 사는 종목" },
-                  { label: "주체별 필터링", desc: "외인/기관 입맛에 맞는 리스트 즉시 전환" },
-                  { label: "에너지 양음블럭", desc: "수급의 연속성을 직관적인 블록 수로 파악" }
-                ]
-              },
-              {
-                icon: "⭐", title: "나의 관심 종목", subtitle: "절대 놓치지 않는 감시망",
-                content: [
-                  { label: "실시간 밀착 추적", desc: "등록 즉시 24시간 수급 변동 상시 감시" },
-                  { label: "수급 엑스레이", desc: "종목별 매집/이탈 히스토리를 차트로 확인" },
-                  { label: "세력 평단가(VWAP)", desc: "큰 손들의 매수 원가 대비 현재가 메리트 분석" }
-                ]
-              },
-              {
-                icon: "⚙️", title: "설정 및 백업", subtitle: "나만의 매매 환경 최적화",
-                content: [
-                  { label: "고유Key 클라우드", desc: "기기를 바꿔도 아이디 하나면 관심종목 복구" },
-                  { label: "초정밀 레이더 설정", desc: "5일, 10일 등 나만의 감지 기준 일수 세팅" }
-                ]
-              }
-            ].map((section, idx) => (
-              <View key={idx} style={{ marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                  <View style={{ width: 44, height: 44, backgroundColor: 'rgba(49, 130, 246, 0.1)', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                    <Text style={{ fontSize: 22 }}>{section.icon}</Text>
+              { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승 패턴', color: '#ff4d4d' },
+              { emoji: '✨', tag: '변곡점 발생', desc: '추세가 상방으로 꺾인 지점', color: '#ffb84d' },
+              { emoji: '🤫', tag: '히든 매집', desc: '조용히 물량을 확보 중인 구간', color: '#00ff00' },
+              { emoji: '🏢', tag: '기관 주도', desc: '국내 기관이 강력히 지지 중', color: '#3182f6' },
+              { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금이 싹쓸이 중', color: '#c431f6' },
+              { emoji: '❄️', tag: '동반 이탈', desc: '세력이 떠나는 자리 (진입금지)', color: '#888' },
+            ].map((p, i) => (
+              <View key={i} style={{ marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 42, height: 42, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                    <Text style={{ fontSize: 22 }}>{p.emoji}</Text>
                   </View>
-                  <View>
-                    <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>{section.title}</Text>
-                    <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600', marginTop: 2 }}>{section.subtitle}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: p.color, fontSize: 16, fontWeight: 'bold' }}>[{p.tag}]</Text>
+                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 2 }}>{p.desc}</Text>
                   </View>
                 </View>
-
-                {section.content.map((item, i) => (
-                  <View key={i} style={{ marginBottom: 12, paddingLeft: 4 }}>
-                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', marginBottom: 2 }}>• {item.label}</Text>
-                    <Text style={{ color: '#8b95a1', fontSize: 13, lineHeight: 18, marginLeft: 14 }}>{item.desc}</Text>
-                  </View>
-                ))}
               </View>
             ))}
 
-            {/* === 양음블럭 해설 섹션 === */}
-            <View style={{ marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ width: 44, height: 44, backgroundColor: 'rgba(255, 77, 77, 0.12)', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                  <Text style={{ fontSize: 22 }}>🟥</Text>
-                </View>
-                <View>
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>양음블럭이란?</Text>
-                  <Text style={{ color: '#ff6b6b', fontSize: 12, fontWeight: '600', marginTop: 2 }}>수급 에너지를 직관적으로 표현</Text>
-                </View>
-              </View>
-
-              <Text style={{ color: '#8b95a1', fontSize: 13, lineHeight: 22, marginBottom: 16 }}>
-                양음블럭은 외인과 기관의 매수/매도 연속일수를 바탕으로 해당 종목의 수급 에너지를 시각적으로 보여주는 머니 팩트만의 독자적 지표입니다.
-              </Text>
-
-              {/* 블럭 시각 예시 */}
-              <View style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 16, padding: 16, marginBottom: 12 }}>
-                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginBottom: 12 }}>📊 블럭 읽는 법</Text>
-
-                <View style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 18, letterSpacing: 2 }}>🟥🟥🟥🟥</Text>
-                    <Text style={{ color: '#ff4d4d', fontSize: 12, fontWeight: '700', marginLeft: 10 }}>MAX 매수 에너지</Text>
-                  </View>
-                  <Text style={{ color: '#666', fontSize: 11, marginLeft: 2 }}>외인+기관 모두 3일 이상 연속 매수</Text>
-                </View>
-
-                <View style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 18, letterSpacing: 2 }}>🟥🟥⬜⬜</Text>
-                    <Text style={{ color: '#ff8c8c', fontSize: 12, fontWeight: '700', marginLeft: 10 }}>매수 우위</Text>
-                  </View>
-                  <Text style={{ color: '#666', fontSize: 11, marginLeft: 2 }}>한쪽 주체가 매수세 주도</Text>
-                </View>
-
-                <View style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 18, letterSpacing: 2 }}>⬜⬜⬜⬜</Text>
-                    <Text style={{ color: '#888', fontSize: 12, fontWeight: '700', marginLeft: 10 }}>중립 / 관망</Text>
-                  </View>
-                  <Text style={{ color: '#666', fontSize: 11, marginLeft: 2 }}>뚜렷한 주도 세력 없음</Text>
-                </View>
-
-                <View style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 18, letterSpacing: 2 }}>🟦🟦⬜⬜</Text>
-                    <Text style={{ color: '#5ca0f6', fontSize: 12, fontWeight: '700', marginLeft: 10 }}>매도 우위</Text>
-                  </View>
-                  <Text style={{ color: '#666', fontSize: 11, marginLeft: 2 }}>한쪽 주체가 연속 매도 중</Text>
-                </View>
-
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 18, letterSpacing: 2 }}>🟦🟦🟦🟦</Text>
-                    <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '700', marginLeft: 10 }}>MAX 매도 에너지</Text>
-                  </View>
-                  <Text style={{ color: '#666', fontSize: 11, marginLeft: 2 }}>외인+기관 모두 3일 이상 연속 매도</Text>
-                </View>
-              </View>
-
-              <View style={{ backgroundColor: 'rgba(49, 130, 246, 0.08)', borderRadius: 12, padding: 12 }}>
-                <Text style={{ color: '#8b95a1', fontSize: 12, lineHeight: 18 }}>
-                  💡 TIP: 🟥 빨간블럭이 많을수록 매수 에너지가 강하고, 🟦 파란블럭이 많을수록 매도 에너지가 강한 것입니다. 블럭 수가 곧 수급의 온도계!
-                </Text>
-              </View>
-            </View>
-
-            {/* === 6대 핵심 수급 패턴 섹션 === */}
-            <View style={{ marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ width: 44, height: 44, backgroundColor: 'rgba(255, 165, 0, 0.12)', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                  <Text style={{ fontSize: 22 }}>🎯</Text>
-                </View>
-                <View>
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>6대 핵심 수급 패턴</Text>
-                  <Text style={{ color: '#ffb84d', fontSize: 12, fontWeight: '600', marginTop: 2 }}>양음블럭이 알려주는 결정적 시그널</Text>
-                </View>
-              </View>
-              <Text style={{ color: '#8b95a1', fontSize: 12, lineHeight: 18, marginBottom: 16, marginLeft: 2 }}>
-                양음블럭 조합에 따라 아래 6가지 패턴 태그가 자동으로 표시됩니다.
-              </Text>
-
-              {[
-                {
-                  emoji: '🔥', tag: '동반 쌍끌이', blocks: '🟥🟥🟥🟥',
-                  color: '#ff4d4d', bgColor: 'rgba(255, 77, 77, 0.1)',
-                  meaning: '외인/기관 합공 필승 패턴',
-                  detail: '외인과 기관이 동시에 3일 이상 연속 매수하는 가장 강력한 신호. 시세 분출 가능성이 매우 높습니다.'
-                },
-                {
-                  emoji: '✨', tag: '변곡점 발생', blocks: '🟥⬜⬜⬜',
-                  color: '#ffb84d', bgColor: 'rgba(255, 184, 77, 0.1)',
-                  meaning: '추세가 상방으로 꺾인 지점',
-                  detail: '매도에서 매수로 전환된 첫날! 추세 변화의 초입으로, 이후 연속 매수가 이어지는지 주시해야 합니다.'
-                },
-                {
-                  emoji: '🤫', tag: '히든 매집', blocks: '🟥🟥⬜⬜',
-                  color: '#00ff00', bgColor: 'rgba(0, 255, 0, 0.08)',
-                  meaning: '조용히 물량을 확보 중인 구간',
-                  detail: '주가 변동은 작지만 거래량이 증가하며 누군가 조용히 사고 있는 구간. 시세 전 마지막 매집 단계일 수 있습니다.'
-                },
-                {
-                  emoji: '🏢', tag: '기관 주도', blocks: '🟥🟥🟥⬜',
-                  color: '#3182f6', bgColor: 'rgba(49, 130, 246, 0.1)',
-                  meaning: '국내 기관이 강력히 지지 중',
-                  detail: '연기금, 자산운용사 등 국내 기관이 꾸준히 담고 있어 하방이 탄탄한 구간입니다.'
-                },
-                {
-                  emoji: '🌎', tag: '외인 주도', blocks: '🟥🟥🟥⬜',
-                  color: '#c431f6', bgColor: 'rgba(196, 49, 246, 0.1)',
-                  meaning: '글로벌 자금이 싹쓸이 중',
-                  detail: '외국인 투자자가 대량으로 매집하는 종목. 글로벌 시각에서 저평가로 판단한 것이며, 환율 영향도 고려해야 합니다.'
-                },
-                {
-                  emoji: '❄️', tag: '동반 이탈', blocks: '🟦🟦🟦🟦',
-                  color: '#888', bgColor: 'rgba(136, 136, 136, 0.1)',
-                  meaning: '세력이 떠나는 자리 (진입금지)',
-                  detail: '외인과 기관 모두 매도세로 전환. 바닥 확인 전까지 섣부른 진입은 위험하며, 반등 시그널을 기다려야 합니다.'
-                }
-              ].map((pattern, idx) => (
-                <View key={idx} style={{ marginBottom: 14, backgroundColor: pattern.bgColor, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 18 }}>{pattern.emoji}</Text>
-                    <View style={{ marginLeft: 8, backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ color: pattern.color, fontWeight: '800', fontSize: 13 }}>{pattern.tag}</Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 16, letterSpacing: 2 }}>{pattern.blocks}</Text>
-                    <Text style={{ color: '#aaa', fontSize: 11, marginLeft: 8 }}>{pattern.meaning}</Text>
-                  </View>
-                  <Text style={{ color: '#8b95a1', fontSize: 12, lineHeight: 18 }}>{pattern.detail}</Text>
-                </View>
-              ))}
-
-              <View style={{ backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 12, padding: 12, marginTop: 4 }}>
-                <Text style={{ color: '#ff9800', fontSize: 12, lineHeight: 18, fontWeight: '600' }}>
-                  ⚠️ 모든 패턴은 투자 참고 자료이며, 최종 투자 판단은 본인의 책임입니다. 분할매수와 손절 기준을 항상 함께 세우세요.
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ marginTop: 12, backgroundColor: '#3182f6', borderRadius: 24, padding: 24, alignItems: 'center' }}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}>
-                준비되셨나요? 혁신적인 투자의 시작!
-              </Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
-                운에 맡기는 매매는 이제 그만.{"\n"}데이터가 증명하는 머니 팩트와 가보시죠!
+            <View style={{ marginTop: 20, backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 16, padding: 16 }}>
+              <Text style={{ color: '#ff9800', fontSize: 12, lineHeight: 18, fontWeight: '600', textAlign: 'center' }}>
+                ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
               </Text>
             </View>
           </ScrollView>
