@@ -1699,11 +1699,10 @@ function MainApp() {
 
           <ScrollView
             style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
-            contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
-            nestedScrollEnabled={true}
+            contentContainerStyle={{ paddingBottom: 120 }}
             showsVerticalScrollIndicator={true}
           >
-            <TouchableOpacity activeOpacity={1}>
+            <View onStartShouldSetResponder={() => true}>
               {/* Intro Hero */}
               <View style={{ marginTop: 24, marginBottom: 32 }}>
                 <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
@@ -1741,7 +1740,7 @@ function MainApp() {
                   ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
                 </Text>
               </View>
-            </TouchableOpacity>
+            </View>
           </ScrollView>
         </View>
       </Modal>
