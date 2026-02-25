@@ -1697,14 +1697,20 @@ function MainApp() {
             </View>
           </View>
 
-          <ScrollView
-            style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            showsVerticalScrollIndicator={true}
-          >
-            <View onStartShouldSetResponder={() => true}>
+          <View style={{ flex: 1, backgroundColor: '#0b1219' }}> {/* 배경색 명시 및 영역 확보 */}
+            <ScrollView
+              style={{ flex: 1 }} // 스타일은 flex만
+              contentContainerStyle={{
+                paddingHorizontal: 20,
+                paddingTop: 34, // 헤더와의 여백 보정
+                paddingBottom: 150
+              }} // 패딩은 무조건 여기서 처리
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
               {/* Intro Hero */}
-              <View style={{ marginTop: 24, marginBottom: 32 }}>
+              <View style={{ marginBottom: 32 }}>
                 <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
                   머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.7</Text>{"\n"}6대 핵심 수급 패턴
                 </Text>
@@ -1740,8 +1746,8 @@ function MainApp() {
                   ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
                 </Text>
               </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
       {loading && (
