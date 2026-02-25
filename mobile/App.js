@@ -1423,7 +1423,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.7</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.8</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1680,10 +1680,10 @@ function MainApp() {
 
       {/* Full Screen Manual Modal - Young-ja Manager's Premium Design! */}
       <Modal visible={manualModal} transparent={false} animationType="slide">
-        <View style={[styles.container, { paddingTop: insets.top, flex: 1 }]}>
+        <View style={[styles.container, { paddingTop: insets?.top || 0 }]}>
           <StatusBar barStyle="light-content" />
 
-          {/* Header - Sleek & Simple */}
+          {/* Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
             <TouchableOpacity
               onPress={() => setManualModal(false)}
@@ -1697,22 +1697,19 @@ function MainApp() {
             </View>
           </View>
 
-          <View style={{ flex: 1, backgroundColor: '#0b1219' }}> {/* 배경색 명시 및 영역 확보 */}
-            <ScrollView
-              style={{ flex: 1 }} // 스타일은 flex만
-              contentContainerStyle={{
-                paddingHorizontal: 20,
-                paddingTop: 34, // 헤더와의 여백 보정
-                paddingBottom: 150
-              }} // 패딩은 무조건 여기서 처리
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-              bounces={true}
-            >
-              {/* Intro Hero */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingTop: 30,
+              paddingBottom: 150
+            }}
+            showsVerticalScrollIndicator={true}
+          >
+            <View>
               <View style={{ marginBottom: 32 }}>
                 <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                  머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.7</Text>{"\n"}6대 핵심 수급 패턴
+                  머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.8</Text>{"\n"}6대 핵심 수급 패턴
                 </Text>
                 <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
                 <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
@@ -1746,8 +1743,8 @@ function MainApp() {
                   ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
                 </Text>
               </View>
-            </ScrollView>
-          </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
       {loading && (
