@@ -1423,7 +1423,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.8</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.9</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1680,71 +1680,59 @@ function MainApp() {
 
       {/* Full Screen Manual Modal - Young-ja Manager's Premium Design! */}
       <Modal visible={manualModal} transparent={false} animationType="slide">
-        <View style={[styles.container, { paddingTop: insets?.top || 0 }]}>
+        <View style={[styles.container, { paddingTop: insets?.top || 0, flex: 1 }]}>
           <StatusBar barStyle="light-content" />
 
-          {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+          {/* Slim Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
             <TouchableOpacity
               onPress={() => setManualModal(false)}
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49, 130, 246, 0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49, 130, 246, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 }}
             >
-              <Text style={{ color: '#3182f6', fontSize: 14, fontWeight: 'bold' }}>← 돌아가기</Text>
+              <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: 'bold' }}>← 닫기</Text>
             </TouchableOpacity>
-            <View style={{ flex: 1, alignItems: 'center', marginRight: 60 }}>
-              <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: -0.5 }}>PREMIUM GUIDE</Text>
+            <View style={{ flex: 1, alignItems: 'center', marginRight: 40 }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>PREMIUM GUIDE</Text>
             </View>
           </View>
 
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: 20,
-              paddingTop: 30,
-              paddingBottom: 150
-            }}
-            showsVerticalScrollIndicator={true}
-          >
+          {/* Static Content (No Scroll Needed) */}
+          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 20, justifyContent: 'space-between', paddingBottom: 24 }}>
             <View>
-              <View style={{ marginBottom: 32 }}>
-                <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                  머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.8</Text>{"\n"}6대 핵심 수급 패턴
-                </Text>
-                <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
-                <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
-                  세력의 흔적을 포착하는 결정적 6가지 시그널입니다.
-                </Text>
-              </View>
+              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 6 }}>
+                수급 핵심 <Text style={{ color: '#3182f6' }}>6대 패턴</Text>
+              </Text>
+              <Text style={{ color: '#8b95a1', fontSize: 13, marginBottom: 4 }}>
+                머니 팩트 <Text style={{ color: '#3182f6', fontWeight: 'bold' }}>v3.4.9</Text> 전용 가이드
+              </Text>
+            </View>
 
+            {/* Compact Grid 2x3 */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 10 }}>
               {[
-                { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승 패턴', color: '#ff4d4d' },
-                { emoji: '✨', tag: '변곡점 발생', desc: '추세가 상방으로 꺾인 지점', color: '#ffb84d' },
-                { emoji: '🤫', tag: '히든 매집', desc: '조용히 물량을 확보 중인 구간', color: '#00ff00' },
-                { emoji: '🏢', tag: '기관 주도', desc: '국내 기관이 강력히 지지 중', color: '#3182f6' },
-                { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금이 싹쓸이 중', color: '#c431f6' },
-                { emoji: '❄️', tag: '동반 이탈', desc: '세력이 떠나는 자리 (진입금지)', color: '#888' },
+                { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승', color: '#ff4d4d' },
+                { emoji: '✨', tag: '변곡점 발생', desc: '추세 상방 반전 타점', color: '#ffb84d' },
+                { emoji: '🤫', tag: '히든 매집', desc: '은밀한 수급 확보주', color: '#00ff00' },
+                { emoji: '🏢', tag: '기관 주도', desc: '국내 기관 강력 지지', color: '#3182f6' },
+                { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금 싹쓸이', color: '#c431f6' },
+                { emoji: '❄️', tag: '동반 이탈', desc: '세력 이탈 (진입금지)', color: '#888' },
               ].map((p, i) => (
-                <View key={i} style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 22, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: 50, height: 50, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
-                      <Text style={{ fontSize: 24 }}>{p.emoji}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: p.color, fontSize: 17, fontWeight: '800', marginBottom: 6, letterSpacing: -0.3 }}>[{p.tag}]</Text>
-                      <Text style={{ color: '#c3c9d1', fontSize: 14, lineHeight: 22, letterSpacing: -0.3 }}>{p.desc}</Text>
-                    </View>
+                <View key={i} style={{ width: '48.5%', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <View style={{ width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 18 }}>{p.emoji}</Text>
                   </View>
+                  <Text style={{ color: p.color, fontSize: 14, fontWeight: '800', marginBottom: 4 }}>{p.tag}</Text>
+                  <Text style={{ color: '#8b95a1', fontSize: 11, lineHeight: 15 }}>{p.desc}</Text>
                 </View>
               ))}
-
-              <View style={{ marginTop: 20, backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 16, padding: 16 }}>
-                <Text style={{ color: '#ff9800', fontSize: 12, lineHeight: 18, fontWeight: '600', textAlign: 'center' }}>
-                  ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
-                </Text>
-              </View>
             </View>
-          </ScrollView>
+
+            <View style={{ backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 12, padding: 10 }}>
+              <Text style={{ color: '#ff9800', fontSize: 11, fontWeight: '600', textAlign: 'center' }}>
+                ⚠️ 모든 패턴은 참고용이며 최종 책임은 본인에게 있습니다.
+              </Text>
+            </View>
+          </View>
         </View>
       </Modal>
       {loading && (
