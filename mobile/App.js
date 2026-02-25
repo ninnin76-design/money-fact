@@ -533,8 +533,18 @@ function MainApp() {
       }
       if (finalStatus !== 'granted') return;
 
-      // 2. Get Push Token
-      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+      // [코다리 부장] Android 8.0 이상 단말에서 APK 설치 후 푸시 알림이 안 오는 문제를 위한 Notification Channel 설정!
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'MoneyFact Notifications',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#3182f6',
+        });
+      }
+
+      // 2. Get Push Token (APK 빌드 시 Constants.expoConfig가 비어있는 문제를 방지하기 위해 강제 할당!)
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || '9427acd0-1304-4333-bd02-35dcb7a29021';
       const pushTokenString = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 
       // 3. Send to Server (Only if enabled!)
@@ -1413,7 +1423,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.6</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.7</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1688,19 +1698,13 @@ function MainApp() {
           </View>
 
           <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: 20,
-              paddingTop: 10,
-              paddingBottom: Math.max(insets.bottom + 80, 120),
-              flexGrow: 1
-            }}
-            showsVerticalScrollIndicator={true}
+            style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
+            contentContainerStyle={{ paddingBottom: 100 }}
           >
             {/* Intro Hero */}
             <View style={{ marginTop: 24, marginBottom: 32 }}>
               <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.6</Text>{"\n"}6대 핵심 수급 패턴
+                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.7</Text>{"\n"}6대 핵심 수급 패턴
               </Text>
               <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
               <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
