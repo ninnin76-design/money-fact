@@ -1699,45 +1699,49 @@ function MainApp() {
 
           <ScrollView
             style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+            nestedScrollEnabled={true}
+            showsVerticalScrollIndicator={true}
           >
-            {/* Intro Hero */}
-            <View style={{ marginTop: 24, marginBottom: 32 }}>
-              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
-                머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.7</Text>{"\n"}6대 핵심 수급 패턴
-              </Text>
-              <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
-              <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
-                세력의 흔적을 포착하는 결정적 6가지 시그널입니다.
-              </Text>
-            </View>
+            <TouchableOpacity activeOpacity={1}>
+              {/* Intro Hero */}
+              <View style={{ marginTop: 24, marginBottom: 32 }}>
+                <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12, lineHeight: 32 }}>
+                  머니 팩트 <Text style={{ color: '#3182f6' }}>v3.4.7</Text>{"\n"}6대 핵심 수급 패턴
+                </Text>
+                <View style={{ width: 40, height: 4, backgroundColor: '#3182f6', borderRadius: 2, marginBottom: 16 }} />
+                <Text style={{ color: '#8b95a1', fontSize: 15, lineHeight: 22 }}>
+                  세력의 흔적을 포착하는 결정적 6가지 시그널입니다.
+                </Text>
+              </View>
 
-            {[
-              { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승 패턴', color: '#ff4d4d' },
-              { emoji: '✨', tag: '변곡점 발생', desc: '추세가 상방으로 꺾인 지점', color: '#ffb84d' },
-              { emoji: '🤫', tag: '히든 매집', desc: '조용히 물량을 확보 중인 구간', color: '#00ff00' },
-              { emoji: '🏢', tag: '기관 주도', desc: '국내 기관이 강력히 지지 중', color: '#3182f6' },
-              { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금이 싹쓸이 중', color: '#c431f6' },
-              { emoji: '❄️', tag: '동반 이탈', desc: '세력이 떠나는 자리 (진입금지)', color: '#888' },
-            ].map((p, i) => (
-              <View key={i} style={{ marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 42, height: 42, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                    <Text style={{ fontSize: 22 }}>{p.emoji}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: p.color, fontSize: 16, fontWeight: 'bold' }}>[{p.tag}]</Text>
-                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 2 }}>{p.desc}</Text>
+              {[
+                { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승 패턴', color: '#ff4d4d' },
+                { emoji: '✨', tag: '변곡점 발생', desc: '추세가 상방으로 꺾인 지점', color: '#ffb84d' },
+                { emoji: '🤫', tag: '히든 매집', desc: '조용히 물량을 확보 중인 구간', color: '#00ff00' },
+                { emoji: '🏢', tag: '기관 주도', desc: '국내 기관이 강력히 지지 중', color: '#3182f6' },
+                { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금이 싹쓸이 중', color: '#c431f6' },
+                { emoji: '❄️', tag: '동반 이탈', desc: '세력이 떠나는 자리 (진입금지)', color: '#888' },
+              ].map((p, i) => (
+                <View key={i} style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 22, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 50, height: 50, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
+                      <Text style={{ fontSize: 24 }}>{p.emoji}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: p.color, fontSize: 17, fontWeight: '800', marginBottom: 6, letterSpacing: -0.3 }}>[{p.tag}]</Text>
+                      <Text style={{ color: '#c3c9d1', fontSize: 14, lineHeight: 22, letterSpacing: -0.3 }}>{p.desc}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              ))}
 
-            <View style={{ marginTop: 20, backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 16, padding: 16 }}>
-              <Text style={{ color: '#ff9800', fontSize: 12, lineHeight: 18, fontWeight: '600', textAlign: 'center' }}>
-                ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
-              </Text>
-            </View>
+              <View style={{ marginTop: 20, backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 16, padding: 16 }}>
+                <Text style={{ color: '#ff9800', fontSize: 12, lineHeight: 18, fontWeight: '600', textAlign: 'center' }}>
+                  ⚠️ 모든 패턴은 참고용이며, 최종 판단은 본인의 책임입니다.
+                </Text>
+              </View>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
