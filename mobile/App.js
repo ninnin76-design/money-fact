@@ -495,14 +495,12 @@ function MainApp() {
     // Stage 2: Deferred detailed analysis
     setTimeout(() => {
       // [코다리 부장] 개선: 장외 시간(밤/주말)이고 이미 캐시된 데이터가 있다면 새로고침을 생략합니다.
-      // 이렇게 하면 앱을 껐다 켜도 한투 API를 찌르지 않아 토큰 발행을 아낄 수 있습니다!
-      // ⚠️ 주의: sectors는 초기값이 6개(flow:0)라 length로 체크하면 항상 true!
-      //    캐시된 데이터가 실제로 존재하는지는 cached 변수로 정확히 판단합니다.
       if (!StockService.isMarketOpen() && cached) {
-        // console.log("앱 시작: 장외 시간이고 캐시 데이터 있으므로 유지.");
         return;
       }
-      refreshData(stocks);
+      // 캐시 데이터가 이미 표시되고 있다면 조용히(silent) 갱신합니다.
+      // 이렇게 하면 "수급 분석 중..." 로딩 화면이 안 뜨고 백그라운드에서 업데이트됩니다!
+      refreshData(stocks, !!cached);
     }, 500);
 
     setupBackground();
@@ -1409,7 +1407,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.4 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.5 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1423,7 +1421,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.4.9</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.5</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1678,7 +1676,7 @@ function MainApp() {
         </View>
       </Modal>
 
-      {/* Full Screen Manual Modal - Young-ja Manager's Premium Design! */}
+      {/* Full Screen Manual Modal - 수급 매뉴얼 */}
       <Modal visible={manualModal} transparent={false} animationType="slide">
         <View style={[styles.container, { paddingTop: insets?.top || 0, flex: 1 }]}>
           <StatusBar barStyle="light-content" />
@@ -1692,42 +1690,38 @@ function MainApp() {
               <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: 'bold' }}>← 닫기</Text>
             </TouchableOpacity>
             <View style={{ flex: 1, alignItems: 'center', marginRight: 40 }}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>PREMIUM GUIDE</Text>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>수급 매뉴얼</Text>
             </View>
           </View>
 
-          {/* Static Content (No Scroll Needed) */}
-          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 20, justifyContent: 'space-between', paddingBottom: 24 }}>
-            <View>
-              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 6 }}>
-                수급 핵심 <Text style={{ color: '#3182f6' }}>6대 패턴</Text>
-              </Text>
-              <Text style={{ color: '#8b95a1', fontSize: 13, marginBottom: 4 }}>
-                머니 팩트 <Text style={{ color: '#3182f6', fontWeight: 'bold' }}>v3.4.9</Text> 전용 가이드
-              </Text>
-            </View>
+          {/* 한 화면에 딱 맞게 표시되는 6대 핵심 수급 패턴 */}
+          <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 16, justifyContent: 'center' }}>
+            {/* 타이틀 */}
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900', marginBottom: 16, textAlign: 'center' }}>
+              🏷️ 6대 핵심 수급 패턴
+            </Text>
 
-            {/* Compact Grid 2x3 */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 10 }}>
-              {[
-                { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승', color: '#ff4d4d' },
-                { emoji: '✨', tag: '변곡점 발생', desc: '추세 상방 반전 타점', color: '#ffb84d' },
-                { emoji: '🤫', tag: '히든 매집', desc: '은밀한 수급 확보주', color: '#00ff00' },
-                { emoji: '🏢', tag: '기관 주도', desc: '국내 기관 강력 지지', color: '#3182f6' },
-                { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금 싹쓸이', color: '#c431f6' },
-                { emoji: '❄️', tag: '동반 이탈', desc: '세력 이탈 (진입금지)', color: '#888' },
-              ].map((p, i) => (
-                <View key={i} style={{ width: '48.5%', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <View style={{ width: 34, height: 34, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 18 }}>{p.emoji}</Text>
-                  </View>
-                  <Text style={{ color: p.color, fontSize: 14, fontWeight: '800', marginBottom: 4 }}>{p.tag}</Text>
-                  <Text style={{ color: '#8b95a1', fontSize: 11, lineHeight: 15 }}>{p.desc}</Text>
+            {/* 패턴 리스트 - 이미지+텍스트 형태 */}
+            {[
+              { emoji: '🔥', tag: '동반 쌍끌이', desc: '외인/기관 합공 필승 패턴', color: '#ff4d4d', bgColor: 'rgba(255,77,77,0.08)' },
+              { emoji: '✨', tag: '변곡점 발생', desc: '추세가 상방으로 꺾인 지점', color: '#ffb84d', bgColor: 'rgba(255,184,77,0.08)' },
+              { emoji: '🤫', tag: '히든 매집', desc: '조용히 물량을 확보 중인 구간', color: '#00ff00', bgColor: 'rgba(0,255,0,0.06)' },
+              { emoji: '🏢', tag: '기관 주도', desc: '국내 기관이 강력히 지지 중', color: '#3182f6', bgColor: 'rgba(49,130,246,0.08)' },
+              { emoji: '🌎', tag: '외인 주도', desc: '글로벌 자금이 싹쓸이 중', color: '#c431f6', bgColor: 'rgba(196,49,246,0.08)' },
+              { emoji: '❄️', tag: '동반 이탈', desc: '세력이 떠나는 자리 (진입금지)', color: '#888', bgColor: 'rgba(255,255,255,0.04)' },
+            ].map((p, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: p.bgColor, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
+                <View style={{ width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                  <Text style={{ fontSize: 20 }}>{p.emoji}</Text>
                 </View>
-              ))}
-            </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: p.color, fontSize: 15, fontWeight: '800' }}>{p.tag}</Text>
+                  <Text style={{ color: '#b0b8c1', fontSize: 13, marginTop: 2 }}>{p.desc}</Text>
+                </View>
+              </View>
+            ))}
 
-            <View style={{ backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 12, padding: 10 }}>
+            <View style={{ backgroundColor: 'rgba(255, 152, 0, 0.08)', borderRadius: 12, padding: 12, marginTop: 6 }}>
               <Text style={{ color: '#ff9800', fontSize: 11, fontWeight: '600', textAlign: 'center' }}>
                 ⚠️ 모든 패턴은 참고용이며 최종 책임은 본인에게 있습니다.
               </Text>

@@ -346,42 +346,6 @@ async function runDeepMarketScan(force = false) {
                 }
             } catch (e) { }
         }
-        if (false) { // Dummy to skip old block
-            const batch = POPULAR_STOCKS.slice(i, i + batchSize).filter(s => !alreadyInMap.has(s.code));
-            if (batch.length === 0) continue;
-
-            await Promise.all(batch.map(async (stk) => {
-                try {
-                    const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
-                        headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
-                        params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
-                    });
-                    const d = priceRes.data.output;
-                    if (!d) return;
-
-                    const price = parseInt(d.stck_prpr || 0);
-                    const changeRate = parseFloat(d.prdy_ctrt || 0);
-                    const volume = parseInt(d.acml_vol || 0);
-                    const avgVolume = parseInt(d.avrg_vol || 0); // 평균 거래량
-
-                    // [코다리 부장 핵심 필터] 아래 조건 중 하나라도 걸리면 '수상한 놈'으로 판정!
-                    const isVolumeSpike = avgVolume > 0 && volume > avgVolume * 2;  // 거래량 200% 이상 폭발
-                    const isQuietAccum = Math.abs(changeRate) < 2 && avgVolume > 0 && volume > avgVolume * 1.3; // 조용한 매집형 (등락 ±2% 미만인데 거래량 130%↑)
-                    const isHighVolume = volume > 500000; // 절대 거래량 50만 이상 (활성 종목)
-
-                    if (isVolumeSpike || isQuietAccum || isHighVolume) {
-                        addCandidate(stk.code, stk.name);
-                        wideNetHits++;
-                    }
-                } catch (e) { /* 개별 실패는 무시 */ }
-            }));
-            await new Promise(r => setTimeout(r, 150)); // API 유량 제어 (150ms)
-
-            // 진행 상황 로그 (500개마다)
-            if (i > 0 && i % 500 === 0) {
-                console.log(`[Radar 1단계] Wide Net 진행: ${i}/${maxWideScan} 스캔 완료, 후보 ${wideNetHits}개 추가 발견`);
-            }
-        }
         console.log(`[Radar 1단계] Wide Net 완료! 전종목에서 ${wideNetHits}개 추가 후보 발견`);
 
         // 핵심 감시 종목은 무조건 포함!
@@ -562,20 +526,17 @@ async function runDeepMarketScan(force = false) {
 
         console.log(`[Radar] ===== 스냅샷 저장 완료! 매수 감지: ${Object.values(newBuyData).reduce((a, b) => a + b.length, 0)}건, 매도 감지: ${Object.values(newSellData).reduce((a, b) => a + b.length, 0)}건 =====`);
 
-        // --- SERVER PUSH: 사용자별 맞춤 알림 발송 ---
-        // --- SERVER PUSH: 사용자별 맞춤 알림 발송 (핵심 변곡 시간대 4번) ---
+        // --- SERVER PUSH: 사용자별 맞춤 알림 발송 (핵심 변곡 시간대 3번) ---
         // 발송 타겟 시간 (근사치, 15분 주기이므로 넓게 잡음)
         // 1. 아침 (9:00 ~ 9:25) - 시가 추이
         // 2. 점심 (13:00 ~ 13:25) - 오후장 방향성
         // 3. 종가 (15:00 ~ 15:25) - 종가 배팅
-        // 4. 저녁 (18:00 ~ 18:25) - 장외/단일가 수급 결산
         let isPushTime = false;
-        if (isMarketOpen || hour === 18) {
+        if (isMarketOpen) {
             const mList = [
                 { h: 9, m1: 0, m2: 25 },
                 { h: 13, m1: 0, m2: 25 },
-                { h: 15, m1: 0, m2: 25 },
-                { h: 18, m1: 0, m2: 25 }
+                { h: 15, m1: 0, m2: 25 }
             ];
             const currentMins = kstDate.getUTCMinutes();
             isPushTime = mList.some(t => hour === t.h && currentMins >= t.m1 && currentMins <= t.m2);
@@ -678,7 +639,6 @@ async function runDeepMarketScan(force = false) {
 
                     // 시간대별 맞춤 타이틀 적용
                     if (hour === 15) pushTitle = `[종가 배팅] ${pushTitle}`;
-                    else if (hour === 18) pushTitle = `[오늘의 수급 결산] ${pushTitle}`;
 
                     // Limit to 3 messages per push so it doesn't get cut off entirely
                     const limitedAlerts = userAlerts.slice(0, 3);
@@ -718,7 +678,7 @@ if (shouldScanNow) {
     runDeepMarketScan(true);
 }
 
-setInterval(runDeepMarketScan, 15 * 60 * 1000);
+// [코다리 부장] setInterval은 app.listen 콜백에서 1회만 실행 (중복 방지)
 
 app.get('/api/analysis/supply/:period/:investor', (req, res) => {
     const key = `${req.params.period}_${req.params.investor}`;
