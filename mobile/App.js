@@ -1205,16 +1205,39 @@ function MainApp() {
               <Plus size={20} color="#3182f6" />
             </TouchableOpacity>
           </View>
-          {analyzedStocks.filter(s => myStocks.some(ms => ms.code === s.code)).map(s => (
-            <StockCard
-              key={s.code}
-              stock={s}
-              onPress={() => handleOpenDetail(s)}
-              onDelete={() => handleDeleteStock(s.code)}
-              buyLimit={settingBuyStreak}
-              sellLimit={settingSellStreak}
-            />
-          ))}
+          {myStocks.map(ms => {
+            const analyzed = analyzedStocks.find(s => s.code === ms.code);
+            if (analyzed) {
+              return (
+                <StockCard
+                  key={ms.code}
+                  stock={analyzed}
+                  onPress={() => handleOpenDetail(analyzed)}
+                  onDelete={() => handleDeleteStock(ms.code)}
+                  buyLimit={settingBuyStreak}
+                  sellLimit={settingSellStreak}
+                />
+              );
+            }
+            // 분석 데이터가 아직 없는 종목 → 즉시 플레이스홀더 카드 표시
+            return (
+              <View key={ms.code} style={{ marginHorizontal: 16, marginBottom: 10, padding: 16, backgroundColor: '#16202b', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{ms.name}</Text>
+                    <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{ms.code}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color="#3182f6" />
+                    <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>수급 분석 중...</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeleteStock(ms.code)} style={{ marginLeft: 12, padding: 4 }}>
+                    <Text style={{ color: '#f04452', fontSize: 18 }}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
           {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
         </ScrollView>
       );
