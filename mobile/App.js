@@ -602,7 +602,8 @@ function MainApp() {
     if (isRefreshing.current) return;
 
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
-    const isUserAction = !!targetStocks;
+    // [v3.6.2 fix] init()에서 호출할 때는 targetStocks가 있더라도 user action이 아닙니다!
+    const isUserAction = !!targetStocks && !isInitial;
 
     // [v3.6.2 핵심 수정] 장 마감 시에도 서버 스냅샷은 항상 가져옵니다!
     // 서버 스냅샷에는 장중에 수집된 캐시 데이터가 있으므로, 밤에 앱을 켜도 데이터를 볼 수 있습니다.
@@ -613,8 +614,8 @@ function MainApp() {
     if (!silent) setLoading(true);
 
     let snapshotStocks = [];
-    // [v3.6.2] 서버 스냅샷은 항상 가져옵니다 (장중/장후 무관, 유저 개별 조회 제외)
-    const shouldFetchSnapshot = !isUserAction;
+    // [v3.6.2 fix] 앱 초기 로딩(isInitial) 또는 자동 갱신 시 항상 스냅샷을 가져옵니다!
+    const shouldFetchSnapshot = !isUserAction || isInitial;
 
     if (shouldFetchSnapshot) {
       try {
