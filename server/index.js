@@ -491,6 +491,10 @@ async function runDeepMarketScan(force = false) {
             newSellData[`5_${inv}`] = [];
         });
 
+        // [v3.6.1] 70개 주요 섹터 종목 데이터 강제 포함 (프론트엔드 분석 대기 해결)
+        newBuyData['sectors'] = [];
+        const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
+
         const sectorMap = {};
         const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
 
@@ -544,6 +548,34 @@ async function runDeepMarketScan(force = false) {
                     });
                 }
             });
+
+            // 70개 기본 섹터 종목은 무조건 snapshot에 포함하여 프론트에서 KIS API를 우회하도록 함
+            if (sectorStockCodes.has(code)) {
+                let fSt = 0, iSt = 0;
+                const calcSt = (inv) => {
+                    let b = 0, s = 0;
+                    for (let j = 0; j < val.daily.length; j++) {
+                        const row = val.daily[j];
+                        let net = 0;
+                        const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
+                        const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
+                        if (inv === '2') net = fQ;
+                        else if (inv === '1') net = oQ;
+                        if (net > 0) { b++; if (s > 0) break; }
+                        else if (net < 0) { s++; if (b > 0) break; }
+                        else break;
+                    }
+                    return b > 0 ? b : (s > 0 ? -s : 0);
+                };
+                fSt = calcSt('2');
+                iSt = calcSt('1');
+
+                newBuyData['sectors'].push({
+                    name: val.name, code, price: val.price, rate: val.rate,
+                    streak: fSt, // 프론트에서 sentiment(50 + streak*10) 계산 시 기반이 됨
+                    fStreak: fSt, iStreak: iSt
+                });
+            }
         });
 
         const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
