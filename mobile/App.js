@@ -951,11 +951,11 @@ function MainApp() {
     if (isFav) {
       handleDeleteStock(stock.code); // 즐겨찾기 해제
     } else {
-      // 즐겨찾기 추가
+      // [v3.6.2 fix] 즐겨찾기 추가 시 refreshData 호출 없이 기존 서버 데이터 활용!
+      // 서버 스냅샷에 이미 데이터가 있으므로 KIS API를 다시 호출할 필요가 없습니다.
       const updated = [...myStocks, stock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
-      refreshData(updated);
     }
   };
 

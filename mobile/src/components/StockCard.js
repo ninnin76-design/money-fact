@@ -63,40 +63,44 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
     return (
         <TouchableOpacity style={styles.card} onPress={onPress}>
             {onFavoriteToggle && (
-                <TouchableOpacity onPress={onFavoriteToggle} style={{ marginRight: 12, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity onPress={onFavoriteToggle} style={{ marginRight: 10, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Star size={22} color={isFavorite ? "#FFD700" : "#666"} fill={isFavorite ? "#FFD700" : "transparent"} />
                 </TouchableOpacity>
             )}
             <View style={styles.cardContent}>
-                <View style={styles.left}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
-                        <Text style={[styles.name, { flexShrink: 1 }]} numberOfLines={2}>{name}</Text>
-                        <View style={{ marginLeft: 8, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={styles.blocksText}>{blocks}</Text>
-                        </View>
+                {/* 상단: 종목이름 + 블럭 */}
+                <View style={styles.topRow}>
+                    <Text style={styles.name}>{name}</Text>
+                    <View style={styles.blocksBox}>
+                        <Text style={styles.blocksText}>{blocks}</Text>
                     </View>
-                    {patternTag && (
-                        <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
-                    )}
-                    <Text style={styles.price}>{price?.toLocaleString()}원</Text>
                 </View>
 
-                <View style={styles.right}>
-                    {fInfo && (
-                        <View style={styles.badge}>
-                            {fInfo.icon}
-                            <Text style={[styles.badgeText, { color: fInfo.color }]}>외인 {fInfo.text}</Text>
+                {/* 하단: 패턴태그 + 가격 + 수급배지들 + 온도 */}
+                <View style={styles.bottomRow}>
+                    <View style={styles.leftInfo}>
+                        {patternTag && (
+                            <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
+                        )}
+                        <Text style={styles.price}>{price?.toLocaleString()}원</Text>
+                    </View>
+                    <View style={styles.rightInfo}>
+                        {fInfo && (
+                            <View style={styles.badge}>
+                                {fInfo.icon}
+                                <Text style={[styles.badgeText, { color: fInfo.color }]}>외인 {fInfo.text}</Text>
+                            </View>
+                        )}
+                        {iInfo && (
+                            <View style={styles.badge}>
+                                {iInfo.icon}
+                                <Text style={[styles.badgeText, { color: iInfo.color }]}>기관 {iInfo.text}</Text>
+                            </View>
+                        )}
+                        <View style={styles.sentimentBox}>
+                            <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
+                            <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
                         </View>
-                    )}
-                    {iInfo && (
-                        <View style={styles.badge}>
-                            {iInfo.icon}
-                            <Text style={[styles.badgeText, { color: iInfo.color }]}>기관 {iInfo.text}</Text>
-                        </View>
-                    )}
-                    <View style={styles.sentimentBox}>
-                        <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
-                        <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
                     </View>
                 </View>
             </View>
@@ -119,17 +123,30 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.1)',
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     cardContent: {
         flex: 1,
+    },
+    topRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 6,
+    },
+    bottomRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-end',
     },
-    left: {
-        flex: 1,
+    leftInfo: {
+        flexShrink: 1,
         marginRight: 10,
+    },
+    rightInfo: {
+        alignItems: 'flex-end',
+        flexShrink: 0,
     },
     deleteBtn: {
         marginLeft: 10,
@@ -140,6 +157,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    blocksBox: {
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
     blocksText: {
         fontSize: 10,
         letterSpacing: 1,
@@ -147,15 +170,12 @@ const styles = StyleSheet.create({
     patternTag: {
         fontSize: 11,
         fontWeight: '800',
-        marginTop: 6,
+        marginBottom: 2,
     },
     price: {
         color: '#aaa',
         fontSize: 14,
-        marginTop: 4,
-    },
-    right: {
-        alignItems: 'flex-end',
+        marginTop: 2,
     },
     badge: {
         flexDirection: 'row',
@@ -170,14 +190,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
         marginLeft: 3,
-    },
-    hiddenBadge: {
-        backgroundColor: 'rgba(122, 255, 122, 0.14)',
-    },
-    hiddenText: {
-        color: '#00ff00',
-        fontSize: 10,
-        fontWeight: 'bold',
     },
     sentimentBox: {
         flexDirection: 'row',

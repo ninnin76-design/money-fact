@@ -317,6 +317,11 @@ async function runDeepMarketScan(force = false) {
             }
         };
 
+        // [v3.6.2 우선순위 보정] 핵심 감시 종목 및 섹터 70개 종목은 
+        // 800개 상한선에 걸려 누락되지 않도록 가장 먼저 후보에 추가합니다.
+        MARKET_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+        SECTOR_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+
         // Source 1: 외인/기관 순매수 랭킹 (시장 주도주)
         try {
             const rankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
@@ -397,11 +402,7 @@ async function runDeepMarketScan(force = false) {
         }
         console.log(`[Radar 1단계] Wide Net 완료! 전종목에서 ${wideNetHits}개 추가 후보 발견`);
 
-        // 핵심 감시 종목은 무조건 포함!
-        MARKET_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
-
-        // 섹터별 관심종목 70개도 무조건 포함! (사용자 앱에서 서버 스냅샷으로 활용)
-        SECTOR_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+        // [v3.6.2 fix] 핵심 종목들은 이미 앞에서 추가되었으므로 중복 추가 제거
 
         // 사용자 관심 종목도 무조건 포함! (푸시 알림 정확도를 위해)
         pushTokens.forEach(entry => {
@@ -422,7 +423,7 @@ async function runDeepMarketScan(force = false) {
         let hits = 0;
 
         // 모든 후보를 정밀 Deep Scan (종목당 150ms 간격으로 순차 진행)
-        const fullList = candidates.slice(0, 800); // 안전 상한: 최대 800개
+        const fullList = candidates.slice(0, 1000); // 안전 상한: 최대 1000개로 상향
         console.log(`[Radar 2단계] 실제 Deep Scan 대상: ${fullList.length}개 순차 분석 시작...`);
 
         for (let i = 0; i < fullList.length; i++) {
