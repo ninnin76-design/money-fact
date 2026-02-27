@@ -518,6 +518,29 @@ async function runDeepMarketScan(force = false) {
             instTotals.ivtg += ivtgBuy;
             instTotals.ins += insBuy;
 
+            // [v3.6.2 핵심 수정] 외인/기관 streak를 독립적으로 계산!
+            // 기존에는 투자자별 루프에서 fStreak=iStreak=같은 값이 들어가는 버그가 있었습니다.
+            const calcIndependentStreak = (daily, investorType) => {
+                let b = 0, s = 0;
+                for (let j = 0; j < daily.length; j++) {
+                    const row = daily[j];
+                    let net = 0;
+                    const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
+                    const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
+                    if (investorType === '2') net = fQ;       // 외인
+                    else if (investorType === '1') net = oQ;   // 기관
+                    else net = fQ + oQ;                        // 합산
+                    if (net > 0) { b++; if (s > 0) break; }
+                    else if (net < 0) { s++; if (b > 0) break; }
+                    else break;
+                }
+                return b > 0 ? b : (s > 0 ? -s : 0);
+            };
+
+            // 각 종목의 외인/기관 streak를 한 번에 독립 계산
+            const indFStreak = calcIndependentStreak(val.daily, '2');
+            const indIStreak = calcIndependentStreak(val.daily, '1');
+
             investors.forEach(inv => {
                 let buyStreak = 0, sellStreak = 0;
 
@@ -543,13 +566,13 @@ async function runDeepMarketScan(force = false) {
                 if (buyStreak >= 2) {
                     newBuyData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: buyStreak, fStreak: buyStreak, iStreak: (inv === '0' || inv === '1') ? buyStreak : 0
+                        streak: buyStreak, fStreak: indFStreak, iStreak: indIStreak
                     });
                 }
                 if (sellStreak >= 2) {
                     newSellData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: sellStreak, fStreak: -sellStreak, iStreak: (inv === '0' || inv === '1') ? -sellStreak : 0
+                        streak: sellStreak, fStreak: indFStreak, iStreak: indIStreak
                     });
                 }
             });

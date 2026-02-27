@@ -63,28 +63,27 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
     return (
         <TouchableOpacity style={styles.card} onPress={onPress}>
             {onFavoriteToggle && (
-                <TouchableOpacity onPress={onFavoriteToggle} style={{ marginRight: 10, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity onPress={onFavoriteToggle} style={styles.starBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Star size={22} color={isFavorite ? "#FFD700" : "#666"} fill={isFavorite ? "#FFD700" : "transparent"} />
                 </TouchableOpacity>
             )}
             <View style={styles.cardContent}>
-                {/* 상단: 종목이름 + 블럭 */}
-                <View style={styles.topRow}>
+                {/* 1행: 종목이름 + 블럭 */}
+                <View style={styles.row1}>
                     <Text style={styles.name}>{name}</Text>
                     <View style={styles.blocksBox}>
                         <Text style={styles.blocksText}>{blocks}</Text>
                     </View>
+                    {onDelete && (
+                        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Trash2 size={18} color="#666" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
-                {/* 하단: 패턴태그 + 가격 + 수급배지들 + 온도 */}
-                <View style={styles.bottomRow}>
-                    <View style={styles.leftInfo}>
-                        {patternTag && (
-                            <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
-                        )}
-                        <Text style={styles.price}>{price?.toLocaleString()}원</Text>
-                    </View>
-                    <View style={styles.rightInfo}>
+                {/* 2행: 수급 배지 (외인/기관) */}
+                {(fInfo || iInfo) && (
+                    <View style={styles.badgeRow}>
                         {fInfo && (
                             <View style={styles.badge}>
                                 {fInfo.icon}
@@ -97,19 +96,23 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                                 <Text style={[styles.badgeText, { color: iInfo.color }]}>기관 {iInfo.text}</Text>
                             </View>
                         )}
-                        <View style={styles.sentimentBox}>
-                            <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
-                            <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
-                        </View>
+                    </View>
+                )}
+
+                {/* 3행: 패턴 + 가격 + 온도 */}
+                <View style={styles.row3}>
+                    <View style={styles.row3Left}>
+                        {patternTag && (
+                            <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
+                        )}
+                        <Text style={styles.price}>{price?.toLocaleString()}원</Text>
+                    </View>
+                    <View style={styles.sentimentBox}>
+                        <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
+                        <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
                     </View>
                 </View>
             </View>
-
-            {onDelete && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Trash2 size={20} color="#666" />
-                </TouchableOpacity>
-            )}
         </TouchableOpacity>
     );
 };
@@ -125,37 +128,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
     },
+    starBtn: {
+        marginRight: 10,
+        padding: 4,
+        marginTop: 2,
+    },
     cardContent: {
         flex: 1,
     },
-    topRow: {
+    row1: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 6,
-    },
-    bottomRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-    },
-    leftInfo: {
-        flexShrink: 1,
-        marginRight: 10,
-    },
-    rightInfo: {
-        alignItems: 'flex-end',
-        flexShrink: 0,
-    },
-    deleteBtn: {
-        marginLeft: 10,
-        padding: 5,
+        marginBottom: 4,
     },
     name: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
+        flexShrink: 0,
+        marginRight: 8,
     },
     blocksBox: {
         backgroundColor: 'rgba(0,0,0,0.2)',
@@ -167,38 +158,56 @@ const styles = StyleSheet.create({
         fontSize: 10,
         letterSpacing: 1,
     },
-    patternTag: {
-        fontSize: 11,
-        fontWeight: '800',
-        marginBottom: 2,
+    deleteBtn: {
+        marginLeft: 'auto',
+        padding: 5,
     },
-    price: {
-        color: '#aaa',
-        fontSize: 14,
-        marginTop: 2,
+    badgeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 4,
     },
     badge: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
         paddingHorizontal: 8,
-        paddingVertical: 2,
+        paddingVertical: 3,
         borderRadius: 5,
-        marginBottom: 4,
     },
     badgeText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 'bold',
         marginLeft: 3,
+    },
+    row3: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    row3Left: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flexShrink: 1,
+    },
+    patternTag: {
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    price: {
+        color: '#aaa',
+        fontSize: 14,
     },
     sentimentBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 2,
+        flexShrink: 0,
     },
     sentimentText: {
         color: '#888',
-        fontSize: 11,
+        fontSize: 12,
         marginLeft: 3,
     },
 });
