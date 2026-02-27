@@ -44,11 +44,12 @@ const APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccT
 const MARKET_WATCH_STOCKS = [
     { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' },
     { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '한미반도체', code: '042700', sector: '반도체' },
-    { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
-    { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '셀트리온', code: '068270', sector: '바이오' },
-    { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
-    { name: 'KB금융', code: '105560', sector: '금융' }, { name: '신한지주', code: '055550', sector: '금융' },
-    { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '카카오', code: '035720', sector: '플랫폼' }
+    { name: 'LG에너지솔루션', code: '373220', sector: '이차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '이차전지' },
+    { name: '삼성바이오로직스', code: '207940', sector: '바이오 및 헬스케어' }, { name: '셀트리온', code: '068270', sector: '바이오 및 헬스케어' },
+    { name: '현대차', code: '005380', sector: '자동차 및 전자부품' }, { name: '기아', code: '000270', sector: '자동차 및 전자부품' },
+    { name: 'KB금융', code: '105560', sector: '기타(금융)' }, { name: '신한지주', code: '055550', sector: '기타(금융)' },
+    { name: 'NAVER', code: '035420', sector: '엔터 및 플랫폼' }, { name: '카카오', code: '035720', sector: '엔터 및 플랫폼' },
+    { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' }
 ];
 
 // 섹터별 관심종목 70개 - 서버 스캔 시 무조건 포함!
@@ -299,6 +300,7 @@ async function runDeepMarketScan(force = false) {
 
     const currentType = 'LIVE';
     console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
+    marketAnalysisReport.status = 'SCANNING';
     try {
         const token = await getAccessToken();
 
@@ -368,7 +370,7 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 1단계] Source 5: 전종목 ${POPULAR_STOCKS.length}개 시세 배치 스캔 시작...`);
         let wideNetHits = 0;
         const batchSize = 8;  // 동시 요청 수 (API 제한 준수)
-        const maxWideScan = Math.min(POPULAR_STOCKS.length, 2000); // 최대 2000개까지 스캔
+        const maxWideScan = Math.min(POPULAR_STOCKS.length, 1200); // 1200개로 축소하여 업데이트 속도 개선
         const alreadyInMap = new Set(candidateMap.keys());
 
         for (let i = 0; i < maxWideScan; i++) {
@@ -579,7 +581,19 @@ async function runDeepMarketScan(force = false) {
             }
         });
 
+        const SECTOR_ORDER = [
+            '반도체', '이차전지', '바이오 및 헬스케어', '자동차 및 전자부품', '로봇 및 에너지', '엔터 및 플랫폼'
+        ];
         const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
+        sectorList.sort((a, b) => {
+            const idxA = SECTOR_ORDER.indexOf(a.name);
+            const idxB = SECTOR_ORDER.indexOf(b.name);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return b.flow - a.flow;
+        });
+
         const totalSectorFlow = sectorList.reduce((acc, s) => acc + Math.abs(s.flow), 0);
 
         investors.forEach(inv => {

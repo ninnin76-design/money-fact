@@ -1329,13 +1329,13 @@ function MainApp() {
                       style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isExpanded ? 'rgba(49,130,246,0.1)' : '#16202b' }}
                       onPress={() => setExpandedSectors(prev => ({ ...prev, [sector.id]: !prev[sector.id] }))}
                     >
-                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 8 }}>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 8 }}>
                         <Folder size={18} color="#3182f6" />
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', flexShrink: 1 }} numberOfLines={1}>{sector.name}</Text>
-                        <Text style={{ color: '#888', fontSize: 13 }}>({sector.stocks.length})</Text>
+                        <Text style={{ color: '#fff', fontSize: 15, fontWeight: 'bold', flexShrink: 1 }} numberOfLines={1}>{sector.name}</Text>
+                        <Text style={{ color: '#888', fontSize: 13, flexShrink: 0 }}>({sector.stocks.length})</Text>
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); setTargetSectorForAdd(sector.id); setSearchModal(true); }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); setTargetSectorForAdd(sector.id); setSearchModal(true); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                           <Plus size={20} color="#3182f6" />
                         </TouchableOpacity>
                         {isExpanded ? <ChevronUp size={20} color="#888" /> : <ChevronDown size={20} color="#888" />}
