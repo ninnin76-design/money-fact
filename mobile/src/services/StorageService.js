@@ -13,22 +13,39 @@ export const StorageService = {
         return saved ? JSON.parse(saved) : [];
     },
 
-    async backup(syncKey, stocks, settings) {
+    async saveUserSectors(sectors) {
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_SECTORS, JSON.stringify(sectors));
+    },
+
+    async loadUserSectors() {
+        const saved = await AsyncStorage.getItem(STORAGE_KEYS.USER_SECTORS);
+        return saved ? JSON.parse(saved) : null;
+    },
+
+    async backup(syncKey, stocks, settings, userSectors) {
         if (!syncKey) throw new Error('Nickname key is required');
-        await axios.post(`${SERVER_URL}/api/sync/save`, { syncKey, stocks, settings });
+        const payload = { syncKey, stocks, settings };
+        // v3.6: 섹터 데이터도 함께 백업
+        if (userSectors) {
+            payload.watchlist = {
+                version: 1,
+                favorites: stocks,
+                sectors: userSectors
+            };
+        }
+        await axios.post(`${SERVER_URL}/api/sync/save`, payload);
     },
 
     async restore(syncKey) {
         if (!syncKey) throw new Error('Nickname key is required');
         const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
-        return res.data; // Now returns { stocks, settings }
+        return res.data; // { stocks, settings, watchlist? }
     },
 
     async checkNickname(syncKey) {
         if (!syncKey) return false;
         try {
             const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
-            // If it returns stocks, it means it's exists (taken)
             return res.data && res.data.stocks && res.data.stocks.length > 0;
         } catch (e) {
             return false;

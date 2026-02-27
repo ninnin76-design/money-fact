@@ -50,6 +50,51 @@ const MARKET_WATCH_STOCKS = [
     { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '카카오', code: '035720', sector: '플랫폼' }
 ];
 
+// 섹터별 관심종목 70개 - 서버 스캔 시 무조건 포함!
+const SECTOR_WATCH_STOCKS = [
+    // 자동차 및 전자부품
+    { name: '현대차', code: '005380' }, { name: '현대차우', code: '005385' },
+    { name: '현대모비스', code: '012330' }, { name: '기아', code: '000270' },
+    { name: '삼성전기', code: '009150' }, { name: '삼성전기우', code: '009155' },
+    // 이차전지
+    { name: '삼성SDI', code: '006400' }, { name: 'LG에너지솔루션', code: '373220' },
+    { name: 'LG화학', code: '051910' }, { name: 'POSCO홀딩스', code: '005490' },
+    { name: '에코프로', code: '086520' }, { name: '에코프로비엠', code: '247540' },
+    { name: '엘앤에프', code: '066970' }, { name: '포스코퓨처엠', code: '003670' },
+    { name: '나노신소재', code: '121600' }, { name: '에코프로머티', code: '450080' },
+    { name: '상신이디피', code: '091580' }, { name: '코스모화학', code: '005420' },
+    // 엔터 및 플랫폼
+    { name: '하이브', code: '352820' }, { name: '와이지엔터테인먼트', code: '122870' },
+    { name: 'JYP Ent.', code: '035900' }, { name: '에스엠(SM)', code: '041510' },
+    { name: 'TCC스틸', code: '002710' }, { name: '디어유', code: '376300' },
+    { name: '카카오', code: '035720' }, { name: 'NAVER', code: '035420' },
+    // 로봇 및 에너지
+    { name: '레인보우로보틱스', code: '277810' }, { name: '티로보틱스', code: '117730' },
+    { name: '씨메스', code: '475400' }, { name: '클로봇', code: '466100' },
+    { name: 'HD현대에너지솔루션', code: '322000' }, { name: 'OCI홀딩스', code: '010060' },
+    // 반도체
+    { name: '삼성전자', code: '005930' }, { name: '삼성전자우', code: '005935' },
+    { name: 'SK하이닉스', code: '000660' }, { name: '와이씨', code: '232140' },
+    { name: 'HPSP', code: '403870' }, { name: '테크윙', code: '089030' },
+    { name: '하나머티리얼즈', code: '166090' }, { name: '하나마이크론', code: '067310' },
+    { name: '유진테크', code: '084370' }, { name: '피에스케이홀딩스', code: '031980' },
+    { name: '피에스케이', code: '319660' }, { name: '에스티아이(STI)', code: '039440' },
+    { name: '디아이(DI)', code: '003160' }, { name: '에스앤에스텍', code: '101490' },
+    { name: '이오테크닉스', code: '039030' }, { name: '원익IPS', code: '240810' },
+    { name: 'ISC', code: '095340' }, { name: '두산테스나', code: '131970' },
+    { name: '에프에스티', code: '036810' }, { name: '한화비전', code: '027740' },
+    { name: '가온칩스', code: '399720' }, { name: '에이디테크놀로지', code: '158430' },
+    { name: '주성엔지니어링', code: '036930' }, { name: '한미반도체', code: '042700' },
+    { name: '케이씨텍', code: '281820' }, { name: '원익QnC', code: '074600' },
+    { name: '유니샘', code: '036200' }, { name: '티씨케이', code: '064760' },
+    // 바이오 및 헬스케어
+    { name: '한올바이오파마', code: '009420' }, { name: '코오롱티슈진', code: '950160' },
+    { name: '한미약품', code: '128940' }, { name: 'HLB', code: '028300' },
+    { name: '에이비엘바이오', code: '298380' }, { name: '인벤티지랩', code: '389470' },
+    { name: '퓨쳐켐', code: '220100' }, { name: '리가켐바이오', code: '141080' },
+    { name: '알테오젠', code: '196170' }, { name: '오스코텍', code: '039200' },
+];
+
 const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
 
 let cachedToken = '';
@@ -239,9 +284,10 @@ async function runDeepMarketScan(force = false) {
 
     console.log(`[Worker] Server(UTC): ${now.toISOString()}, Target(KST): ${kstDate.toISOString()}, Hour: ${hour}, Day: ${day}`);
 
-    // Market Hours: 8 AM - 8 PM KST, Weekdays only
+    // [v3.6 최적화] 시장 감시 시간: 오전 8시 ~ 오후 8시 (20:00) KST
+    // 오후 3:30 이후 시간외 및 야간 거래 수급까지 15분마다 추적하여 8시에 최종 확정합니다.
     const isWeekend = (day === 0 || day === 6);
-    const isMarketOpen = (hour >= 8 && hour < 20) && !isWeekend;
+    const isMarketOpen = (hour >= 8 && hour <= 20) && !isWeekend;
     const hasNoData = !marketAnalysisReport.updateTime;
 
     if (!isMarketOpen && !force && !hasNoData) {
@@ -350,6 +396,9 @@ async function runDeepMarketScan(force = false) {
 
         // 핵심 감시 종목은 무조건 포함!
         MARKET_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+
+        // 섹터별 관심종목 70개도 무조건 포함! (사용자 앱에서 서버 스냅샷으로 활용)
+        SECTOR_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
 
         // 사용자 관심 종목도 무조건 포함! (푸시 알림 정확도를 위해)
         pushTokens.forEach(entry => {
@@ -819,19 +868,20 @@ const saveSyncFile = async (changedKey) => {
 };
 
 app.post('/api/sync/save', async (req, res) => {
-    const { syncKey, stocks, settings } = req.body;
+    const { syncKey, stocks, settings, watchlist } = req.body;
     if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
 
     // Add timestamp for backup tracking
     userStore[syncKey] = {
         stocks,
         settings: settings || {},
+        watchlist: watchlist || null,
         updatedAt: new Date().toISOString(),
         version: (userStore[syncKey]?.version || 0) + 1
     };
     try {
         await saveSyncFile(syncKey);
-        console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})`);
+        console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})${watchlist ? ' +watchlist' : ''}`);
         res.json({ status: 'success', version: userStore[syncKey].version });
     } catch (e) {
         res.status(500).json({ error: 'File save error' });
@@ -866,7 +916,8 @@ app.get('/api/sync/load', async (req, res) => {
     console.log(`[Sync] Loaded data for key: ${syncKey}`);
     const stocks = Array.isArray(data) ? data : (data.stocks || []);
     const settings = data.settings || {};
-    res.json({ stocks, settings, version: data.version || 1, updatedAt: data.updatedAt });
+    const watchlist = data.watchlist || null;
+    res.json({ stocks, settings, watchlist, version: data.version || 1, updatedAt: data.updatedAt });
 });
 
 // Secret Admin Endpoint to Force Scan

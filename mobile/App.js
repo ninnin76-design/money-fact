@@ -9,7 +9,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2
+  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2, ChevronUp, ChevronDown, Folder, Heart
 } from 'lucide-react-native';
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
@@ -23,6 +23,7 @@ import Thermometer from './src/components/Thermometer';
 import SectorHeatmap from './src/components/SectorHeatmap';
 import StockCard from './src/components/StockCard';
 import { BACKGROUND_TASK_NAME, STORAGE_KEYS, SERVER_URL } from './src/constants/Config';
+import { DEFAULT_SECTORS } from './src/constants/SectorData';
 import { ALL_STOCKS } from './src/constants/StockData';
 
 const MARKET_WATCH_STOCKS = [
@@ -413,8 +414,12 @@ export default function App() {
 function MainApp() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('home'); // home, list, my, settings
+  const [mySubTab, setMySubTab] = useState('favorites'); // favorites, sectors
   const [loading, setLoading] = useState(false);
   const [myStocks, setMyStocks] = useState([]);
+  const [userSectors, setUserSectors] = useState([]);
+  const [expandedSectors, setExpandedSectors] = useState({});
+  const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
   const [analyzedStocks, setAnalyzedStocks] = useState([]);
   const [tickerItems, setTickerItems] = useState(["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"]);
   const [syncKey, setSyncKey] = useState('');
@@ -458,6 +463,14 @@ function MainApp() {
     // Hybrid Loading Stage 1: Fast data
     const stocks = await StorageService.loadMyStocks();
     setMyStocks(stocks);
+
+    const loadedSectors = await StorageService.loadUserSectors();
+    if (loadedSectors) {
+      setUserSectors(loadedSectors);
+    } else {
+      setUserSectors(DEFAULT_SECTORS);
+      StorageService.saveUserSectors(DEFAULT_SECTORS);
+    }
 
     // [코다리 부장 터치] 앱 켤 때 섹터, 수급 금액까지 전재산(Full Snapshot)을 한 번에 복원합니다!
     const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
@@ -676,33 +689,27 @@ function MainApp() {
     }
 
     const results = [...snapshotStocks];
-    // 기존 스냅샷이 있으면 이미 있는 종목은 KIS에 재조회하지 않도록 방어 (단, 유저 관심종목은 무조건 조회)
     const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
 
-    // Analyze both user stocks and default market watch stocks
+    // [v3.6 최적화] 서버 스냅샷에 이미 데이터가 있는 종목은 KIS API를 호출하지 않음!
+    // 관심종목이라도 서버가 이미 분석해둔 데이터가 있으면 그대로 활용합니다.
+    // 스냅샷에 없는 종목(사용자가 개별 추가한 종목)만 직접 KIS API를 호출합니다.
+    // → 관심종목 대부분이 70개 섹터에 포함되므로 API 호출이 거의 0에 수렴!
     const base = targetStocks || myStocks;
-    const combined = [...base];
-
-    // Add market watch stocks if not already in there
-    MARKET_WATCH_STOCKS.forEach(ms => {
-      if (!combined.find(c => c.code === ms.code)) {
-        combined.push(ms);
-      }
-    });
+    const combined = [...base]; // 관심종목만!
 
     const tickerTexts = ["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"];
     const sectorMap = {};
     const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
 
     for (const stock of combined) {
-      // 기존 스냅샷이 있으면 이미 있는 종목은 KIS에 재조회하지 않도록 방어 (단, 유저 관심종목은 무조건 조회)
-      const isMyStock = base.some(bs => bs.code === stock.code);
-      if (snapshotExistingCodes.has(stock.code) && !isMyStock) {
+      // [v3.6 핵심] 서버 스냅샷에 이미 있으면 → KIS API 호출 안 함! (관심종목 포함!)
+      if (snapshotExistingCodes.has(stock.code)) {
         continue;
       }
 
-      // 250ms delay per stock to stay well within KIS rate limits (20 req/sec)
-      await new Promise(resolve => setTimeout(resolve, 250));
+      // [v3.6 최적화] 500ms delay per stock - 관심종목만 호출하므로 넉넉한 간격으로 안정적 운영
+      await new Promise(resolve => setTimeout(resolve, 500));
       try {
         const [data, livePrice] = await Promise.all([
           StockService.getInvestorData(stock.code, forceFetch),
@@ -864,53 +871,100 @@ function MainApp() {
         name = found.name;
         code = found.code;
       } else if (searchQuery.length === 6 && /^\d+$/.test(searchQuery)) {
-        // 2. 6-digit Code Input
         code = searchQuery;
-        try {
-          const priceData = await StockService.getCurrentPrice(code);
-          if (priceData && priceData.hts_kor_isnm) {
-            name = priceData.hts_kor_isnm.trim();
-          } else {
+
+        // [v3.6 최적화] 서버 스냅샷에 이미 데이터가 있으면 API 호출 없이 이름 확인!
+        const snapshotStock = allStocksData.find(s => s.code === code);
+        if (snapshotStock && snapshotStock.name) {
+          name = snapshotStock.name;
+        } else {
+          // 스냅샷에 없는 종목만 KIS API 호출
+          try {
+            const priceData = await StockService.getCurrentPrice(code);
+            if (priceData && priceData.hts_kor_isnm) {
+              name = priceData.hts_kor_isnm.trim();
+            } else {
+              name = `종목(${code})`;
+            }
+          } catch (e) {
             name = `종목(${code})`;
           }
-        } catch (e) {
-          name = `종목(${code})`;
         }
       } else if (searchQuery.length >= 2) {
-        // 3. Name Input -> Try Server Search
-        setLoading(true);
-        const serverResults = await StockService.searchStock(searchQuery);
-        setLoading(false);
-        if (serverResults.length > 0) {
-          // If exactly one match or first one
-          name = serverResults[0].name;
-          code = serverResults[0].code;
-        }
-      }
-
-      if (!code) {
-        name = searchQuery;
-        code = null;
+        Alert.alert('알림', '정확한 종목 코드 6자리를 입력해주세요.');
+        return;
+      } else {
+        return;
       }
     }
 
-    if (code) {
-      const newStock = { code, name };
-      const isAlreadyAdded = myStocks.some(s => s.code === code);
-      if (isAlreadyAdded) {
-        Alert.alert('알림', '이미 추가된 종목입니다.');
-      } else {
-        const updated = [...myStocks, newStock];
-        setMyStocks(updated);
-        StorageService.saveMyStocks(updated);
-        refreshData(updated);
-        setSearchQuery('');
-        setSuggestions([]);
-        setSearchModal(false);
+    const newStock = { code, name };
+
+    if (targetSectorForAdd) {
+      const sectorIndex = userSectors.findIndex(s => s.id === targetSectorForAdd);
+      if (sectorIndex >= 0) {
+        if (userSectors[sectorIndex].stocks.some(s => s.code === code)) {
+          Alert.alert('알림', '이미 해당 섹터에 등록된 종목입니다.');
+          return;
+        }
+        const newSectors = [...userSectors];
+        newSectors[sectorIndex] = {
+          ...newSectors[sectorIndex],
+          stocks: [...newSectors[sectorIndex].stocks, newStock]
+        };
+        setUserSectors(newSectors);
+        StorageService.saveUserSectors(newSectors);
       }
     } else {
-      Alert.alert('검색 실패', '정확한 종목명이나 6자리 종목코드를 입력해주세요.');
+      if (myStocks.some(s => s.code === code)) {
+        Alert.alert('알림', '이미 등록된 관심종목입니다.');
+        return;
+      }
+      const updated = [...myStocks, newStock];
+      setMyStocks(updated);
+      StorageService.saveMyStocks(updated);
+      refreshData(updated);
     }
+
+    setSearchModal(false);
+    setSearchQuery('');
+    setSuggestions([]);
+    setTargetSectorForAdd(null);
+  };
+
+  const handleToggleFavorite = (stock) => {
+    const isFav = myStocks.some(s => s.code === stock.code);
+    if (isFav) {
+      handleDeleteStock(stock.code); // 즐겨찾기 해제
+    } else {
+      // 즐겨찾기 추가
+      const updated = [...myStocks, stock];
+      setMyStocks(updated);
+      StorageService.saveMyStocks(updated);
+      refreshData(updated);
+    }
+  };
+
+  const handleDeleteStockFromSector = (sectorId, stockCode) => {
+    Alert.alert(
+      '종목 삭제',
+      '섹터에서 해당 종목을 삭제하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제', onPress: () => {
+            const newSectors = userSectors.map(sec => {
+              if (sec.id === sectorId) {
+                return { ...sec, stocks: sec.stocks.filter(s => s.code !== stockCode) };
+              }
+              return sec;
+            });
+            setUserSectors(newSectors);
+            StorageService.saveUserSectors(newSectors);
+          }, style: 'destructive'
+        }
+      ]
+    );
   };
 
   const handleCheckDuplicate = async () => {
@@ -934,7 +988,7 @@ function MainApp() {
         sellStreak: settingSellStreak,
         accumStreak: settingAccumStreak
       };
-      await StorageService.backup(syncKey, myStocks, settings);
+      await StorageService.backup(syncKey, myStocks, settings, userSectors);
       await AsyncStorage.setItem(STORAGE_KEYS.SYNC_NICKNAME, syncKey);
       Alert.alert('성공', '전체 데이터(종목 및 설정) 백업이 완료되었습니다.');
     } catch (e) {
@@ -949,8 +1003,18 @@ function MainApp() {
     try {
       const data = await StorageService.restore(syncKey);
       if (data) {
-        // 1. Restore Stocks
-        if (data.stocks) {
+        // 1. Restore Stocks (Watchlist Expansion)
+        if (data.watchlist) {
+          if (data.watchlist.favorites) {
+            setMyStocks(data.watchlist.favorites);
+            StorageService.saveMyStocks(data.watchlist.favorites);
+            refreshData(data.watchlist.favorites);
+          }
+          if (data.watchlist.sectors) {
+            setUserSectors(data.watchlist.sectors);
+            StorageService.saveUserSectors(data.watchlist.sectors);
+          }
+        } else if (data.stocks) {
           setMyStocks(data.stocks);
           StorageService.saveMyStocks(data.stocks);
           refreshData(data.stocks);
@@ -1199,46 +1263,137 @@ function MainApp() {
     if (tab === 'my') {
       return (
         <ScrollView style={styles.scroll}>
-          <View style={styles.headerRow}>
-            <Text style={styles.sectionTitle}>관심 종목 현황</Text>
-            <TouchableOpacity onPress={() => setSearchModal(true)}>
-              <Plus size={20} color="#3182f6" />
+          {/* Sub Tab Navigation */}
+          <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 15, backgroundColor: '#16202b', borderRadius: 8, padding: 4 }}>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: mySubTab === 'favorites' ? '#3182f6' : 'transparent', borderRadius: 6 }}
+              onPress={() => setMySubTab('favorites')}
+            >
+              <Text style={{ color: mySubTab === 'favorites' ? '#fff' : '#888', fontWeight: 'bold' }}>⭐ 관심종목</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: mySubTab === 'sectors' ? '#3182f6' : 'transparent', borderRadius: 6 }}
+              onPress={() => setMySubTab('sectors')}
+            >
+              <Text style={{ color: mySubTab === 'sectors' ? '#fff' : '#888', fontWeight: 'bold' }}>📂 섹터별</Text>
             </TouchableOpacity>
           </View>
-          {myStocks.map(ms => {
-            const analyzed = analyzedStocks.find(s => s.code === ms.code);
-            if (analyzed) {
-              return (
-                <StockCard
-                  key={ms.code}
-                  stock={analyzed}
-                  onPress={() => handleOpenDetail(analyzed)}
-                  onDelete={() => handleDeleteStock(ms.code)}
-                  buyLimit={settingBuyStreak}
-                  sellLimit={settingSellStreak}
-                />
-              );
-            }
-            // 분석 데이터가 아직 없는 종목 → 즉시 플레이스홀더 카드 표시
-            return (
-              <View key={ms.code} style={{ marginHorizontal: 16, marginBottom: 10, padding: 16, backgroundColor: '#16202b', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{ms.name}</Text>
-                    <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{ms.code}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color="#3182f6" />
-                    <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>수급 분석 중...</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeleteStock(ms.code)} style={{ marginLeft: 12, padding: 4 }}>
-                    <Text style={{ color: '#f04452', fontSize: 18 }}>×</Text>
-                  </TouchableOpacity>
-                </View>
+
+          {mySubTab === 'favorites' ? (
+            <>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>관심 종목 현황</Text>
+                <TouchableOpacity onPress={() => setSearchModal(true)}>
+                  <Plus size={20} color="#3182f6" />
+                </TouchableOpacity>
               </View>
-            );
-          })}
-          {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
+              {myStocks.map(ms => {
+                const analyzed = analyzedStocks.find(s => s.code === ms.code);
+                if (analyzed) {
+                  return (
+                    <StockCard
+                      key={ms.code}
+                      stock={analyzed}
+                      onPress={() => handleOpenDetail(analyzed)}
+                      onDelete={() => handleDeleteStock(ms.code)}
+                      buyLimit={settingBuyStreak}
+                      sellLimit={settingSellStreak}
+                    />
+                  );
+                }
+                // 분석 데이터가 아직 없는 종목 → 즉시 플레이스홀더 카드 표시
+                return (
+                  <View key={ms.code} style={{ marginHorizontal: 16, marginBottom: 10, padding: 16, backgroundColor: '#16202b', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{ms.name}</Text>
+                        <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{ms.code}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <ActivityIndicator size="small" color="#3182f6" />
+                        <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>수급 분석 중...</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => handleDeleteStock(ms.code)} style={{ marginLeft: 12, padding: 4 }}>
+                        <Text style={{ color: '#f04452', fontSize: 18 }}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+              {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
+            </>
+          ) : (
+            <>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>섹터별 분류</Text>
+              </View>
+              {userSectors.map(sector => {
+                const isExpanded = expandedSectors[sector.id];
+                return (
+                  <View key={sector.id} style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: '#16202b', borderRadius: 12, overflow: 'hidden' }}>
+                    <TouchableOpacity
+                      style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isExpanded ? 'rgba(49,130,246,0.1)' : '#16202b' }}
+                      onPress={() => setExpandedSectors(prev => ({ ...prev, [sector.id]: !prev[sector.id] }))}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Folder size={18} color="#3182f6" />
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{sector.name}</Text>
+                        <Text style={{ color: '#888', fontSize: 14 }}>({sector.stocks.length}종목)</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); setTargetSectorForAdd(sector.id); setSearchModal(true); }}>
+                          <Plus size={20} color="#3182f6" />
+                        </TouchableOpacity>
+                        {isExpanded ? <ChevronUp size={20} color="#888" /> : <ChevronDown size={20} color="#888" />}
+                      </View>
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View style={{ padding: 10, backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                        {sector.stocks.map(ms => {
+                          const analyzed = analyzedStocks.find(s => s.code === ms.code);
+                          const isFav = myStocks.some(s => s.code === ms.code);
+                          if (analyzed) {
+                            return (
+                              <StockCard
+                                key={ms.code}
+                                stock={analyzed}
+                                onPress={() => handleOpenDetail(analyzed)}
+                                onDelete={() => handleDeleteStockFromSector(sector.id, ms.code)}
+                                buyLimit={settingBuyStreak}
+                                sellLimit={settingSellStreak}
+                                isFavorite={isFav}
+                                onFavoriteToggle={() => handleToggleFavorite(ms)}
+                              />
+                            );
+                          }
+                          return (
+                            <TouchableOpacity onPress={() => handleOpenDetail({ code: ms.code, name: ms.name })} key={ms.code} style={{ marginBottom: 8, padding: 16, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', flexDirection: 'row', alignItems: 'center' }}>
+                              <TouchableOpacity onPress={() => handleToggleFavorite(ms)} style={{ marginRight: 12, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Star size={22} color={isFav ? "#FFD700" : "#666"} fill={isFav ? "#FFD700" : "transparent"} />
+                              </TouchableOpacity>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{ms.name}</Text>
+                                <Text style={{ color: '#aaa', fontSize: 14, marginTop: 4 }}>{ms.code}</Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <ActivityIndicator size="small" color="#3182f6" />
+                                <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>분석 대기</Text>
+                              </View>
+                              <TouchableOpacity onPress={() => handleDeleteStockFromSector(sector.id, ms.code)} style={{ marginLeft: 15, padding: 5 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Trash2 size={20} color="#666" />
+                              </TouchableOpacity>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {sector.stocks.length === 0 && <Text style={{ color: '#666', textAlign: 'center', padding: 20 }}>등록된 종목이 없습니다.</Text>}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </>
+          )}
         </ScrollView>
       );
     }
@@ -1430,7 +1585,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.5 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.6.0 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1499,7 +1654,11 @@ function MainApp() {
       <Modal visible={searchModal} transparent animationType="slide">
         <KeyboardAvoidingView behavior="padding" style={styles.modalBg}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>종목 추가</Text>
+            <Text style={styles.modalTitle}>
+              {targetSectorForAdd
+                ? `📂 ${userSectors.find(s => s.id === targetSectorForAdd)?.name || '섹터'}에 종목 추가`
+                : '종목 추가'}
+            </Text>
             <TextInput
               style={styles.modalInput}
               autoFocus
@@ -1526,7 +1685,7 @@ function MainApp() {
             <TouchableOpacity style={styles.modalBtn} onPress={() => handleAddStock()}>
               <Text style={styles.modalBtnText}>직접 추가/검색</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => { setSearchModal(false); setSuggestions([]); }}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => { setSearchModal(false); setSuggestions([]); setSearchQuery(''); setTargetSectorForAdd(null); }}>
               <Text style={styles.closeBtnText}>닫기</Text>
             </TouchableOpacity>
           </View>

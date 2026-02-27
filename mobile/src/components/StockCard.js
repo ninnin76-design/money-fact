@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2 } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2, Star } from 'lucide-react-native';
 
-const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) => {
+const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFavorite = false, onFavoriteToggle = null }) => {
     const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation } = stock;
 
     // --- 수급박스 양음블럭 & 패턴 로직 ---
@@ -62,6 +62,11 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3 }) =>
 
     return (
         <TouchableOpacity style={styles.card} onPress={onPress}>
+            {onFavoriteToggle && (
+                <TouchableOpacity onPress={onFavoriteToggle} style={{ marginRight: 12, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Star size={22} color={isFavorite ? "#FFD700" : "#666"} fill={isFavorite ? "#FFD700" : "transparent"} />
+                </TouchableOpacity>
+            )}
             <View style={styles.cardContent}>
                 <View style={styles.left}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
