@@ -618,16 +618,15 @@ function MainApp() {
 
     // 데이터가 아예 없는 밤(새로 깔았을 때)이거나 유저가 직접 종목을 가져왔을 때는 강제로 한 번 조회합니다.
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
-    // console.log(`[refreshData] market=${StockService.isMarketOpen()}, hasData=${hasAnyData}, userAction=${isUserAction}, force=${forceFetch}`);
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
 
     let snapshotStocks = [];
+    // [v3.6.1] 장중(Market Open)이거나 데이터가 아예 없는 경우 서버 스냅샷을 우선 가져옵니다.
+    const shouldFetchSnapshot = !isUserAction && (StockService.isMarketOpen() || !hasAnyData);
 
-    // [코다리 부장 터치] 밤에 새로 깔았을 때는 서버 스냅샷을 한 방에 받아오는 게 최고!
-    // 다만 유저 액션(가져오기 등)일 경우엔 한투 API 조회를 보장하기 위해 바로 리턴하지 않습니다.
-    if (forceFetch && !isUserAction && !hasAnyData) {
+    if (shouldFetchSnapshot) {
       try {
         const snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 20000 });
         if (snapshotRes.data) {
@@ -1585,7 +1584,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.6.0 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.6.1 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1599,7 +1598,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.5</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.6</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
