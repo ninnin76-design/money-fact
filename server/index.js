@@ -487,6 +487,7 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 3단계] 분석 결과 정리 및 알림 발송 중...`);
 
         const newBuyData = {}, newSellData = {};
+        const newAllAnalysis = {}; // [v3.6.2] 분석된 모든 종목 보관용
         const investors = ['0', '2', '1'];
 
         investors.forEach(inv => {
@@ -579,6 +580,33 @@ async function runDeepMarketScan(force = false) {
                     fStreak: fSt, iStreak: iSt
                 });
             }
+
+            // [v3.6.2] 모든 분석 종목 요약 정보를 맵에 저장 (관심종목용)
+            let allFSt = 0, allISt = 0;
+            const calcStreak = (inv) => {
+                let b = 0, s = 0;
+                for (let j = 0; j < Math.min(val.daily.length, 31); j++) {
+                    const row = val.daily[j];
+                    let net = 0;
+                    if (inv === '2') net = parseInt(row.frgn_ntby_qty || 0) || 0;
+                    else if (inv === '1') net = parseInt(row.orgn_ntby_qty || 0) || 0;
+                    if (net > 0) { b++; if (s > 0) break; }
+                    else if (net < 0) { s++; if (b > 0) break; }
+                    else break;
+                }
+                return b > 0 ? b : (s > 0 ? -s : 0);
+            };
+            allFSt = calcStreak('2');
+            allISt = calcStreak('1');
+
+            newAllAnalysis[code] = {
+                name: val.name,
+                price: val.price,
+                rate: val.rate,
+                fStreak: allFSt,
+                iStreak: allISt,
+                sentiment: 50 + (allFSt + allISt) * 5
+            };
         });
 
         const SECTOR_ORDER = [
@@ -604,6 +632,7 @@ async function runDeepMarketScan(force = false) {
         // [코다리 부장 터치] 밤 늦게 데이터가 0으로 들어와도, 낮의 뜨거웠던 자금 흐름 데이터를 삭제하지 않고 보존합니다!
         marketAnalysisReport.buyData = newBuyData;
         marketAnalysisReport.sellData = newSellData;
+        marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
 
         if (totalSectorFlow > 0) {
             marketAnalysisReport.sectors = sectorList;

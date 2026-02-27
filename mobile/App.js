@@ -601,25 +601,20 @@ function MainApp() {
   const refreshData = async (targetStocks, silent = false, isInitial = false) => {
     if (isRefreshing.current) return;
 
-    // [코다리 부장 터치] 장외 시간(오후 8시 ~ 익일 오전 8시)에는 새로운 데이터를 요청하지 않고 현재 화면을 고정합니다!
-    // 다만, 앱을 갓 켰을 때(isInitial)는 예외입니다.
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
     const isUserAction = !!targetStocks;
 
-    if (!StockService.isMarketOpen() && hasAnyData && !isUserAction && !isInitial) {
-      // console.log("Off-hours: Holding current data.");
-      return;
-    }
-
-    // 데이터가 아예 없는 밤(새로 깔았을 때)이거나 유저가 직접 종목을 가져왔을 때는 강제로 한 번 조회합니다.
+    // [v3.6.2 핵심 수정] 장 마감 시에도 서버 스냅샷은 항상 가져옵니다!
+    // 서버 스냅샷에는 장중에 수집된 캐시 데이터가 있으므로, 밤에 앱을 켜도 데이터를 볼 수 있습니다.
+    // 단, 장 마감 시 KIS API 직접 호출(관심종목 개별 조회)은 차단합니다.
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
 
     isRefreshing.current = true;
     if (!silent) setLoading(true);
 
     let snapshotStocks = [];
-    // [v3.6.1] 장중(Market Open)이나 데이터가 없는 경우, 또는 앱 초기 구동 시 서버 스냅샷을 가져옵니다.
-    const shouldFetchSnapshot = !isUserAction && (StockService.isMarketOpen() || !hasAnyData || isInitial);
+    // [v3.6.2] 서버 스냅샷은 항상 가져옵니다 (장중/장후 무관, 유저 개별 조회 제외)
+    const shouldFetchSnapshot = !isUserAction;
 
     if (shouldFetchSnapshot) {
       try {
@@ -651,6 +646,22 @@ function MainApp() {
 
             Object.values(allBuy).forEach(l => processServerList(l, true));
             Object.values(allSell).forEach(l => processServerList(l, false));
+
+            // [v3.6.2] 서버가 분석한 전체 종목 데이터(allAnalysis) 추가 활용
+            if (snap.allAnalysis) {
+              Object.entries(snap.allAnalysis).forEach(([code, item]) => {
+                if (!seenCodes.has(code)) {
+                  seenCodes.add(code);
+                  snapshotStocks.push({
+                    name: item.name, code: code, price: parseInt(item.price || 0) || 0,
+                    fStreak: item.fStreak || 0,
+                    iStreak: item.iStreak || 0,
+                    sentiment: item.sentiment || 50,
+                    vwap: 0, isHiddenAccumulation: false
+                  });
+                }
+              });
+            }
 
             if (snapshotStocks.length > 0) {
               // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
@@ -699,6 +710,12 @@ function MainApp() {
     for (const stock of combined) {
       // [v3.6 핵심] 서버 스냅샷에 이미 있으면 → KIS API 호출 안 함! (관심종목 포함!)
       if (snapshotExistingCodes.has(stock.code)) {
+        continue;
+      }
+
+      // [v3.6.2] 장 마감 시간에 스냅샷에 없는 종목은 KIS API 호출을 건너뜁니다.
+      // (이미 위에서 서버의 명단을 확인했으므로, 여기에 왔다는 것은 서버 스캔 대상조차 아니었다는 뜻입니다)
+      if (!StockService.isMarketOpen() && !forceFetch) {
         continue;
       }
 
@@ -1579,7 +1596,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.6.1 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.6.2 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1593,7 +1610,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.6.1</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.6.2</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

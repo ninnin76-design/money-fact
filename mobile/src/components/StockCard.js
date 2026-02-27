@@ -69,8 +69,8 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
             )}
             <View style={styles.cardContent}>
                 <View style={styles.left}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.name}>{name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+                        <Text style={[styles.name, { flexShrink: 1 }]} numberOfLines={2}>{name}</Text>
                         <View style={{ marginLeft: 8, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                             <Text style={styles.blocksText}>{blocks}</Text>
                         </View>
@@ -95,8 +95,8 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                         </View>
                     )}
                     <View style={styles.sentimentBox}>
-                        <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : '#888'} />
-                        <Text style={styles.sentimentText}>{sentiment}도</Text>
+                        <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
+                        <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
                     </View>
                 </View>
             </View>
@@ -127,9 +127,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    // ... existing ...
+    left: {
+        flex: 1,
+        marginRight: 10,
+    },
     deleteBtn: {
-        marginLeft: 15,
+        marginLeft: 10,
         padding: 5,
     },
     name: {
