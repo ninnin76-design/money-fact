@@ -526,7 +526,7 @@ function MainApp() {
       if (open && tab !== 'settings') {
         refreshData(undefined, true); // Silent refresh
       }
-    }, 30000); // Auto refresh every 30s
+    }, 15 * 60 * 1000); // Auto refresh every 15 mins (900000ms)
     return () => clearInterval(timer);
   }, [tab, myStocks]);
 
