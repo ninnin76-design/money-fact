@@ -507,13 +507,9 @@ function MainApp() {
 
     // Stage 2: Deferred detailed analysis
     setTimeout(() => {
-      // [코다리 부장] 개선: 장외 시간(밤/주말)이고 이미 캐시된 데이터가 있다면 새로고침을 생략합니다.
-      if (!StockService.isMarketOpen() && cached) {
-        return;
-      }
+      // [코다리 부장] 앱 구동 시에는 장외 시간이라도 서버의 최신 스냅샷을 한 번은 가져옵니다.
       // 캐시 데이터가 이미 표시되고 있다면 조용히(silent) 갱신합니다.
-      // 이렇게 하면 "수급 분석 중..." 로딩 화면이 안 뜨고 백그라운드에서 업데이트됩니다!
-      refreshData(stocks, !!cached);
+      refreshData(stocks, !!cached, true);
     }, 500);
 
     setupBackground();
@@ -602,16 +598,15 @@ function MainApp() {
     } catch (e) { }
   };
 
-  const refreshData = async (targetStocks, silent = false) => {
+  const refreshData = async (targetStocks, silent = false, isInitial = false) => {
     if (isRefreshing.current) return;
 
     // [코다리 부장 터치] 장외 시간(오후 8시 ~ 익일 오전 8시)에는 새로운 데이터를 요청하지 않고 현재 화면을 고정합니다!
-    // ⚠️ sectors는 초기값이 6개(flow:0)라 length로 체크하면 항상 true!
-    //    실제 flow 데이터가 있는 섹터가 있는지, 또는 분석된 종목이 있는지로 판단합니다.
+    // 다만, 앱을 갓 켰을 때(isInitial)는 예외입니다.
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
     const isUserAction = !!targetStocks;
 
-    if (!StockService.isMarketOpen() && hasAnyData && !isUserAction) {
+    if (!StockService.isMarketOpen() && hasAnyData && !isUserAction && !isInitial) {
       // console.log("Off-hours: Holding current data.");
       return;
     }
@@ -623,8 +618,8 @@ function MainApp() {
     if (!silent) setLoading(true);
 
     let snapshotStocks = [];
-    // [v3.6.1] 장중(Market Open)이거나 데이터가 아예 없는 경우 서버 스냅샷을 우선 가져옵니다.
-    const shouldFetchSnapshot = !isUserAction && (StockService.isMarketOpen() || !hasAnyData);
+    // [v3.6.1] 장중(Market Open)이나 데이터가 없는 경우, 또는 앱 초기 구동 시 서버 스냅샷을 가져옵니다.
+    const shouldFetchSnapshot = !isUserAction && (StockService.isMarketOpen() || !hasAnyData || isInitial);
 
     if (shouldFetchSnapshot) {
       try {
