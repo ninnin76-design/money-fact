@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+axios.defaults.timeout = 5000; // 5초 타임아웃 추가: KIS API 무한대기 방지
 const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
@@ -390,7 +391,7 @@ async function runDeepMarketScan(force = false) {
                     addCandidate(stk.code, stk.name);
                     wideNetHits++;
                 }
-            } catch (e) { }
+            } catch (e) { console.error(`[Source 5 Error] ${e.message}`); }
         }
         console.log(`[Radar 1단계] Wide Net 완료! 전종목에서 ${wideNetHits}개 추가 후보 발견`);
 
