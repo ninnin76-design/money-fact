@@ -793,7 +793,10 @@ async function runDeepMarketScan(force = false) {
 
         console.log(`[Radar] ====== 2단계 하이브리드 레이더 임무 완료! ======`);
 
-    } catch (e) { console.error("[Radar] Worker Error:", e.message); }
+    } catch (e) {
+        console.error("[Radar] Worker Error:", e.message);
+        marketAnalysisReport.status = marketAnalysisReport.updateTime ? 'READY' : 'ERROR';
+    }
 }
 
 // [코다리 부장 터치] 서버가 켜질 때 데이터가 너무 오래됐거나 없으면 즉시 한 번 구워줍니다!

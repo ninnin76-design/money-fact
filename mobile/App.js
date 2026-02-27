@@ -604,6 +604,8 @@ function MainApp() {
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
     // [v3.6.2 fix] init()에서 호출할 때는 targetStocks가 있더라도 user action이 아닙니다!
     const isUserAction = !!targetStocks && !isInitial;
+    // [v3.6.2 fix] 정의되지 않은 변수 오류 방지
+    const isMyStock = !targetStocks || isInitial;
 
     // [v3.6.2 핵심 수정] 장 마감 시에도 서버 스냅샷은 항상 가져옵니다!
     // 서버 스냅샷에는 장중에 수집된 캐시 데이터가 있으므로, 밤에 앱을 켜도 데이터를 볼 수 있습니다.
