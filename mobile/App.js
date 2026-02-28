@@ -1227,16 +1227,17 @@ function MainApp() {
       const iStrength = detailedInstFlow?.institution || 0;
 
       const getSentimentInfo = () => {
+        const dateStr = lastUpdate ? lastUpdate.substring(0, 6).trim() : new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
         if (isMarketOpen) {
           return {
             title: "급변하는 실시간 수급 현황",
-            desc: `🔥 외국인(${fStrength > 0 ? '매수우위' : '매도우위'})과 기관(${iStrength > 0 ? '매수우위' : '매도우위'})이 현재 시장의 방향성을 결정하고 있습니다.`,
+            desc: `🔥 [${dateStr}] 외국인(${fStrength > 0 ? '매수우위' : '매도우위'})과 기관(${iStrength > 0 ? '매수우위' : '매도우위'})이 시장의 방향을 결정하고 있습니다.`,
             temp: 50 + (fStrength * 2) + (iStrength * 2)
           };
         } else {
           return {
             title: "오늘의 시장 종합 심리",
-            desc: `📅 금일 외국인은 ${fStrength > 0 ? '순매수' : '순매도'}를, 기관은 ${iStrength > 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
+            desc: `📊 [${dateStr}] 외국인은 ${fStrength > 0 ? '순매수' : '순매도'}, 기관은 ${iStrength > 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
             temp: 50 + (fStrength > 0 ? 10 : -10) + (iStrength > 0 ? 10 : -10) + (fStrength + iStrength) / 200
           };
         }
@@ -1870,8 +1871,6 @@ function MainApp() {
                 const iScore = getScore(selectedStock.iStreak || 0);
                 const fStreak = selectedStock.fStreak || 0;
                 const iStreak = selectedStock.iStreak || 0;
-                const fBadge = getStreakBadge('외인', fStreak, fStreak > 0 ? settingBuyStreak : settingSellStreak);
-                const iBadge = getStreakBadge('기관', iStreak, iStreak > 0 ? settingBuyStreak : settingSellStreak);
                 const totalScore = fScore + iScore;
 
                 let blocks = '';

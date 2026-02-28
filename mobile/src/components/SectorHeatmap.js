@@ -27,7 +27,12 @@ const SectorHeatmap = ({ sectors = [] }) => {
                         >
                             <Text style={styles.sectorName} numberOfLines={1}>{sector.name}</Text>
                             <View style={styles.flowRow}>
-                                <Text style={[styles.flowText, { color: isPositive ? '#ff4d4d' : '#3182f6' }]}>
+                                <Text
+                                    style={[styles.flowText, { color: isPositive ? '#ff4d4d' : '#3182f6' }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit={true}
+                                    minimumFontScale={0.5}
+                                >
                                     {isPositive ? '↑' : '↓'} {Math.abs(sector.flow)}
                                 </Text>
                                 <Text style={styles.unit}>억</Text>
@@ -91,10 +96,14 @@ const styles = StyleSheet.create({
     flowRow: {
         flexDirection: 'row',
         alignItems: 'baseline',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        width: '100%',
     },
     flowText: {
         fontSize: 14,
         fontWeight: '900',
+        flexShrink: 1,
     },
     unit: {
         color: '#555',
