@@ -627,8 +627,9 @@ function MainApp() {
           const allBuy = snap.buyData || {};
           const allSell = snap.sellData || {};
 
-          const hasServerData = Object.values(allBuy).some(l => l && l.length > 0) ||
-            Object.values(allSell).some(l => l && l.length > 0);
+          const hasServerData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
+            (Object.values(allBuy).some(l => l && l.length > 0)) ||
+            (Object.values(allSell).some(l => l && l.length > 0));
 
           if (hasServerData) {
             const seenCodes = new Set();
@@ -638,9 +639,9 @@ function MainApp() {
                   seenCodes.add(item.code);
                   snapshotStocks.push({
                     name: item.name, code: item.code, price: parseInt(item.price || 0) || 0,
-                    fStreak: item.fStreak || (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
-                    iStreak: item.iStreak || 0,
-                    sentiment: isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10),
+                    fStreak: (item.fStreak !== undefined) ? item.fStreak : (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
+                    iStreak: (item.iStreak !== undefined) ? item.iStreak : 0,
+                    sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10)),
                     vwap: 0, isHiddenAccumulation: false
                   });
                 }
@@ -649,6 +650,28 @@ function MainApp() {
 
             Object.values(allBuy).forEach(l => processServerList(l, true));
             Object.values(allSell).forEach(l => processServerList(l, false));
+
+            // [v3.6.3] 중복 제거 및 데이터 정합성 보강 (매수/매도 리스트에 겹치는 종목 처리)
+            // seenCodes로 이미 추가된 종목이라도, 매도 리스트에서 발견되면 streak 정보를 더 정확하게 보정합니다.
+            const enhanceServerList = (list, isBuy) => {
+              (list || []).forEach(item => {
+                const existing = snapshotStocks.find(s => s.code === item.code);
+                if (existing) {
+                  // 이미 존재하는 종목이면 streak 정보 중 더 극단적인 값을 취함 (매수는 더 크게, 매도는 더 작게)
+                  if (item.fStreak !== undefined) {
+                    existing.fStreak = isBuy ? Math.max(existing.fStreak, item.fStreak) : Math.min(existing.fStreak, item.fStreak);
+                  }
+                  if (item.iStreak !== undefined) {
+                    existing.iStreak = isBuy ? Math.max(existing.iStreak, item.iStreak) : Math.min(existing.iStreak, item.iStreak);
+                  }
+                  // 매도 데이터에서 온 경우 sentiment 낮게 조정
+                  if (!isBuy && existing.sentiment > 50) {
+                    existing.sentiment = 50 - (parseInt(item.streak || 0) * 10);
+                  }
+                }
+              });
+            };
+            Object.values(allSell).forEach(l => enhanceServerList(l, false));
 
             // [v3.6.2] 서버가 분석한 전체 종목 데이터(allAnalysis) 추가 활용
             if (snap.allAnalysis) {
@@ -674,10 +697,11 @@ function MainApp() {
               // [코다리 부장] 레이더 스캔 통계 업데이트!
               if (snap.scanStats) setScanStats(snap.scanStats);
 
-              const timeStr = snap.updateTime
-                ? new Date(snap.updateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                : '최근 데이터';
-              setLastUpdate(timeStr);
+              const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
+              const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+              const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              const fullTimeStr = `${dateStr} ${timeStr}`;
+              setLastUpdate(fullTimeStr);
 
               // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
               const localSnapshot = {
@@ -685,7 +709,7 @@ function MainApp() {
                 sectors: snap.sectors || [],
                 instFlow: snap.instFlow || { pnsn: 0, ivtg: 0, ins: 0 },
                 scanStats: snap.scanStats || null,
-                updateTime: timeStr
+                updateTime: fullTimeStr
               };
               AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
             }
@@ -825,12 +849,15 @@ function MainApp() {
       pnsn: Math.round(instTotals.pnsn / 100000000),
       ivtg: Math.round(instTotals.ivtg / 100000000),
       ins: Math.round(instTotals.ins / 100000000),
+      foreign: Math.round(instTotals.foreign / 100000000),
+      institution: Math.round(instTotals.institution / 100000000),
     };
     setDetailedInstFlow(roundedInstTotals);
 
     if (tickerTexts.length > 2) setTickerItems(tickerTexts);
-    const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLastUpdate(timeStr);
+    const now = new Date();
+    const fullTimeStr = `${now.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    setLastUpdate(fullTimeStr);
     // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
     if (results.length > 0) {
       const snapshot = {
@@ -1124,22 +1151,37 @@ function MainApp() {
         <View style={[styles.statusDot, isMarketOpen ? styles.dotOpen : styles.dotClosed]} />
         <View>
           <Text style={styles.marketStatusText}>
-            {isMarketOpen ? "장중 - 실시간 대응 모드" : "장후 - 심층 분석 모드"}
+            {isMarketOpen ? "장중 - 실시간 대응 모드" : "장후 최종 데이터 - 심층 분석 모드"}
           </Text>
-          {lastUpdate && <Text style={styles.updateText}>{lastUpdate} 마지막 갱신</Text>}
+          {lastUpdate && (
+            <Text style={styles.updateText}>
+              {lastUpdate} {isMarketOpen ? "갱신" : "기점(08:00까지 유지)"}
+            </Text>
+          )}
         </View>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.marketTimeText}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-        {isMarketOpen && <Text style={styles.liveBadge}>LIVE</Text>}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.marketTimeText}>
+            {new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {isMarketOpen && <Text style={styles.liveBadge}>LIVE</Text>}
+        </View>
+        <TouchableOpacity
+          onPress={() => refreshData(null, true)}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          style={{ padding: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20 }}
+        >
+          <RefreshCcw size={18} color="#fff" />
+        </TouchableOpacity>
       </View>
     </View>
   );
 
   const renderContent = () => {
     if (tab === 'home') {
-      const fStrength = analyzedStocks.reduce((acc, s) => acc + (s.fStreak || 0), 0);
-      const iStrength = analyzedStocks.reduce((acc, s) => acc + (s.iStreak || 0), 0);
+      const fStrength = detailedInstFlow?.foreign || 0;
+      const iStrength = detailedInstFlow?.institution || 0;
 
       const getSentimentInfo = () => {
         if (isMarketOpen) {
@@ -1152,7 +1194,7 @@ function MainApp() {
           return {
             title: "오늘의 시장 종합 심리",
             desc: `📅 금일 외국인은 ${fStrength > 0 ? '순매수' : '순매도'}를, 기관은 ${iStrength > 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
-            temp: 50 + (fStrength * 2) + (iStrength * 2)
+            temp: 50 + (fStrength > 0 ? 10 : -10) + (iStrength > 0 ? 10 : -10) + (fStrength + iStrength) / 200
           };
         }
       };
@@ -1387,8 +1429,11 @@ function MainApp() {
                                 <Star size={22} color={isFav ? "#FFD700" : "#666"} fill={isFav ? "#FFD700" : "transparent"} />
                               </TouchableOpacity>
                               <View style={{ flex: 1 }}>
-                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{ms.name}</Text>
-                                <Text style={{ color: '#aaa', fontSize: 14, marginTop: 4 }}>{ms.code}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{ms.name}</Text>
+                                  <Text style={{ color: '#666', fontSize: 12 }}>{ms.code}</Text>
+                                </View>
+                                <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>실시간 데이터 분석 중...</Text>
                               </View>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <ActivityIndicator size="small" color="#3182f6" />
@@ -1599,7 +1644,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.6.2 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.7.0 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1613,7 +1658,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.6.2</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.7.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -1780,6 +1825,10 @@ function MainApp() {
                 };
                 const fScore = getScore(selectedStock.fStreak || 0);
                 const iScore = getScore(selectedStock.iStreak || 0);
+                const fStreak = selectedStock.fStreak || 0;
+                const iStreak = selectedStock.iStreak || 0;
+                const fBadge = getStreakBadge('외인', fStreak, fStreak > 0 ? settingBuyStreak : settingSellStreak);
+                const iBadge = getStreakBadge('기관', iStreak, iStreak > 0 ? settingBuyStreak : settingSellStreak);
                 const totalScore = fScore + iScore;
 
                 let blocks = '';

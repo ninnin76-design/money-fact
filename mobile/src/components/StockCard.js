@@ -51,14 +51,29 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
     }
     // ---------------------------------
 
-    const getStreakText = (streak) => {
-        if (streak >= buyLimit) return { text: `${streak}일 연속 매수`, color: '#ff4d4d', icon: <TrendingUp size={12} color="#ff4d4d" /> };
-        if (streak <= -sellLimit) return { text: `${Math.abs(streak)}일 연속 매도`, color: '#3182f6', icon: <TrendingDown size={12} color="#3182f6" /> };
-        return null;
+    // [v3.6.2 개선] streak 배지: 기준일수 이상 → 주요 배지, 그 외 → 보조 배지
+    // 연속매매 탭에서 기관 5일인 종목이 보일 때, 외인 streak도 함께 보이도록 개선
+    const getStreakBadge = (label, streak, limit) => {
+        if (!streak || streak === 0) return null;
+        const abStreak = Math.abs(streak);
+        const isBuy = streak > 0;
+        const meetsLimit = isBuy ? streak >= limit : streak <= -limit;
+
+        return {
+            text: `${label} ${abStreak}일 연속 ${isBuy ? '매수' : '매도'}`,
+            color: isBuy ? '#ff4d4d' : '#3182f6',
+            icon: isBuy
+                ? <TrendingUp size={12} color="#ff4d4d" />
+                : <TrendingDown size={12} color="#3182f6" />,
+            isPrimary: meetsLimit,  // 기준일수를 넘으면 주요 배지
+        };
     };
 
-    const fInfo = getStreakText(fStreak);
-    const iInfo = getStreakText(iStreak);
+    const fBadge = getStreakBadge('외인', fStreak, fStreak > 0 ? buyLimit : sellLimit);
+    const iBadge = getStreakBadge('기관', iStreak, iStreak > 0 ? buyLimit : sellLimit);
+
+    // 최소 하나라도 streak가 있으면 배지 영역 표시
+    const hasBadge = fBadge || iBadge;
 
     return (
         <TouchableOpacity style={styles.card} onPress={onPress}>
@@ -81,19 +96,19 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                     )}
                 </View>
 
-                {/* 2행: 수급 배지 (외인/기관) */}
-                {(fInfo || iInfo) && (
+                {/* 2행: 수급 배지 (외인/기관) - 모든 streak 표시 */}
+                {hasBadge && (
                     <View style={styles.badgeRow}>
-                        {fInfo && (
-                            <View style={styles.badge}>
-                                {fInfo.icon}
-                                <Text style={[styles.badgeText, { color: fInfo.color }]}>외인 {fInfo.text}</Text>
+                        {fBadge && (
+                            <View style={[styles.badge, !fBadge.isPrimary && styles.badgeSub]}>
+                                {fBadge.icon}
+                                <Text style={[styles.badgeText, { color: fBadge.color }, !fBadge.isPrimary && styles.badgeTextSub]}>{fBadge.text}</Text>
                             </View>
                         )}
-                        {iInfo && (
-                            <View style={styles.badge}>
-                                {iInfo.icon}
-                                <Text style={[styles.badgeText, { color: iInfo.color }]}>기관 {iInfo.text}</Text>
+                        {iBadge && (
+                            <View style={[styles.badge, !iBadge.isPrimary && styles.badgeSub]}>
+                                {iBadge.icon}
+                                <Text style={[styles.badgeText, { color: iBadge.color }, !iBadge.isPrimary && styles.badgeTextSub]}>{iBadge.text}</Text>
                             </View>
                         )}
                     </View>
@@ -176,10 +191,20 @@ const styles = StyleSheet.create({
         paddingVertical: 3,
         borderRadius: 5,
     },
+    badgeSub: {
+        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
     badgeText: {
         fontSize: 11,
         fontWeight: 'bold',
         marginLeft: 3,
+    },
+    badgeTextSub: {
+        fontSize: 10,
+        fontWeight: '600',
+        opacity: 0.7,
     },
     row3: {
         flexDirection: 'row',

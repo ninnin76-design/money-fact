@@ -84,7 +84,7 @@ const SECTOR_WATCH_STOCKS = [
     { name: '디아이(DI)', code: '003160' }, { name: '에스앤에스텍', code: '101490' },
     { name: '이오테크닉스', code: '039030' }, { name: '원익IPS', code: '240810' },
     { name: 'ISC', code: '095340' }, { name: '두산테스나', code: '131970' },
-    { name: '에프에스티', code: '036810' }, { name: '한화비전', code: '027740' },
+    { name: '에프에스티', code: '036810' }, { name: '한화비전', code: '489790' },
     { name: '가온칩스', code: '399720' }, { name: '에이디테크놀로지', code: '158430' },
     { name: '주성엔지니어링', code: '036930' }, { name: '한미반도체', code: '042700' },
     { name: '케이씨텍', code: '281820' }, { name: '원익QnC', code: '074600' },
@@ -412,11 +412,94 @@ async function runDeepMarketScan(force = false) {
         const totalCandidates = candidateMap.size;
         console.log(`[Radar] ===== 1단계 완료: 총 ${totalCandidates}개 후보 확보! =====`);
 
+        // [v3.6.2] 시장 전체 섹터별 자금 흐름 (2,800개 종목 대변)을 먼저 가져옵니다.
+        async function fetchOverallSectors(token) {
+            const sectorsToTrack = [
+                { name: '반도체(전기전자)', code: '0013', div: 'U' },
+                { name: '자동차(운수장비)', code: '0015', div: 'U' },
+                { name: '바이오(의약품)', code: '0006', div: 'U' },
+                { name: '이차전지(화학)', code: '0005', div: 'U' },
+                { name: '엔터/SW(서비스)', code: '0021', div: 'U' },
+                { name: '금융/지주', code: '0018', div: 'U' },
+                { name: 'IT 하드웨어', code: '1012', div: 'U' },
+                { name: '코스닥 제약', code: '1029', div: 'U' },
+                { name: '기계/장비', code: '0009', div: 'U' }
+            ];
+
+            const results = [];
+            for (const s of sectorsToTrack) {
+                try {
+                    await new Promise(r => setTimeout(r, 80));
+                    const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
+                        headers: {
+                            authorization: `Bearer ${token}`,
+                            appkey: APP_KEY,
+                            appsecret: APP_SECRET,
+                            tr_id: 'FHKUP03500100',
+                            custtype: 'P'
+                        },
+                        params: {
+                            FID_COND_MRKT_DIV_CODE: s.div,
+                            FID_INPUT_ISCD: s.code
+                        }
+                    });
+                    const d = res.data.output;
+                    if (d) {
+                        const foreign = parseInt(d.prdy_frgn_ntby_qty || 0);
+                        const institution = parseInt(d.prdy_orgn_ntby_qty || 0);
+                        results.push({ name: s.name, flow: foreign + institution });
+                    }
+                } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
+            }
+            return results.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6);
+        }
+
+        const marketSectorsResult = await fetchOverallSectors(token);
+
+        // [v3.6.3] 대한민국 시장 전체(2,800개 종목) 자금 흐름 가져오기
+        async function fetchMarketTotalFlow(token) {
+            const markets = [
+                { name: 'KOSPI', code: '0001' },
+                { name: 'KOSDAQ', code: '1001' }
+            ];
+            let totalF = 0, totalI = 0;
+            let pnsn = 0, ivtg = 0, ins = 0;
+
+            for (const m of markets) {
+                try {
+                    await new Promise(r => setTimeout(r, 100));
+                    const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
+                        headers: {
+                            authorization: `Bearer ${token}`,
+                            appkey: APP_KEY,
+                            appsecret: APP_SECRET,
+                            tr_id: 'FHKUP03500100',
+                            custtype: 'P'
+                        },
+                        params: {
+                            FID_COND_MRKT_DIV_CODE: 'U',
+                            FID_INPUT_ISCD: m.code
+                        }
+                    });
+                    const d = res.data.output;
+                    if (d) {
+                        totalF += parseInt(d.prdy_frgn_ntby_qty || 0);
+                        totalI += parseInt(d.prdy_orgn_ntby_qty || 0);
+                        pnsn += parseInt(d.pnsn_ntby_qty || 0);
+                        ivtg += parseInt(d.ivtg_ntby_qty || 0);
+                        ins += parseInt(d.ins_ntby_qty || 0);
+                    }
+                } catch (e) { console.error(`Market Total API Error [${m.name}]: ${e.message}`); }
+            }
+            return { foreign: totalF, institution: totalI, pnsn, ivtg, ins };
+        }
+
+        const marketTotalFlow = await fetchMarketTotalFlow(token);
+
         // ========================================================
         // [코다리 부장] 2단계: 정밀 수급 분석 (The Deep Scan)
-        // 1단계에서 걸러낸 '수상한 놈들'의 투자자별 매집 현황을 정밀 분석합니다.
         // ========================================================
-        console.log(`[Radar 2단계] 정밀 수급 분석 시작 - ${totalCandidates}개 종목 Deep Scan...`);
+        console.log(`[Radar 2단계] 정밀 수급 분석 시작...`);
 
         const candidates = Array.from(candidateMap.values());
         const historyData = new Map();
@@ -469,7 +552,25 @@ async function runDeepMarketScan(force = false) {
                         name: stk.name, price: currentPrice, rate: currentRate, daily
                     });
                 }
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                console.error(`[Deep Scan Error] ${stk.name} (${stk.code}): ${e.message}`);
+                // [v3.6.2] 핵심 섹터 종목은 실패 시 1회 재시도 (유량 제한 등 일시적 오류 대비)
+                if (sectorStockCodes.has(stk.code)) {
+                    console.log(`[Radar] 핵심 종목 ${stk.name} 재시도 중...`);
+                    await new Promise(r => setTimeout(r, 500));
+                    try {
+                        const invRes2 = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                            headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+                            params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
+                        });
+                        const daily2 = invRes2.data.output || [];
+                        if (daily2.length > 0) {
+                            hits++;
+                            historyData.set(stk.code, { name: stk.name, price: daily2[0].stck_clpr, rate: daily2[0].prdy_ctrt, daily: daily2 });
+                        }
+                    } catch (e2) { console.error(`[Deep Scan Retry Failed] ${stk.name}: ${e2.message}`); }
+                }
+            }
 
             if (i % 50 === 0 && i > 0) console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
         }
@@ -501,7 +602,14 @@ async function runDeepMarketScan(force = false) {
         const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
 
         const sectorMap = {};
-        const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
+        // 2,800개 전 종목 수급 데이터를 기본값으로 사용
+        const instTotals = {
+            pnsn: marketTotalFlow.pnsn || 0,
+            ivtg: marketTotalFlow.ivtg || 0,
+            ins: marketTotalFlow.ins || 0,
+            foreign: marketTotalFlow.foreign || 0,
+            institution: marketTotalFlow.institution || 0
+        };
 
         historyData.forEach((val, code) => {
             const d = val.daily[0];
@@ -514,9 +622,7 @@ async function runDeepMarketScan(force = false) {
             if (mwc && mwc.sector) {
                 sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuy;
             }
-            instTotals.pnsn += pnsnBuy;
-            instTotals.ivtg += ivtgBuy;
-            instTotals.ins += insBuy;
+            // [v3.6.3] instTotals는 위에서 이미 시장 전체 합계로 초기화되었으므로 개별 합산을 수행하지 않습니다.
 
             // [v3.6.2 핵심 수정] 외인/기관 streak를 독립적으로 계산!
             // 기존에는 투자자별 루프에서 fStreak=iStreak=같은 값이 들어가는 버그가 있었습니다.
@@ -654,15 +760,19 @@ async function runDeepMarketScan(force = false) {
         });
 
         // [코다리 부장 터치] 밤 늦게 데이터가 0으로 들어와도, 낮의 뜨거웠던 자금 흐름 데이터를 삭제하지 않고 보존합니다!
+        const buyCount = Object.values(newBuyData).reduce((acc, l) => acc + l.length, 0);
+        const sellCount = Object.values(newSellData).reduce((acc, l) => acc + l.length, 0);
+        console.log(`[Radar 3단계] 분석 완료! 매수:${buyCount}건, 매도:${sellCount}건, 전체:${Object.keys(newAllAnalysis).length}건`);
+
         marketAnalysisReport.buyData = newBuyData;
         marketAnalysisReport.sellData = newSellData;
         marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
 
-        if (totalSectorFlow > 0) {
-            marketAnalysisReport.sectors = sectorList;
+        if (marketSectorsResult && marketSectorsResult.length > 0) {
+            marketAnalysisReport.sectors = marketSectorsResult;
             marketAnalysisReport.instFlow = instTotals;
         }
-        marketAnalysisReport.updateTime = new Date();
+        marketAnalysisReport.updateTime = new Date().toISOString();
         marketAnalysisReport.dataType = currentType;
         marketAnalysisReport.status = 'READY';
         marketAnalysisReport.scanStats = {
