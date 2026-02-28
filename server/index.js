@@ -743,16 +743,17 @@ async function runDeepMarketScan(force = false) {
             '반도체', '이차전지', '바이오 및 헬스케어', '자동차 및 전자부품', '로봇 및 에너지', '엔터 및 플랫폼'
         ];
         const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
-        sectorList.sort((a, b) => {
-            const idxA = SECTOR_ORDER.indexOf(a.name);
-            const idxB = SECTOR_ORDER.indexOf(b.name);
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            if (idxA !== -1) return -1;
-            if (idxB !== -1) return 1;
-            return b.flow - a.flow;
-        });
+        // [v3.8.0] 섹터별 자금 흐름을 금액(절대값)이 큰 순서대로 정렬하여 시장 활성도를 우선적으로 보여줌
+        sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
 
-        const totalSectorFlow = sectorList.reduce((acc, s) => acc + Math.abs(s.flow), 0);
+        if (marketSectorsResult && marketSectorsResult.length > 0) {
+            // 외부 API에서 가져온 섹터 데이터도 금액 순으로 정렬
+            marketSectorsResult.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+            marketAnalysisReport.sectors = marketSectorsResult;
+        } else {
+            // 자체 집계된 섹터 데이터 사용 시 상위 6개 노출
+            marketAnalysisReport.sectors = sectorList.slice(0, 6);
+        }
 
         investors.forEach(inv => {
             newBuyData[`5_${inv}`].sort((a, b) => b.streak - a.streak);

@@ -631,7 +631,7 @@ function MainApp() {
           }
         }
       } catch (e) {
-        console.log('[Cache] Load failed:', e.message);
+        // [Cache] Load failed
       }
     }
 
@@ -736,7 +736,7 @@ function MainApp() {
           }
         }
       } catch (e) {
-        console.log('[Snapshot] Failed:', e.message);
+        // [Snapshot] Failed
       }
     }
 
@@ -1183,7 +1183,7 @@ function MainApp() {
         setSelectedStockHistory(history);
       }
     } catch (e) {
-      console.log("Detail fetch failed:", e);
+      // Detail fetch failed
     } finally {
       setFetchingDetail(false);
     }
@@ -1693,7 +1693,7 @@ function MainApp() {
 
           {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.7.0 Gold Edition</Text>
+            <Text style={styles.footerText}>Money Fact v3.8.0 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1707,7 +1707,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.7.0</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
