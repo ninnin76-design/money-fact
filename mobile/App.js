@@ -615,6 +615,25 @@ function MainApp() {
     isRefreshing.current = true;
     if (!silent) setLoading(true);
 
+    // [v3.7.1] 초기 로딩 시 로컬에 저장된 캐시 데이터가 있다면 즉시 화면에 먼저 보여줍니다! (0.1초 만에 뜨게 함)
+    if (isInitial) {
+      try {
+        const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.stocks && parsed.stocks.length > 0) {
+            setAnalyzedStocks(parsed.stocks);
+            if (parsed.sectors) setSectors(parsed.sectors);
+            if (parsed.instFlow) setDetailedInstFlow(parsed.instFlow);
+            if (parsed.scanStats) setScanStats(parsed.scanStats);
+            setLastUpdate(parsed.updateTime || '데이터 로딩 중...');
+          }
+        }
+      } catch (e) {
+        console.log('[Cache] Load failed:', e.message);
+      }
+    }
+
     let snapshotStocks = [];
     // [v3.6.2 fix] 앱 초기 로딩(isInitial) 또는 자동 갱신 시 항상 스냅샷을 가져옵니다!
     const shouldFetchSnapshot = !isUserAction || isInitial;
@@ -723,6 +742,19 @@ function MainApp() {
     const results = [...snapshotStocks];
     const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
 
+    // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
+    // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
+    analyzedStocks.forEach(prev => {
+      if (!snapshotExistingCodes.has(prev.code)) {
+        // 외국인/기관 매집 추천(isHiddenAccumulation)이거나, 3일 이상 중요 연속 매수세가 확인된 종목은 강제로 유지
+        const isTreasure = prev.isHiddenAccumulation || Math.abs(prev.fStreak) >= 3 || Math.abs(prev.iStreak) >= 3;
+        if (isTreasure) {
+          results.push(prev);
+          snapshotExistingCodes.add(prev.code);
+        }
+      }
+    });
+
     // [v3.6 최적화] 서버 스냅샷에 이미 데이터가 있는 종목은 KIS API를 호출하지 않음!
     // 관심종목이라도 서버가 이미 분석해둔 데이터가 있으면 그대로 활용합니다.
     // 스냅샷에 없는 종목(사용자가 개별 추가한 종목)만 직접 KIS API를 호출합니다.
@@ -741,8 +773,19 @@ function MainApp() {
       }
 
       // [v3.6.2] 장 마감 시간에 스냅샷에 없는 종목은 KIS API 호출을 건너뜁니다.
-      // (이미 위에서 서버의 명단을 확인했으므로, 여기에 왔다는 것은 서버 스캔 대상조차 아니었다는 뜻입니다)
       if (!StockService.isMarketOpen() && !forceFetch) {
+        // [v3.7.1] 서버 스냅샷에 없더라도 내 명사산 리 리스트(results)에는 일단 추가해 둡니다. (사라짐 방지)
+        // 기존에 분석된(analyzedStocks) 정보가 있다면 그것을 재사용하고, 없으면 0으로 초기화합니다.
+        const prev = analyzedStocks.find(s => s.code === stock.code);
+        if (prev) {
+          if (!results.some(r => r.code === stock.code)) {
+            results.push(prev);
+          }
+        } else {
+          if (!results.some(r => r.code === stock.code)) {
+            results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
+          }
+        }
         continue;
       }
 
