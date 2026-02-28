@@ -8,7 +8,7 @@ const SectorHeatmap = ({ sectors = [] }) => {
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
-                <Text style={styles.title}>📈 섹터별 자금 유입 TOP</Text>
+                <Text style={styles.title}>📈 섹터별 자금 흐름 TOP</Text>
                 <Text style={styles.noticeText}>*정확한 수급은 장 마감 후 반영</Text>
             </View>
             <View style={styles.grid}>

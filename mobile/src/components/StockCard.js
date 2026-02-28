@@ -85,9 +85,9 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
             <View style={styles.cardContent}>
                 {/* 1행: 종목이름 + 블럭 */}
                 <View style={styles.row1}>
-                    <Text style={styles.name}>{name}</Text>
+                    <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.4}>{name}</Text>
                     <View style={styles.blocksBox}>
-                        <Text style={styles.blocksText}>{blocks}</Text>
+                        <Text style={styles.blocksText} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.4}>{blocks}</Text>
                     </View>
                     {onDelete && (
                         <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -118,13 +118,13 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                 <View style={styles.row3}>
                     <View style={styles.row3Left}>
                         {patternTag && (
-                            <Text style={[styles.patternTag, { color: patternColor }]}>{patternTag}</Text>
+                            <Text style={[styles.patternTag, { color: patternColor }]} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.4}>{patternTag}</Text>
                         )}
-                        <Text style={styles.price}>{price?.toLocaleString()}원</Text>
+                        <Text style={styles.price} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.4}>{price?.toLocaleString()}원</Text>
                     </View>
                     <View style={styles.sentimentBox}>
                         <ThermoIcon size={12} color={sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888')} />
-                        <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]}>{sentiment}도</Text>
+                        <Text style={[styles.sentimentText, { color: sentiment > 70 ? '#ff4d4d' : (sentiment < 30 ? '#3182f6' : '#888') }]} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.4}>{sentiment}도</Text>
                     </View>
                 </View>
             </View>
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
-        flexShrink: 0,
+        flexShrink: 1,
         marginRight: 8,
     },
     blocksBox: {
@@ -214,21 +214,25 @@ const styles = StyleSheet.create({
     row3Left: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         flexShrink: 1,
+        flex: 1,
     },
     patternTag: {
         fontSize: 12,
         fontWeight: '800',
+        flexShrink: 1,
     },
     price: {
         color: '#aaa',
         fontSize: 14,
+        flexShrink: 0,
     },
     sentimentBox: {
         flexDirection: 'row',
         alignItems: 'center',
         flexShrink: 0,
+        marginLeft: 4,
     },
     sentimentText: {
         color: '#888',

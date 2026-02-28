@@ -9,7 +9,8 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
-  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2, ChevronUp, ChevronDown, Folder, Heart
+  AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2, ChevronUp, ChevronDown, Folder, Heart,
+  Server, Smartphone
 } from 'lucide-react-native';
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
@@ -907,7 +908,7 @@ function MainApp() {
         stocks: results,
         sectors: updatedSectors.sort((a, b) => b.flow - a.flow).slice(0, 6),
         instFlow: roundedInstTotals,
-        updateTime: timeStr
+        updateTime: fullTimeStr
       };
       AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
     }
@@ -1190,34 +1191,37 @@ function MainApp() {
 
   const MarketStatusHeader = () => (
     <View style={[styles.marketHeader, isMarketOpen ? styles.marketOpenBg : styles.marketClosedBg]}>
-      <View style={styles.marketInfo}>
-        <View style={[styles.statusDot, isMarketOpen ? styles.dotOpen : styles.dotClosed]} />
-        <View>
+      <View style={{ flex: 1 }}>
+        <View style={styles.marketInfo}>
+          <View style={[styles.statusDot, isMarketOpen ? styles.dotOpen : styles.dotClosed]} />
           <Text style={styles.marketStatusText}>
             {isMarketOpen ? "장중 - 실시간 대응 모드" : "장후 최종 데이터 - 심층 분석 모드"}
           </Text>
-          {lastUpdate && (
-            <Text style={styles.updateText}>
-              {lastUpdate} {isMarketOpen ? "갱신" : "기점(08:00까지 유지)"}
-            </Text>
-          )}
+          {isMarketOpen && <Text style={[styles.liveBadge, { marginLeft: 6, marginTop: 0 }]}>LIVE</Text>}
         </View>
+        {lastUpdate && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Server size={10} color="rgba(255,255,255,0.5)" />
+              <Text style={styles.updateText}>[확정] {lastUpdate}</Text>
+            </View>
+            <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Smartphone size={10} color="rgba(255,255,255,0.5)" />
+              <Text style={styles.updateText}>
+                [동기화] {new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.marketTimeText}>
-            {new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          {isMarketOpen && <Text style={styles.liveBadge}>LIVE</Text>}
-        </View>
-        <TouchableOpacity
-          onPress={() => refreshData(null, true)}
-          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-          style={{ padding: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20 }}
-        >
-          <RefreshCcw size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        onPress={() => refreshData(null, true)}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+        style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, marginLeft: 10 }}
+      >
+        <RefreshCcw size={18} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 
@@ -1246,7 +1250,7 @@ function MainApp() {
       const info = getSentimentInfo();
 
       return (
-        <ScrollView style={styles.scroll}>
+        <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
           <MarketStatusHeader />
 
           {/* [코다리 부장] 전종목 레이더 스캔 현황 */}
@@ -1285,6 +1289,7 @@ function MainApp() {
             ))}
           {analyzedStocks.filter(s => s.isHiddenAccumulation).length === 0
             && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
+          <View style={{ height: 40 }} />
         </ScrollView>
       );
     }
