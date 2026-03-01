@@ -749,15 +749,6 @@ async function runDeepMarketScan(force = false) {
         // [v3.8.0] 섹터별 자금 흐름을 금액(절대값)이 큰 순서대로 정렬하여 시장 활성도를 우선적으로 보여줌
         sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
 
-        if (marketSectorsResult && marketSectorsResult.length > 0) {
-            // 외부 API에서 가져온 섹터 데이터도 금액 순으로 정렬
-            marketSectorsResult.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
-            marketAnalysisReport.sectors = marketSectorsResult;
-        } else {
-            // 자체 집계된 섹터 데이터 사용 시 상위 6개 노출
-            marketAnalysisReport.sectors = sectorList.slice(0, 6);
-        }
-
         investors.forEach(inv => {
             newBuyData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
             newSellData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
@@ -773,7 +764,14 @@ async function runDeepMarketScan(force = false) {
         marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
 
         if (marketSectorsResult && marketSectorsResult.length > 0) {
-            marketAnalysisReport.sectors = marketSectorsResult;
+            // [v3.8.2] 외부 API 데이터 기반 섹터 정렬 (확실하게 절대값 큰 순서)
+            marketSectorsResult.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+            marketAnalysisReport.sectors = marketSectorsResult.slice(0, 6);
+            marketAnalysisReport.instFlow = instTotals;
+        } else {
+            // 자체 집계 데이터 사용 시에도 정렬 보장
+            sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+            marketAnalysisReport.sectors = sectorList.slice(0, 6);
             marketAnalysisReport.instFlow = instTotals;
         }
         marketAnalysisReport.updateTime = new Date().toISOString();

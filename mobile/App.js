@@ -624,7 +624,7 @@ function MainApp() {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.stocks && parsed.stocks.length > 0) {
             setAnalyzedStocks(parsed.stocks);
-            if (parsed.sectors) setSectors(parsed.sectors);
+            if (parsed.sectors) setSectors([...parsed.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
             if (parsed.instFlow) setDetailedInstFlow(parsed.instFlow);
             if (parsed.scanStats) setScanStats(parsed.scanStats);
             setLastUpdate(parsed.updateTime || '데이터 로딩 중...');
@@ -711,7 +711,7 @@ function MainApp() {
 
             if (snapshotStocks.length > 0) {
               // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
-              if (snap.sectors) setSectors(snap.sectors);
+              if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
               if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
 
               // [코다리 부장] 레이더 스캔 통계 업데이트!
@@ -1696,7 +1696,7 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={styles.footerInfo}>
-            <Text style={styles.versionLabel}>Money Fact v3.8.2 Gold Edition</Text>
+            <Text style={styles.versionLabel}>Money Fact v3.8.3 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1710,7 +1710,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.2</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.3</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
