@@ -445,9 +445,10 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        const foreign = parseInt(d.prdy_frgn_ntby_qty || 0);
-                        const institution = parseInt(d.prdy_orgn_ntby_qty || 0);
-                        results.push({ name: s.name, flow: foreign + institution });
+                        // [v3.8.2] 수량이 아닌 '거래 대금(tr_pbmn)' 필드를 사용하여 실질적인 자금 규모를 집계
+                        const foreign = parseInt(d.prdy_frgn_ntby_tr_pbmn || 0);
+                        const institution = parseInt(d.prdy_orgn_ntby_tr_pbmn || 0);
+                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100) }); // 백만원 -> 억원 단위로 대략적 변환
                     }
                 } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
             }
@@ -620,7 +621,9 @@ async function runDeepMarketScan(force = false) {
 
             const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
             if (mwc && mwc.sector) {
-                sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuy;
+                // [v3.8.2] 수량 * 현재가 공식을 통해 자금의 실제 규모(금액)를 계산
+                const amount = netBuy * parseInt(val.price || 0);
+                sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + amount;
             }
             // [v3.6.3] instTotals는 위에서 이미 시장 전체 합계로 초기화되었으므로 개별 합산을 수행하지 않습니다.
 
