@@ -886,7 +886,7 @@ function MainApp() {
     // [코다리 부장 터치] 밤 늦게 API가 0을 던져줘도, 화면의 섹터 데이터를 0으로 덮어쓰지 않고 유지합니다!
     const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
     if (updatedSectors.length > 0 && totalFlow > 0) {
-      setSectors(updatedSectors.sort((a, b) => b.flow - a.flow).slice(0, 6));
+      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
     }
     // Round inst sub-types to billion KRW
     const roundedInstTotals = {
@@ -906,7 +906,7 @@ function MainApp() {
     if (results.length > 0) {
       const snapshot = {
         stocks: results,
-        sectors: updatedSectors.sort((a, b) => b.flow - a.flow).slice(0, 6),
+        sectors: updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
         instFlow: roundedInstTotals,
         updateTime: fullTimeStr
       };
@@ -1691,13 +1691,12 @@ function MainApp() {
 
           {/* Version Info (Moved up to fill the gap) */}
 
-          {/* Version Info */}
           <View style={styles.footerInfo}>
-            <Text style={styles.footerText}>Money Fact v3.8.0 Gold Edition</Text>
+            <Text style={styles.versionLabel}>Money Fact v3.8.1 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
-        </ScrollView>
+        </ScrollView >
       );
     }
     return null;
@@ -1707,7 +1706,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.0</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.1</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
