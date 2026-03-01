@@ -765,7 +765,7 @@ function MainApp() {
 
     const tickerTexts = ["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"];
     const sectorMap = {};
-    const instTotals = { pnsn: 0, ivtg: 0, ins: 0 };
+    const instTotals = { pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 };
 
     for (const stock of combined) {
       // [v3.6 핵심] 서버 스냅샷에 이미 있으면 → KIS API 호출 안 함! (관심종목 포함!)
@@ -846,15 +846,17 @@ function MainApp() {
           }
 
           if (stock.sector) {
-            // [v3.8.2] 수량 * 현재가로 실제 돈의 규모를 합산
-            const netBuyAmount = netBuy * currentPrice;
+            // [v3.8.3] StockService.getNetBuyAmount는 이미 (수량 * 가격)을 반환하므로 중복 곱셈 제거
+            const netBuyAmount = netBuy;
             sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuyAmount;
           }
 
-          // Sum inst sub-types (Market monitor focus)
+          // Sum inst sub-types (금액 기준으로 합산)
           instTotals.pnsn += pnsnBuy;
           instTotals.ivtg += ivtgBuy;
           instTotals.ins += insBuy;
+          instTotals.foreign += (StockService.getNetBuyAmount(data, 1, 'F'));
+          instTotals.institution += (StockService.getNetBuyAmount(data, 1, 'I'));
 
           // Ticker logic for MY stocks only
           if (isMyStock) {

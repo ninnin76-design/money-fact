@@ -14,6 +14,14 @@ const SectorHeatmap = ({ sectors = [] }) => {
             <View style={styles.grid}>
                 {sectors.map((sector, index) => {
                     const isPositive = sector.flow >= 0;
+                    const formatFlow = (val) => {
+                        const absVal = Math.abs(val);
+                        if (absVal >= 10000) {
+                            return (val / 10000).toFixed(1) + '조';
+                        }
+                        return val + '억';
+                    };
+
                     return (
                         <View
                             key={index}
@@ -33,9 +41,8 @@ const SectorHeatmap = ({ sectors = [] }) => {
                                     adjustsFontSizeToFit={true}
                                     minimumFontScale={0.5}
                                 >
-                                    {isPositive ? '↑' : '↓'} {Math.abs(sector.flow)}
+                                    {isPositive ? '↑' : '↓'} {formatFlow(sector.flow)}
                                 </Text>
-                                <Text style={styles.unit}>억</Text>
                             </View>
                         </View>
                     );

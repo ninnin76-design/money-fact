@@ -448,7 +448,7 @@ async function runDeepMarketScan(force = false) {
                         // [v3.8.2] 수량이 아닌 '거래 대금(tr_pbmn)' 필드를 사용하여 실질적인 자금 규모를 집계
                         const foreign = parseInt(d.prdy_frgn_ntby_tr_pbmn || 0);
                         const institution = parseInt(d.prdy_orgn_ntby_tr_pbmn || 0);
-                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100) }); // 백만원 -> 억원 단위로 대략적 변환
+                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100000000) }); // 원 -> 억원 단위로 정확히 변환
                     }
                 } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
             }
@@ -484,15 +484,24 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        totalF += parseInt(d.prdy_frgn_ntby_qty || 0);
-                        totalI += parseInt(d.prdy_orgn_ntby_qty || 0);
-                        pnsn += parseInt(d.pnsn_ntby_qty || 0);
-                        ivtg += parseInt(d.ivtg_ntby_qty || 0);
-                        ins += parseInt(d.ins_ntby_qty || 0);
+                        // [v3.8.3] 수량이 아닌 '거래 대금(tr_pbmn)' 필드를 사용하여 실질적인 자금 규모 집계
+                        totalF += parseInt(d.prdy_frgn_ntby_tr_pbmn || 0);
+                        totalI += parseInt(d.prdy_orgn_ntby_tr_pbmn || 0);
+                        pnsn += parseInt(d.pnsn_ntby_tr_pbmn || 0);
+                        ivtg += parseInt(d.ivtg_ntby_tr_pbmn || 0);
+                        ins += parseInt(d.ins_ntby_tr_pbmn || 0);
                     }
                 } catch (e) { console.error(`Market Total API Error [${m.name}]: ${e.message}`); }
             }
-            return { foreign: totalF, institution: totalI, pnsn, ivtg, ins };
+            // 원 -> 억원 단위로 변환
+            const normalize = (val) => Math.round(val / 100000000);
+            return {
+                foreign: normalize(totalF),
+                institution: normalize(totalI),
+                pnsn: normalize(pnsn),
+                ivtg: normalize(ivtg),
+                ins: normalize(ins)
+            };
         }
 
         const marketTotalFlow = await fetchMarketTotalFlow(token);
@@ -621,8 +630,8 @@ async function runDeepMarketScan(force = false) {
 
             const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
             if (mwc && mwc.sector) {
-                // [v3.8.2] 수량 * 현재가 공식을 통해 자금의 실제 규모(금액)를 계산
-                const amount = netBuy * parseInt(val.price || 0);
+                // [v3.8.3] 수량 * 현재가 공식을 통해 자금의 실제 규모(금액)를 계산 후 억 단위로 변환
+                const amount = Math.round((netBuy * parseInt(val.price || 0)) / 100000000);
                 sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + amount;
             }
             // [v3.6.3] instTotals는 위에서 이미 시장 전체 합계로 초기화되었으므로 개별 합산을 수행하지 않습니다.
