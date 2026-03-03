@@ -282,19 +282,42 @@ async function runDeepMarketScan(force = false) {
     const kstOffset = 9 * 60 * 60 * 1000;
     const kstDate = new Date(now.getTime() + kstOffset);
     const hour = kstDate.getUTCHours();
+    const minute = kstDate.getUTCMinutes();
     const day = kstDate.getUTCDay(); // 0=Sun, 6=Sat
+    const kstDateStr = `${kstDate.getUTCFullYear()}-${String(kstDate.getUTCMonth() + 1).padStart(2, '0')}-${String(kstDate.getUTCDate()).padStart(2, '0')}`;
 
-    console.log(`[Worker] Server(UTC): ${now.toISOString()}, Target(KST): ${kstDate.toISOString()}, Hour: ${hour}, Day: ${day}`);
+    console.log(`[Worker] Server(UTC): ${now.toISOString()}, KST: ${kstDateStr} ${hour}:${String(minute).padStart(2, '0')}, Day: ${day}, Force: ${force}`);
 
-    // [v3.6 최적화] 시장 감시 시간: 오전 8시 ~ 오후 8시 (20:00) KST
+    // [v3.9.0 최적화] 시장 감시 시간: 오전 8시 ~ 오후 8시 (20:00) KST
     // 오후 3:30 이후 시간외 및 야간 거래 수급까지 15분마다 추적하여 8시에 최종 확정합니다.
     const isWeekend = (day === 0 || day === 6);
     const isMarketOpen = (hour >= 8 && hour <= 20) && !isWeekend;
     const hasNoData = !marketAnalysisReport.updateTime;
 
+    // [v3.9.0] 마지막 업데이트가 오늘 날짜가 아니면 데이터가 오래된 것으로 판단
+    let isDataStale = false;
+    if (marketAnalysisReport.updateTime) {
+        const lastUpdate = new Date(marketAnalysisReport.updateTime);
+        const lastUpdateKST = new Date(lastUpdate.getTime() + kstOffset);
+        const lastUpdateDateStr = `${lastUpdateKST.getUTCFullYear()}-${String(lastUpdateKST.getUTCMonth() + 1).padStart(2, '0')}-${String(lastUpdateKST.getUTCDate()).padStart(2, '0')}`;
+        isDataStale = (lastUpdateDateStr !== kstDateStr);
+        if (isDataStale) {
+            console.log(`[Worker] ⚠️ 데이터가 오래됨! 마지막: ${lastUpdateDateStr}, 오늘: ${kstDateStr}`);
+        }
+    }
+
+    // 장중인데 데이터가 오래됐으면 강제 갱신
+    if (isMarketOpen && isDataStale) {
+        console.log(`[Worker] 🔄 장중 + 오래된 데이터 → 강제 갱신 모드로 전환!`);
+        force = true;
+    }
+
     if (!isMarketOpen && !force && !hasNoData) {
-        console.log(`[Worker] Market Closed (KST ${hour}:xx). Serving cached data.`);
-        marketAnalysisReport.dataType = 'MARKET_CLOSE';
+        console.log(`[Worker] Market Closed (KST ${hour}:${String(minute).padStart(2, '0')}). Serving cached data.`);
+        // [v3.9.0] MARKET_CLOSE 상태는 dataType만 바꾸고 기존 데이터는 보존
+        if (marketAnalysisReport.status === 'READY') {
+            marketAnalysisReport.dataType = 'MARKET_CLOSE';
+        }
         return;
     }
 
@@ -511,6 +534,9 @@ async function runDeepMarketScan(force = false) {
         // ========================================================
         console.log(`[Radar 2단계] 정밀 수급 분석 시작...`);
 
+        // [v3.9.0] sectorStockCodes를 Deep Scan 루프 전에 먼저 선언 (ReferenceError 방지)
+        const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
+
         const candidates = Array.from(candidateMap.values());
         const historyData = new Map();
         let hits = 0;
@@ -609,7 +635,7 @@ async function runDeepMarketScan(force = false) {
 
         // [v3.6.1] 70개 주요 섹터 종목 데이터 강제 포함 (프론트엔드 분석 대기 해결)
         newBuyData['sectors'] = [];
-        const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
+        // [v3.9.0] sectorStockCodes는 2단계 시작 시 이미 선언됨 (위 참조)
 
         const sectorMap = {};
         // 2,800개 전 종목 수급 데이터를 기본값으로 사용
@@ -944,11 +970,22 @@ async function runDeepMarketScan(force = false) {
     }
 }
 
-// [코다리 부장 터치] 서버가 켜질 때 데이터가 너무 오래됐거나 없으면 즉시 한 번 구워줍니다!
-const shouldScanNow = !marketAnalysisReport.updateTime || (new Date() - new Date(marketAnalysisReport.updateTime) > 60 * 60 * 1000);
+// [v3.9.0 코다리 부장] 서버 기동 시 데이터 갱신 판단 로직 개선
+// - 데이터가 없거나 마지막 업데이트가 오늘 날짜가 아니면 즉시 강제 스캔
+// - 연휴/주말을 지나 장이 시작될 때 반드시 새 데이터를 가져오도록 보장
+const _kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+const _todayStr = `${_kstNow.getUTCFullYear()}-${String(_kstNow.getUTCMonth() + 1).padStart(2, '0')}-${String(_kstNow.getUTCDate()).padStart(2, '0')}`;
+let _lastUpdateStr = '';
+if (marketAnalysisReport.updateTime) {
+    const _lastKST = new Date(new Date(marketAnalysisReport.updateTime).getTime() + 9 * 60 * 60 * 1000);
+    _lastUpdateStr = `${_lastKST.getUTCFullYear()}-${String(_lastKST.getUTCMonth() + 1).padStart(2, '0')}-${String(_lastKST.getUTCDate()).padStart(2, '0')}`;
+}
+const shouldScanNow = !marketAnalysisReport.updateTime || (_lastUpdateStr !== _todayStr);
 if (shouldScanNow) {
-    console.log("[Server] Data stale or missing. Starting immediate market scan...");
+    console.log(`[Server] 데이터가 오래됨 또는 없음! 마지막: ${_lastUpdateStr || '없음'}, 오늘: ${_todayStr}. 즉시 스캔 시작...`);
     runDeepMarketScan(true);
+} else {
+    console.log(`[Server] 데이터가 오늘(${_todayStr}) 것입니다. 정기 스케줄로 갱신합니다.`);
 }
 
 // [코다리 부장] setInterval은 app.listen 콜백에서 1회만 실행 (중복 방지)
@@ -1265,7 +1302,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Deep Scan Server Online on port ${PORT}`);
 
-    // [코다리 부장 터치] 어플을 켜지 않아도 서버가 알아서 푸시를 날리도록 15분 주기로 스캔 가동!
+    // [v3.9.0 코다리 부장] 15분 주기 스캔 (장중 자동 갱신의 핵심!)
     setInterval(() => {
         runDeepMarketScan(false);
     }, 15 * 60 * 1000);
@@ -1275,6 +1312,7 @@ app.listen(PORT, () => {
         axios.get('https://money-fact-server.onrender.com/').catch(() => { });
     }, 14 * 60 * 1000);
 
-    // 구동 시 1회 즉시 스캔
-    setTimeout(() => runDeepMarketScan(false), 5000);
+    // [v3.9.0] 서버 시작 시 중복 스캔 제거 - 위의 shouldScanNow에서 이미 처리됨
+    // force=false 중복 호출이 장 외 시간에 MARKET_CLOSE로 덮어쓰는 버그 방지
+    console.log(`[Server] 15분 주기 스캔 스케줄러 활성화 완료`);
 });
