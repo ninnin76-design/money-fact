@@ -422,7 +422,7 @@ function MainApp() {
   const [expandedSectors, setExpandedSectors] = useState({});
   const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
   const [analyzedStocks, setAnalyzedStocks] = useState([]);
-  const [tickerItems, setTickerItems] = useState(["전체 시장 매수세가 강해지고 있습니다", "반도체 섹터 자금 유입 중"]);
+  const [tickerItems, setTickerItems] = useState(["시장의 수급 흐름을 분석 중입니다..", "잠시만 기다려 주세요."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -616,335 +616,350 @@ function MainApp() {
     isRefreshing.current = true;
     if (!silent) setLoading(true);
 
-    // [v3.7.1] 초기 로딩 시 로컬에 저장된 캐시 데이터가 있다면 즉시 화면에 먼저 보여줍니다! (0.1초 만에 뜨게 함)
-    if (isInitial) {
-      try {
-        const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.stocks && parsed.stocks.length > 0) {
-            setAnalyzedStocks(parsed.stocks);
-            if (parsed.sectors) setSectors([...parsed.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
-            if (parsed.instFlow) setDetailedInstFlow(parsed.instFlow);
-            if (parsed.scanStats) setScanStats(parsed.scanStats);
-            setLastUpdate(parsed.updateTime || '데이터 로딩 중...');
-          }
-        }
-      } catch (e) {
-        // [Cache] Load failed
-      }
-    }
+    let snapshotRes = null;
+    let fullTimeStr = lastUpdate;
 
-    let snapshotStocks = [];
-    // [v3.6.2 fix] 앱 초기 로딩(isInitial) 또는 자동 갱신 시 항상 스냅샷을 가져옵니다!
-    const shouldFetchSnapshot = !isUserAction || isInitial;
+    try {
 
-    if (shouldFetchSnapshot) {
-      try {
-        const snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 20000 });
-        if (snapshotRes.data) {
-          const snap = snapshotRes.data;
-          const allBuy = snap.buyData || {};
-          const allSell = snap.sellData || {};
-
-          const hasServerData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
-            (Object.values(allBuy).some(l => l && l.length > 0)) ||
-            (Object.values(allSell).some(l => l && l.length > 0));
-
-          if (hasServerData) {
-            const seenCodes = new Set();
-            const processServerList = (list, isBuy) => {
-              (list || []).forEach(item => {
-                if (!seenCodes.has(item.code)) {
-                  seenCodes.add(item.code);
-                  snapshotStocks.push({
-                    name: item.name, code: item.code, price: parseInt(item.price || 0) || 0,
-                    fStreak: (item.fStreak !== undefined) ? item.fStreak : (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
-                    iStreak: (item.iStreak !== undefined) ? item.iStreak : 0,
-                    sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10)),
-                    vwap: item.vwap || 0,
-                    isHiddenAccumulation: item.isHiddenAccumulation || false
-                  });
-                }
-              });
-            };
-
-            Object.values(allBuy).forEach(l => processServerList(l, true));
-            Object.values(allSell).forEach(l => processServerList(l, false));
-
-            // [v3.6.3] 중복 제거 및 데이터 정합성 보강 (매수/매도 리스트에 겹치는 종목 처리)
-            // seenCodes로 이미 추가된 종목이라도, 매도 리스트에서 발견되면 streak 정보를 더 정확하게 보정합니다.
-            const enhanceServerList = (list, isBuy) => {
-              (list || []).forEach(item => {
-                const existing = snapshotStocks.find(s => s.code === item.code);
-                if (existing) {
-                  // 이미 존재하는 종목이면 streak 정보 중 더 극단적인 값을 취함 (매수는 더 크게, 매도는 더 작게)
-                  if (item.fStreak !== undefined) {
-                    existing.fStreak = isBuy ? Math.max(existing.fStreak, item.fStreak) : Math.min(existing.fStreak, item.fStreak);
-                  }
-                  if (item.iStreak !== undefined) {
-                    existing.iStreak = isBuy ? Math.max(existing.iStreak, item.iStreak) : Math.min(existing.iStreak, item.iStreak);
-                  }
-                  // 매도 데이터에서 온 경우 sentiment 낮게 조정
-                  if (!isBuy && existing.sentiment > 50) {
-                    existing.sentiment = 50 - (parseInt(item.streak || 0) * 10);
-                  }
-                }
-              });
-            };
-            Object.values(allSell).forEach(l => enhanceServerList(l, false));
-
-            // [v3.6.2] 서버가 분석한 전체 종목 데이터(allAnalysis) 추가 활용
-            if (snap.allAnalysis) {
-              Object.entries(snap.allAnalysis).forEach(([code, item]) => {
-                if (!seenCodes.has(code)) {
-                  seenCodes.add(code);
-                  snapshotStocks.push({
-                    name: item.name, code: code, price: parseInt(item.price || 0) || 0,
-                    fStreak: item.fStreak || 0,
-                    iStreak: item.iStreak || 0,
-                    sentiment: item.sentiment || 50,
-                    vwap: item.vwap || 0,
-                    isHiddenAccumulation: item.isHiddenAccumulation || false
-                  });
-                }
-              });
+      // [v3.7.1] 초기 로딩 시 로컬에 저장된 캐시 데이터가 있다면 즉시 화면에 먼저 보여줍니다! (0.1초 만에 뜨게 함)
+      if (isInitial) {
+        try {
+          const cached = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_ANALYSIS);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.stocks && parsed.stocks.length > 0) {
+              setAnalyzedStocks(parsed.stocks);
+              if (parsed.sectors) setSectors([...parsed.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+              if (parsed.instFlow) setDetailedInstFlow(parsed.instFlow);
+              if (parsed.scanStats) setScanStats(parsed.scanStats);
+              setLastUpdate(parsed.updateTime || '데이터 로딩 중...');
             }
+          }
+        } catch (e) {
+          // [Cache] Load failed
+        }
+      }
 
-            if (snapshotStocks.length > 0) {
-              // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
-              if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
-              if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
+      let snapshotStocks = [];
+      // [v3.9.9] 사용자가 직접 새로고침을 누르더라도 서버 스냅샷(전체 시장 분석 결과)을 항상 함께 가져옵니다.
+      const shouldFetchSnapshot = true;
 
-              // [코다리 부장] 레이더 스캔 통계 업데이트!
-              if (snap.scanStats) setScanStats(snap.scanStats);
+      if (shouldFetchSnapshot) {
+        try {
+          snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 20000 });
+          if (snapshotRes.data) {
+            const snap = snapshotRes.data;
+            const allBuy = snap.buyData || {};
+            const allSell = snap.sellData || {};
 
-              const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
-              const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
-              const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-              const fullTimeStr = `${dateStr} ${timeStr}`;
-              setLastUpdate(fullTimeStr);
+            const hasServerData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
+              (Object.values(allBuy).some(l => l && l.length > 0)) ||
+              (Object.values(allSell).some(l => l && l.length > 0));
 
-              // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
-              const localSnapshot = {
-                stocks: snapshotStocks,
-                sectors: snap.sectors || [],
-                instFlow: snap.instFlow || { pnsn: 0, ivtg: 0, ins: 0 },
-                scanStats: snap.scanStats || null,
-                updateTime: fullTimeStr
+            if (hasServerData) {
+              const seenCodes = new Set();
+              const processServerList = (list, isBuy) => {
+                (list || []).forEach(item => {
+                  if (!seenCodes.has(item.code)) {
+                    seenCodes.add(item.code);
+                    snapshotStocks.push({
+                      name: item.name, code: item.code, price: parseInt(item.price || 0) || 0,
+                      fStreak: (item.fStreak !== undefined) ? item.fStreak : (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
+                      iStreak: (item.iStreak !== undefined) ? item.iStreak : 0,
+                      sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10)),
+                      vwap: item.vwap || 0,
+                      isHiddenAccumulation: item.isHiddenAccumulation || false
+                    });
+                  }
+                });
               };
-              AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
+
+              Object.values(allBuy).forEach(l => processServerList(l, true));
+              Object.values(allSell).forEach(l => processServerList(l, false));
+
+              // [v3.6.3] 중복 제거 및 데이터 정합성 보강 (매수/매도 리스트에 겹치는 종목 처리)
+              // seenCodes로 이미 추가된 종목이라도, 매도 리스트에서 발견되면 streak 정보를 더 정확하게 보정합니다.
+              const enhanceServerList = (list, isBuy) => {
+                (list || []).forEach(item => {
+                  const existing = snapshotStocks.find(s => s.code === item.code);
+                  if (existing) {
+                    // 이미 존재하는 종목이면 streak 정보 중 더 극단적인 값을 취함 (매수는 더 크게, 매도는 더 작게)
+                    if (item.fStreak !== undefined) {
+                      existing.fStreak = isBuy ? Math.max(existing.fStreak, item.fStreak) : Math.min(existing.fStreak, item.fStreak);
+                    }
+                    if (item.iStreak !== undefined) {
+                      existing.iStreak = isBuy ? Math.max(existing.iStreak, item.iStreak) : Math.min(existing.iStreak, item.iStreak);
+                    }
+                    // 매도 데이터에서 온 경우 sentiment 낮게 조정
+                    if (!isBuy && existing.sentiment > 50) {
+                      existing.sentiment = 50 - (parseInt(item.streak || 0) * 10);
+                    }
+                  }
+                });
+              };
+              Object.values(allSell).forEach(l => enhanceServerList(l, false));
+
+              // [v3.6.2] 서버가 분석한 전체 종목 데이터(allAnalysis) 추가 활용
+              if (snap.allAnalysis) {
+                Object.entries(snap.allAnalysis).forEach(([code, item]) => {
+                  if (!seenCodes.has(code)) {
+                    seenCodes.add(code);
+                    snapshotStocks.push({
+                      name: item.name, code: code, price: parseInt(item.price || 0) || 0,
+                      fStreak: item.fStreak || 0,
+                      iStreak: item.iStreak || 0,
+                      sentiment: item.sentiment || 50,
+                      vwap: item.vwap || 0,
+                      isHiddenAccumulation: item.isHiddenAccumulation || false
+                    });
+                  }
+                });
+              }
+
+              if (snapshotStocks.length > 0) {
+                // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
+                if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+                if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
+
+                // [코다리 부장] 레이더 스캔 통계 업데이트!
+                if (snap.scanStats) setScanStats(snap.scanStats);
+
+                const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
+                const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+                const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                fullTimeStr = `${dateStr} ${timeStr}`;
+                setLastUpdate(fullTimeStr);
+
+                // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
+                const localSnapshot = {
+                  stocks: snapshotStocks,
+                  sectors: snap.sectors || [],
+                  instFlow: snap.instFlow || { pnsn: 0, ivtg: 0, ins: 0 },
+                  scanStats: snap.scanStats || null,
+                  updateTime: fullTimeStr
+                };
+                AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
+              }
             }
           }
-        }
-      } catch (e) {
-        // [Snapshot] Failed
-      }
-    }
-
-    const results = [...snapshotStocks];
-    const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
-
-    // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
-    // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
-    analyzedStocks.forEach(prev => {
-      if (!snapshotExistingCodes.has(prev.code)) {
-        // [v3.9.8] 보존 조건: 히든매집, 3일 이상 연속수급, 또는 즐겨찾기(My Stocks)
-        const isFav = myStocks.some(ms => ms.code === prev.code);
-        const isTreasure = prev.isHiddenAccumulation || Math.abs(prev.fStreak) >= 3 || Math.abs(prev.iStreak) >= 3;
-
-        if (isFav || isTreasure) {
-          results.push(prev);
-          snapshotExistingCodes.add(prev.code);
+        } catch (e) {
+          // [Snapshot] Failed
         }
       }
-    });
 
-    // [v3.9.8] 리스크 관리: 종목 데이터가 너무 많아지면 메모리 효율을 위해 오래된/비중요 종목은 쳐냅니다. (최대 1000개 유지)
-    if (results.length > 1000) {
-      results.sort((a, b) => {
-        // 우선순위: 1. 즐겨찾기 2. 히든매집 3. 연속 수급 강도 순
-        const scoreA = (myStocks.some(s => s.code === a.code) ? 100 : 0) + (a.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(a.fStreak), Math.abs(a.iStreak));
-        const scoreB = (myStocks.some(s => s.code === b.code) ? 100 : 0) + (b.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(b.fStreak), Math.abs(b.iStreak));
-        return scoreB - scoreA;
-      });
-      results.splice(1000);
-    }
+      const results = [...snapshotStocks];
+      const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
 
-    // [v3.9.8] 전광판 텍스트 설정 (서버에서 받은 것이 있으면 우선 사용)
-    const tickerTexts = res.data && res.data.tickerItems ? [...res.data.tickerItems] : ["전체 시장 수급을 분석 중입니다..", "실시간 섹터 흐름 확인 중"];
-    const base = targetStocks || myStocks;
-    const combined = [...base];
+      // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
+      // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
+      analyzedStocks.forEach(prev => {
+        if (!snapshotExistingCodes.has(prev.code)) {
+          // [v3.9.8] 보존 조건: 히든매집, 3일 이상 연속수급, 또는 즐겨찾기(My Stocks)
+          const isFav = myStocks.some(ms => ms.code === prev.code);
+          const isTreasure = prev.isHiddenAccumulation || Math.abs(prev.fStreak) >= 3 || Math.abs(prev.iStreak) >= 3;
 
-    const sectorMap = {};
-    const instTotals = { pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 };
-
-    for (const stock of combined) {
-      // [v3.9.8] 관심종목(My Stock)은 장중이라면 서버 스냅샷이 있더라도 무조건 실시간 조회를 수행하여 정확도를 높입니다.
-      const isMyStockItem = myStocks.some(ms => ms.code === stock.code);
-      if (snapshotExistingCodes.has(stock.code) && !(isMyStockItem && StockService.isMarketOpen())) {
-        continue;
-      }
-
-      // [v3.6.2] 장 마감 시간에 스냅샷에 없는 종목은 KIS API 호출을 건너뜁니다.
-      if (!StockService.isMarketOpen() && !forceFetch) {
-        // [v3.7.1] 서버 스냅샷에 없더라도 내 명사산 리 리스트(results)에는 일단 추가해 둡니다. (사라짐 방지)
-        // 기존에 분석된(analyzedStocks) 정보가 있다면 그것을 재사용하고, 없으면 0으로 초기화합니다.
-        const prev = analyzedStocks.find(s => s.code === stock.code);
-        if (prev) {
-          if (!results.some(r => r.code === stock.code)) {
+          if (isFav || isTreasure) {
             results.push(prev);
-          }
-        } else {
-          if (!results.some(r => r.code === stock.code)) {
-            results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
+            snapshotExistingCodes.add(prev.code);
           }
         }
-        continue;
+      });
+
+      // [v3.9.8] 리스크 관리: 종목 데이터가 너무 많아지면 메모리 효율을 위해 오래된/비중요 종목은 쳐냅니다. (최대 1000개 유지)
+      if (results.length > 1000) {
+        results.sort((a, b) => {
+          // 우선순위: 1. 즐겨찾기 2. 히든매집 3. 연속 수급 강도 순
+          const scoreA = (myStocks.some(s => s.code === a.code) ? 100 : 0) + (a.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(a.fStreak), Math.abs(a.iStreak));
+          const scoreB = (myStocks.some(s => s.code === b.code) ? 100 : 0) + (b.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(b.fStreak), Math.abs(b.iStreak));
+          return scoreB - scoreA;
+        });
+        results.splice(1000);
       }
 
-      // [v3.6 최적화] 500ms delay per stock - 관심종목만 호출하므로 넉넉한 간격으로 안정적 운영
-      await new Promise(resolve => setTimeout(resolve, 500));
-      try {
-        const [data, livePrice] = await Promise.all([
-          StockService.getInvestorData(stock.code, forceFetch),
-          StockService.getCurrentPrice(stock.code, forceFetch)
-        ]);
+      // [v3.9.8] 전광판 텍스트 설정 (서버에서 받은 것이 있으면 우선 사용)
+      const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : ["전체 시장 수급을 분석 중입니다..", "실시간 섹터 흐름 확인 중"];
+      // [v3.9.9] 관심종목(My Stock)을 최상위 우선순위로 배치하여 '분석중' 상태를 즉시 해소합니다.
+      const myStockCodes = new Set(myStocks.map(ms => ms.code));
+      const combined = [...myStocks];
+      results.forEach(s => {
+        if (!myStockCodes.has(s.code)) combined.push(s);
+      });
 
-        if (data && data.length > 0) {
-          const analysis = StockService.analyzeSupply(data);
-          const vwap = StockService.calculateVWAP(data, settingBuyStreak);
-          const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak);
-          const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
-          const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
-          const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
-          const insBuy = StockService.getNetBuyAmount(data, 1, 'INS');
+      const sectorMap = {};
+      const instTotals = { pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 };
 
-          // Prioritize live price (ATS or KRX real-time) over daily close
-          let currentPrice = 0;
-          if (livePrice && livePrice.stck_prpr) {
-            currentPrice = parseInt(livePrice.stck_prpr) || 0;
+      for (const stock of combined) {
+        // [v3.9.9] 관심종목(My Stock)은 사용자가 직접 새로고침을 누르거나 장중인 경우, 서버 스냅샷이 있더라도 무조건 실시간 조회를 수행하여 정확도를 높입니다.
+        const isMyStockItem = myStockCodes.has(stock.code);
+        if (snapshotExistingCodes.has(stock.code) && !(isMyStockItem && (StockService.isMarketOpen() || isUserAction))) {
+          continue;
+        }
+
+        // [v3.6.2] 장 마감 시간에 스냅샷에 없는 종목은 KIS API 호출을 건너뜁니다.
+        if (!StockService.isMarketOpen() && !forceFetch) {
+          // [v3.7.1] 서버 스냅샷에 없더라도 내 명사산 리 리스트(results)에는 일단 추가해 둡니다. (사라짐 방지)
+          // 기존에 분석된(analyzedStocks) 정보가 있다면 그것을 재사용하고, 없으면 0으로 초기화합니다.
+          const prev = analyzedStocks.find(s => s.code === stock.code);
+          if (prev) {
+            if (!results.some(r => r.code === stock.code)) {
+              results.push(prev);
+            }
           } else {
-            currentPrice = parseInt(data[0].stck_clpr || 0) || 0;
-          }
-
-          // Auto-fix stock names that were registered by code only
-          let stockName = stock.name;
-          if (stock.name.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm) {
-            stockName = livePrice.hts_kor_isnm.trim();
-            // Persist the corrected name
-            const idx = myStocks.findIndex(s => s.code === stock.code);
-            if (idx >= 0) {
-              const updatedStocks = [...myStocks];
-              updatedStocks[idx] = { ...updatedStocks[idx], name: stockName };
-              setMyStocks(updatedStocks);
-              StorageService.saveMyStocks(updatedStocks);
+            if (!results.some(r => r.code === stock.code)) {
+              results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
             }
           }
-
-          const newStockData = {
-            ...stock,
-            name: stockName,
-            ...analysis,
-            vwap,
-            isHiddenAccumulation: hidden,
-            price: currentPrice
-          };
-
-          const existingIdx = results.findIndex(r => r.code === stock.code);
-          if (existingIdx >= 0) {
-            results[existingIdx] = newStockData;
-          } else {
-            results.push(newStockData);
-          }
-
-          if (stock.sector) {
-            // [v3.8.3] StockService.getNetBuyAmount는 이미 (수량 * 가격)을 반환하므로 중복 곱셈 제거
-            const netBuyAmount = netBuy;
-            sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuyAmount;
-          }
-
-          // Sum inst sub-types (금액 기준으로 합산)
-          instTotals.pnsn += pnsnBuy;
-          instTotals.ivtg += ivtgBuy;
-          instTotals.ins += insBuy;
-          instTotals.foreign += (StockService.getNetBuyAmount(data, 1, 'F'));
-          instTotals.institution += (StockService.getNetBuyAmount(data, 1, 'I'));
-
-          // Ticker logic for MY stocks only
-          if (isMyStockItem) {
-            if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
-            if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
-            const priceVal = currentPrice;
-            if (vwap > 0 && priceVal < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
-            if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
-          }
-
-          // [v3.9.8] 인크리멘탈 업데이트: 한 종목씩 분석될 때마다 즉시 반영하여 '분석중' 상태를 빠르게 해소
-          setAnalyzedStocks([...results]);
-        } else {
-          const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false };
-          const existingIdx = results.findIndex(r => r.code === stock.code);
-          if (existingIdx >= 0) results[existingIdx] = emptyStock;
-          else results.push(emptyStock);
+          continue;
         }
-      } catch (e) {
-        const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true };
-        const existingIdx = results.findIndex(r => r.code === stock.code);
-        if (existingIdx >= 0) results[existingIdx] = errorStock;
-        else results.push(errorStock);
+
+        // [v3.6 최적화] 500ms delay per stock - 관심종목만 호출하므로 넉넉한 간격으로 안정적 운영
+        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+          const [data, livePrice] = await Promise.all([
+            StockService.getInvestorData(stock.code, forceFetch),
+            StockService.getCurrentPrice(stock.code, forceFetch)
+          ]);
+
+          if (data && data.length > 0) {
+            const analysis = StockService.analyzeSupply(data);
+            const vwap = StockService.calculateVWAP(data, settingBuyStreak);
+            const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak);
+            const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
+            const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
+            const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
+            const insBuy = StockService.getNetBuyAmount(data, 1, 'INS');
+
+            // Prioritize live price (ATS or KRX real-time) over daily close
+            let currentPrice = 0;
+            if (livePrice && livePrice.stck_prpr) {
+              currentPrice = parseInt(livePrice.stck_prpr) || 0;
+            } else {
+              currentPrice = parseInt(data[0].stck_clpr || 0) || 0;
+            }
+
+            // Auto-fix stock names that were registered by code only
+            let stockName = stock.name;
+            if (stock.name.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm) {
+              stockName = livePrice.hts_kor_isnm.trim();
+              // Persist the corrected name
+              const idx = myStocks.findIndex(s => s.code === stock.code);
+              if (idx >= 0) {
+                const updatedStocks = [...myStocks];
+                updatedStocks[idx] = { ...updatedStocks[idx], name: stockName };
+                setMyStocks(updatedStocks);
+                StorageService.saveMyStocks(updatedStocks);
+              }
+            }
+
+            const newStockData = {
+              ...stock,
+              name: stockName,
+              ...analysis,
+              vwap,
+              isHiddenAccumulation: hidden,
+              price: currentPrice
+            };
+
+            const existingIdx = results.findIndex(r => r.code === stock.code);
+            if (existingIdx >= 0) {
+              results[existingIdx] = newStockData;
+            } else {
+              results.push(newStockData);
+            }
+
+            if (stock.sector) {
+              // [v3.8.3] StockService.getNetBuyAmount는 이미 (수량 * 가격)을 반환하므로 중복 곱셈 제거
+              const netBuyAmount = netBuy;
+              sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuyAmount;
+            }
+
+            // Sum inst sub-types (금액 기준으로 합산)
+            instTotals.pnsn += pnsnBuy;
+            instTotals.ivtg += ivtgBuy;
+            instTotals.ins += insBuy;
+            instTotals.foreign += (StockService.getNetBuyAmount(data, 1, 'F'));
+            instTotals.institution += (StockService.getNetBuyAmount(data, 1, 'I'));
+
+            // Ticker logic for MY stocks only
+            if (isMyStockItem) {
+              if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
+              if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
+              const priceVal = currentPrice;
+              if (vwap > 0 && priceVal < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
+              if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
+            }
+
+            // [v3.9.8] 인크리멘탈 업데이트: 한 종목씩 분석될 때마다 즉시 반영하여 '분석중' 상태를 빠르게 해소
+            setAnalyzedStocks([...results]);
+          } else {
+            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false };
+            const existingIdx = results.findIndex(r => r.code === stock.code);
+            if (existingIdx >= 0) results[existingIdx] = emptyStock;
+            else results.push(emptyStock);
+          }
+        } catch (e) {
+          const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true };
+          const existingIdx = results.findIndex(r => r.code === stock.code);
+          if (existingIdx >= 0) results[existingIdx] = errorStock;
+          else results.push(errorStock);
+        }
       }
-    }
-    setAnalyzedStocks(results);
+      setAnalyzedStocks(results);
 
-    // Finalize sectors (Convert raw KRW to 100M units)
-    const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
-      const flow = Math.round(rawFlow / 100000000);
-      return { name, flow };
-    });
+      // Finalize sectors (Convert raw KRW to 100M units)
+      const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
+        const flow = Math.round(rawFlow / 100000000);
+        return { name, flow };
+      });
 
-    // [v3.8.2] 서버 스냅샷 데이터(전체 시장)가 이미 있다면, 관심종목 위주의 로컬 계산 데이터로 덮어쓰지 않습니다.
-    const hasServerSectorData = snapshotStocks.length > 0 && sectors.length > 0;
-    const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
+      // [v3.8.2] 서버 스냅샷 데이터(전체 시장)가 이미 있다면, 관심종목 위주의 로컬 계산 데이터로 덮어쓰지 않습니다.
+      const hasServerMarketData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
+      const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
 
-    if (!hasServerSectorData && updatedSectors.length > 0 && totalFlow > 0) {
-      setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
-    }
-    // Round inst sub-types to billion KRW
-    const roundedInstTotals = {
-      pnsn: Math.round(instTotals.pnsn / 100000000),
-      ivtg: Math.round(instTotals.ivtg / 100000000),
-      ins: Math.round(instTotals.ins / 100000000),
-      foreign: Math.round(instTotals.foreign / 100000000),
-      institution: Math.round(instTotals.institution / 100000000),
-    };
-    setDetailedInstFlow(roundedInstTotals);
-
-    if (tickerTexts.length > 0) setTickerItems(tickerTexts);
-
-    // [v3.9.8] 시간 표시 로직 개선: 서버 데이터가 있으면 서버 시간을, 아니면 현재 시간을 표시
-    let displayTime = "";
-    if (res.data && res.data.updateTime) {
-      const sDate = new Date(res.data.updateTime);
-      displayTime = `${sDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${sDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      const now = new Date();
-      displayTime = `${now.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-    }
-    setLastUpdate(displayTime);
-    // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
-    if (results.length > 0) {
-      const snapshot = {
-        stocks: results,
-        sectors: updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
-        instFlow: roundedInstTotals,
-        updateTime: fullTimeStr
+      if (!hasServerMarketData && updatedSectors.length > 0 && totalFlow > 0) {
+        setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+      }
+      // Round inst sub-types to billion KRW
+      const roundedInstTotals = {
+        pnsn: Math.round(instTotals.pnsn / 100000000),
+        ivtg: Math.round(instTotals.ivtg / 100000000),
+        ins: Math.round(instTotals.ins / 100000000),
+        foreign: Math.round(instTotals.foreign / 100000000),
+        institution: Math.round(instTotals.institution / 100000000),
       };
-      AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
-    }
+      if (!hasServerMarketData) {
+        setDetailedInstFlow(roundedInstTotals);
+      }
 
-    setLoading(false);
-    isRefreshing.current = false;
+      if (tickerTexts.length > 0) setTickerItems(tickerTexts);
+
+      // [v3.9.9] [확정] 시간은 서버의 데이터 생성 시점을, [동기화] 시간은 현재 앱이 새로고침된 시점을 나타냅니다.
+      let displayTime = "";
+      if (snapshotRes && snapshotRes.data && snapshotRes.data.updateTime) {
+        const sDate = new Date(snapshotRes.data.updateTime);
+        displayTime = `${sDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${sDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+      } else {
+        // 서버 데이터가 없는 경우(오프라인 등) 캐시된 마지막 시간을 유지
+        displayTime = lastUpdate || "데이터 없음";
+      }
+      setLastUpdate(displayTime);
+      // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
+      if (results.length > 0) {
+        const hasServerSectorData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
+        const snapshot = {
+          stocks: results,
+          sectors: hasServerSectorData ? snapshotRes.data.sectors : updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
+          instFlow: hasServerSectorData ? snapshotRes.data.instFlow : roundedInstTotals,
+          updateTime: displayTime
+        };
+        AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
+      }
+    } catch (err) {
+      console.error("[Refresh Error]", err);
+    } finally {
+      setLoading(false);
+      isRefreshing.current = false;
+    }
   };
 
   const handleSearch = async (text) => {
@@ -1748,8 +1763,8 @@ function MainApp() {
 
           {/* Version Info (Moved up to fill the gap) */}
 
-          <View style={styles.footerInfo}>
-            <Text style={styles.versionLabel}>Money Fact v3.8.4 Gold Edition</Text>
+          <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
+            <Text style={styles.versionLabel}>Money Fact v3.8.5 Gold Edition</Text>
             <Text style={styles.footerSubText}>Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
@@ -1763,7 +1778,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.4</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.5</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

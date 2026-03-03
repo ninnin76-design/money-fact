@@ -1,16 +1,15 @@
-async function test() {
+const axios = require('axios');
+
+async function testAnalysis() {
     try {
-        console.log('Testing /api/finance/005930...');
-        const res = await fetch('http://localhost:3000/api/finance/005930');
-        console.log('Status:', res.status);
-        const data = await res.json();
-        console.log('Has output:', data.output ? 'YES' : 'NO');
-        if (data.output && data.output[0]) {
-            console.log('First day data:', data.output[0]);
-        }
+        console.log("Testing Portfolio Analysis API...");
+        const res = await axios.post('http://localhost:3000/api/my-portfolio/analyze', {
+            codes: ['005930', '000660'] // Samsung, Hynix
+        });
+        console.log("Result:", JSON.stringify(res.data, null, 2));
     } catch (e) {
-        console.error('Error:', e.message);
+        console.error("Error:", e.message);
     }
 }
 
-test();
+testAnalysis();
