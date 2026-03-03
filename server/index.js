@@ -749,7 +749,8 @@ async function runDeepMarketScan(force = false) {
                     } else if (net < 0) {
                         sellStreak++;
                         if (buyStreak > 0) break;
-                    } else break;
+                    } else if (buyStreak > 0 || sellStreak > 0) break; // [v3.9.6] 수급 0이면 연속성 중단
+                    else continue; // 아직 수급이 시작되지 않은 날(0)은 무시하고 다음 날 확인
                 }
 
                 // [v3.9.5] VWAP 및 히든 매집 정보 포함
