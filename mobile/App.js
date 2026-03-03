@@ -662,7 +662,8 @@ function MainApp() {
                     fStreak: (item.fStreak !== undefined) ? item.fStreak : (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
                     iStreak: (item.iStreak !== undefined) ? item.iStreak : 0,
                     sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10)),
-                    vwap: 0, isHiddenAccumulation: false
+                    vwap: item.vwap || 0,
+                    isHiddenAccumulation: item.isHiddenAccumulation || false
                   });
                 }
               });
@@ -703,7 +704,8 @@ function MainApp() {
                     fStreak: item.fStreak || 0,
                     iStreak: item.iStreak || 0,
                     sentiment: item.sentiment || 50,
-                    vwap: 0, isHiddenAccumulation: false
+                    vwap: item.vwap || 0,
+                    isHiddenAccumulation: item.isHiddenAccumulation || false
                   });
                 }
               });

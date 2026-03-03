@@ -593,8 +593,15 @@ async function runDeepMarketScan(force = false) {
                     hits++;
                     const currentPrice = daily[0].stck_clpr;
                     const currentRate = daily[0].prdy_ctrt;
+                    const currentDate = daily[0].stck_bsop_date || 'Unknown';
+
+                    // [v3.9.5] 데이터 기준일자 로깅 (JYP Ent 등 특정 종목 데이터 정합성 확인용)
+                    if (stk.code === '035900') {
+                        console.log(`[Radar-Data] JYP Ent. (035900) Data Date: ${currentDate}, Price: ${currentPrice}`);
+                    }
+
                     historyData.set(stk.code, {
-                        name: stk.name, price: currentPrice, rate: currentRate, daily
+                        name: stk.name, price: currentPrice, rate: currentRate, date: currentDate, daily
                     });
                 }
             } catch (e) {
@@ -686,9 +693,37 @@ async function runDeepMarketScan(force = false) {
                     else net = fQ + oQ;                        // 합산
                     if (net > 0) { b++; if (s > 0) break; }
                     else if (net < 0) { s++; if (b > 0) break; }
-                    else break;
+                    else if (b > 0 || s > 0) break; // [v3.9.5] 수급이 0인 경우 연속성 끊김 처리
+                    else continue;
                 }
                 return b > 0 ? b : (s > 0 ? -s : 0);
+            };
+
+            // [v3.9.5] 서버 측 VWAP 및 히든 매집 계산 함수 추가 (App.js 로직 이식)
+            const calculateVWAP = (daily, days = 5) => {
+                let totalValue = 0, totalVol = 0;
+                const actual = Math.min(daily.length, days);
+                for (let j = 0; j < actual; j++) {
+                    const row = daily[j];
+                    const v = parseInt(row.acml_vol || 0);
+                    const p = parseInt(row.stck_clpr || 0);
+                    if (v > 0 && p > 0) { totalValue += (v * p); totalVol += v; }
+                }
+                return totalVol === 0 ? 0 : Math.round(totalValue / totalVol);
+            };
+
+            const checkHidden = (daily, threshold = 3) => {
+                if (daily.length < 5) return false;
+                let totalVolatiltiy = 0;
+                for (let j = 0; j < 5; j++) {
+                    // 고가/저가가 없는 경우 등락률 절대값 활용
+                    const changeRate = Math.abs(parseFloat(daily[j].prdy_ctrt || 0));
+                    totalVolatiltiy += changeRate;
+                }
+                const avgVol = totalVolatiltiy / 5;
+                const fSt = calcIndependentStreak(daily, '2');
+                const iSt = calcIndependentStreak(daily, '1');
+                return avgVol < 3 && (fSt >= threshold || iSt >= threshold);
             };
 
             // 각 종목의 외인/기관 streak를 한 번에 독립 계산
@@ -717,16 +752,22 @@ async function runDeepMarketScan(force = false) {
                     } else break;
                 }
 
+                // [v3.9.5] VWAP 및 히든 매집 정보 포함
+                const stockVwap = calculateVWAP(val.daily);
+                const isHid = checkHidden(val.daily);
+
                 if (buyStreak >= 2) {
                     newBuyData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: buyStreak, fStreak: indFStreak, iStreak: indIStreak
+                        streak: buyStreak, fStreak: indFStreak, iStreak: indIStreak,
+                        vwap: stockVwap, isHiddenAccumulation: isHid
                     });
                 }
                 if (sellStreak >= 2) {
                     newSellData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: sellStreak, fStreak: indFStreak, iStreak: indIStreak
+                        streak: sellStreak, fStreak: indFStreak, iStreak: indIStreak,
+                        vwap: stockVwap, isHiddenAccumulation: isHid
                     });
                 }
             });
@@ -755,7 +796,9 @@ async function runDeepMarketScan(force = false) {
                 newBuyData['sectors'].push({
                     name: val.name, code, price: val.price, rate: val.rate,
                     streak: fSt, // 프론트에서 sentiment(50 + streak*10) 계산 시 기반이 됨
-                    fStreak: fSt, iStreak: iSt
+                    fStreak: fSt, iStreak: iSt,
+                    vwap: calculateVWAP(val.daily),
+                    isHiddenAccumulation: checkHidden(val.daily)
                 });
             }
 
@@ -777,13 +820,18 @@ async function runDeepMarketScan(force = false) {
             allFSt = calcStreak('2');
             allISt = calcStreak('1');
 
+            const vwap = calculateVWAP(val.daily);
+            const hidden = checkHidden(val.daily);
+
             newAllAnalysis[code] = {
                 name: val.name,
                 price: val.price,
                 rate: val.rate,
                 fStreak: allFSt,
                 iStreak: allISt,
-                sentiment: 50 + (allFSt + allISt) * 5
+                vwap: vwap,
+                isHiddenAccumulation: hidden,
+                sentiment: Math.max(0, Math.min(100, 50 + (allFSt * 10) + (allISt * 10)))
             };
         });
 
