@@ -302,6 +302,16 @@ async function runDeepMarketScan(force = false) {
     const isMarketOpen = (hour >= 8 && hour <= 20) && !isWeekend;
     const hasNoData = !marketAnalysisReport.updateTime;
 
+    // [v3.9.8] 가동 주기 쓰로틀링 (15분 이내 중복 스캔 방지)
+    const minInterval = 14 * 60 * 1000; // 14분 (약간의 여유)
+    const timeSinceLast = marketAnalysisReport.updateTime ? (now.getTime() - new Date(marketAnalysisReport.updateTime).getTime()) : Infinity;
+
+    if (timeSinceLast < minInterval && !force && !hasNoData) {
+        console.log(`[Worker] 최근 스캔(${Math.round(timeSinceLast / 1000)}초 전)이 이미 수행되었습니다. 스킵합니다.`);
+        scanLock = false;
+        return;
+    }
+
     // [v3.9.0] 마지막 업데이트가 오늘 날짜가 아니면 데이터가 오래된 것으로 판단
     let isDataStale = false;
     if (marketAnalysisReport.updateTime) {
@@ -310,13 +320,13 @@ async function runDeepMarketScan(force = false) {
         const lastUpdateDateStr = `${lastUpdateKST.getUTCFullYear()}-${String(lastUpdateKST.getUTCMonth() + 1).padStart(2, '0')}-${String(lastUpdateKST.getUTCDate()).padStart(2, '0')}`;
         isDataStale = (lastUpdateDateStr !== kstDateStr);
         if (isDataStale) {
-            console.log(`[Worker] ⚠️ 데이터가 오래됨! 마지막: ${lastUpdateDateStr}, 오늘: ${kstDateStr}`);
+            console.log(`[Worker] ⚠️ 데이터 기준일 상이! 마지막: ${lastUpdateDateStr}, 오늘: ${kstDateStr}`);
         }
     }
 
-    // 장중인데 데이터가 오래됐으면 강제 갱신
-    if (isMarketOpen && isDataStale) {
-        console.log(`[Worker] 🔄 장중 + 오래된 데이터 → 강제 갱신 모드로 전환!`);
+    // [v3.9.8] 마지막 업데이트가 오늘 날짜가 아니면 무조건 강제 갱신 허용 (단, 장 마감이더라도 1회는 수행)
+    if (isDataStale) {
+        console.log(`[Worker] 🔄 데이터가 오래됨(${lastUpdateDateStr || '없음'}) → 강제 갱신 모드 가동! (오늘: ${kstDateStr})`);
         force = true;
     }
 
@@ -331,10 +341,16 @@ async function runDeepMarketScan(force = false) {
     }
 
     const currentType = 'LIVE';
-    console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
+    console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! (Force: ${force}) ======`);
     marketAnalysisReport.status = 'SCANNING';
     try {
         const token = await getAccessToken();
+        if (!token) {
+            console.error("[Radar] ❌ 토큰 발급 실패. 레이더 가동을 중단합니다.");
+            marketAnalysisReport.status = 'ERROR';
+            scanLock = false;
+            return;
+        }
 
         // ========================================================
         // [코다리 부장] 1단계: 광범위 필터 (The Wide Net)
@@ -396,10 +412,20 @@ async function runDeepMarketScan(force = false) {
         try {
             const sellRankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
-                params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
+                params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '2', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
             });
             (sellRankRes.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
-        } catch (e) { console.warn('[Radar] Source 4 (Sell Rank) failed:', e.message); }
+        } catch (e) { console.warn('[Radar] Source 4 (Foreign Sell Rank) failed:', e.message); }
+        await new Promise(r => setTimeout(r, 120));
+
+        // Source 4-B: 기관 순매도 랭킹 (추가)
+        try {
+            const instSellRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
+                headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
+                params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '1', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
+            });
+            (instSellRes.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
+        } catch (e) { console.warn('[Radar] Source 4-B (Inst Sell Rank) failed:', e.message); }
         await new Promise(r => setTimeout(r, 120));
 
         // Source 5: [코다리 부장] 전종목 배치 스캔 (popular_stocks에서 시세 변동/거래량 이상 감지)
@@ -407,7 +433,7 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 1단계] Source 5: 전종목 ${POPULAR_STOCKS.length}개 시세 배치 스캔 시작...`);
         let wideNetHits = 0;
         const batchSize = 8;  // 동시 요청 수 (API 제한 준수)
-        const maxWideScan = Math.min(POPULAR_STOCKS.length, 300); // [v3.9.1] 300개로 축소 → 스캔 시간 3분 이내로 보장
+        const maxWideScan = Math.min(POPULAR_STOCKS.length, 500); // [v3.9.8] 500개로 확대
         const alreadyInMap = new Set(candidateMap.keys());
 
         for (let i = 0; i < maxWideScan; i++) {
@@ -477,10 +503,10 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        // [v3.8.2] 수량이 아닌 '거래 대금(tr_pbmn)' 필드를 사용하여 실질적인 자금 규모를 집계
-                        const foreign = parseInt(d.prdy_frgn_ntby_tr_pbmn || 0);
-                        const institution = parseInt(d.prdy_orgn_ntby_tr_pbmn || 0);
-                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100000000) }); // 원 -> 억원 단위로 정확히 변환
+                        // [v3.9.8] prdy_ 접두사 제거 (전일 데이터가 아닌 당일 데이터 사용!)
+                        const foreign = parseInt(d.frgn_ntby_tr_pbmn || 0);
+                        const institution = parseInt(d.orgn_ntby_tr_pbmn || 0);
+                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100000000) });
                     }
                 } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
             }
@@ -516,9 +542,9 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        // [v3.8.3] 수량이 아닌 '거래 대금(tr_pbmn)' 필드를 사용하여 실질적인 자금 규모 집계
-                        totalF += parseInt(d.prdy_frgn_ntby_tr_pbmn || 0);
-                        totalI += parseInt(d.prdy_orgn_ntby_tr_pbmn || 0);
+                        // [v3.9.8] prdy_ 접두사 제거 (전일 데이터가 아닌 당일 데이터 사용!)
+                        totalF += parseInt(d.frgn_ntby_tr_pbmn || 0);
+                        totalI += parseInt(d.orgn_ntby_tr_pbmn || 0);
                         pnsn += parseInt(d.pnsn_ntby_tr_pbmn || 0);
                         ivtg += parseInt(d.ivtg_ntby_tr_pbmn || 0);
                         ins += parseInt(d.ins_ntby_tr_pbmn || 0);
@@ -691,10 +717,15 @@ async function runDeepMarketScan(force = false) {
                     if (investorType === '2') net = fQ;       // 외인
                     else if (investorType === '1') net = oQ;   // 기관
                     else net = fQ + oQ;                        // 합산
+
                     if (net > 0) { b++; if (s > 0) break; }
                     else if (net < 0) { s++; if (b > 0) break; }
-                    else if (b > 0 || s > 0) break; // [v3.9.5] 수급이 0인 경우 연속성 끊김 처리
-                    else continue;
+                    else {
+                        // [v3.9.7] 수급이 0인 날은 단순히 건너뜁니다 (주말/휴장/거래없음 등 고려)
+                        // 단, 이미 방향성이 정해진 상태(b>0 or s>0)에서 0이 계속되면 끊기도록 할 수도 있지만, 
+                        // 일단은 노이즈 제거를 위해 skip합니다.
+                        continue;
+                    }
                 }
                 return b > 0 ? b : (s > 0 ? -s : 0);
             };
@@ -705,7 +736,8 @@ async function runDeepMarketScan(force = false) {
                 const actual = Math.min(daily.length, days);
                 for (let j = 0; j < actual; j++) {
                     const row = daily[j];
-                    const v = parseInt(row.acml_vol || 0);
+                    // KIS API field fallback for volume: acml_vol (today/daily), prdy_vol (historical in some TRs)
+                    const v = parseInt(row.acml_vol || row.prdy_vol || 0);
                     const p = parseInt(row.stck_clpr || 0);
                     if (v > 0 && p > 0) { totalValue += (v * p); totalVol += v; }
                 }
@@ -749,8 +781,10 @@ async function runDeepMarketScan(force = false) {
                     } else if (net < 0) {
                         sellStreak++;
                         if (buyStreak > 0) break;
-                    } else if (buyStreak > 0 || sellStreak > 0) break; // [v3.9.6] 수급 0이면 연속성 중단
-                    else continue; // 아직 수급이 시작되지 않은 날(0)은 무시하고 다음 날 확인
+                    } else {
+                        // [v3.9.7] 수급 0인 날은 무시 (연속성 유지에 더 유리하도록 수정)
+                        continue;
+                    }
                 }
 
                 // [v3.9.5] VWAP 및 히든 매집 정보 포함
@@ -814,7 +848,7 @@ async function runDeepMarketScan(force = false) {
                     else if (inv === '1') net = parseInt(row.orgn_ntby_qty || 0) || 0;
                     if (net > 0) { b++; if (s > 0) break; }
                     else if (net < 0) { s++; if (b > 0) break; }
-                    else break;
+                    else continue; // [v3.9.7] 0은 무시하고 계속 확인
                 }
                 return b > 0 ? b : (s > 0 ? -s : 0);
             };
@@ -868,6 +902,26 @@ async function runDeepMarketScan(force = false) {
             marketAnalysisReport.sectors = sectorList.slice(0, 6);
             marketAnalysisReport.instFlow = instTotals;
         }
+        // [v3.9.8] 전광판(Ticker)용 동적 텍스트 생성 로직
+        const tickerItems = [];
+        const fF = instTotals.foreign || 0;
+        const iF = instTotals.institution || 0;
+
+        // 1. 시장 전체 수급 기반 메시지
+        if (fF > 1000 && iF > 1000) tickerItems.push("🔥 [시장] 외인/기관 쌍끌이 강력 매수세 포착! 주도주를 선점하세요.");
+        else if (fF < -1000 && iF < -1000) tickerItems.push("⚠️ [시장] 외인/기관 동반 이탈 중... 현금 비중 확대 및 관망 권장.");
+        else if (fF > 1500) tickerItems.push("🌍 [시장] 외국인 대규모 자금 유입 중! 대형주 중심으로 지수 방어 흐름.");
+        else if (iF > 1500) tickerItems.push("🏛️ [시장] 기관의 강력한 러브콜! 배당주 및 기관 선호 종목군 집중 분석.");
+        else tickerItems.push("⚖️ [시장] 외인/기관 눈치싸움 중. 뚜렷한 주도 주체가 나타날 때까지 대기.");
+
+        // 2. 섹터 흐름 기반 메시지
+        const topSector = marketAnalysisReport.sectors && marketAnalysisReport.sectors.length > 0 ? marketAnalysisReport.sectors[0] : null;
+        const bottomSector = marketAnalysisReport.sectors && marketAnalysisReport.sectors.length > 0 ? marketAnalysisReport.sectors[marketAnalysisReport.sectors.length - 1] : null;
+
+        if (topSector && topSector.flow > 100) tickerItems.push(`🚀 [주도섹터] ${topSector.name} 섹터에 ${topSector.flow}억 규모 자금 집중 유입!`);
+        if (bottomSector && bottomSector.flow < -100) tickerItems.push(`📉 [약세섹터] ${bottomSector.name} 섹터에서 ${Math.abs(bottomSector.flow)}억 규모 차익실현 매물 출회.`);
+
+        marketAnalysisReport.tickerItems = tickerItems;
         marketAnalysisReport.updateTime = new Date().toISOString();
         marketAnalysisReport.dataType = currentType;
         marketAnalysisReport.status = 'READY';
@@ -1061,8 +1115,18 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 });
 
 // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
+// [v3.9.8] 앱의 스냅샷 요청 시에도 데이터 신선도를 체크하여 필요시 스캐너 가동
 app.get('/api/snapshot', (req, res) => {
-    res.json(marketAnalysisReport);
+    const isStale = (marketAnalysisReport.updateTime &&
+        new Date().getDate() !== new Date(marketAnalysisReport.updateTime).getDate());
+
+    // 비동기로 실행하여 응답 지연 방지
+    runDeepMarketScan(false);
+
+    res.json({
+        ...marketAnalysisReport,
+        _scanTriggered: isStale ? 'STALE_FORCE' : 'CHECKED'
+    });
 });
 
 const ALL_STOCKS = require('./popular_stocks');

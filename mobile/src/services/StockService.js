@@ -186,24 +186,26 @@ export const StockService = {
         if (!dailyData || dailyData.length < 3) return { fStreak: 0, iStreak: 0, sentiment: 50 };
 
         const getStreak = (type) => {
-            let buy = 0, sell = 0;
-            let streakStarted = false;
+            let buyCount = 0;
+            let sellCount = 0;
+            let streakType = null; // 'BUY', 'SELL'
 
             for (let i = 0; i < dailyData.length; i++) {
                 const rawVal = type === 'F' ? dailyData[i].frgn_ntby_qty : dailyData[i].orgn_ntby_qty;
                 const val = parseInt(rawVal) || 0;
 
                 if (val > 0) {
-                    if (sell > 0) break;
-                    buy++;
-                    streakStarted = true;
+                    if (streakType === 'SELL') break;
+                    buyCount++;
+                    streakType = 'BUY';
                 } else if (val < 0) {
-                    if (buy > 0) break;
-                    sell++;
-                    streakStarted = true;
-                } else if (streakStarted) break;
+                    if (streakType === 'BUY') break;
+                    sellCount++;
+                    streakType = 'SELL';
+                }
+                // Skip zero volume days (STREAK CONTINUES)
             }
-            return buy > 0 ? buy : -sell;
+            return buyCount > 0 ? buyCount : -sellCount;
         };
 
         const fStreak = getStreak('F');
