@@ -276,7 +276,15 @@ app.get('/api/alerts/opportunities', async (req, res) => {
     }
 });
 
+let scanLock = false; // [v3.9.1] 재진입 방지 락
+
 async function runDeepMarketScan(force = false) {
+    // [v3.9.1] 이전 스캔이 아직 실행 중이면 새 스캔을 건너뜀
+    if (scanLock) {
+        console.log(`[Worker] ⏳ 이전 스캔이 아직 진행 중... 이번 사이클 건너뜀`);
+        return;
+    }
+    scanLock = true;
     const now = new Date();
     // KST calculation (UTC + 9 hours)
     const kstOffset = 9 * 60 * 60 * 1000;
@@ -318,6 +326,7 @@ async function runDeepMarketScan(force = false) {
         if (marketAnalysisReport.status === 'READY') {
             marketAnalysisReport.dataType = 'MARKET_CLOSE';
         }
+        scanLock = false; // [v3.9.1] early return 시 lock 해제!
         return;
     }
 
@@ -398,7 +407,7 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 1단계] Source 5: 전종목 ${POPULAR_STOCKS.length}개 시세 배치 스캔 시작...`);
         let wideNetHits = 0;
         const batchSize = 8;  // 동시 요청 수 (API 제한 준수)
-        const maxWideScan = Math.min(POPULAR_STOCKS.length, 1200); // 1200개로 축소하여 업데이트 속도 개선
+        const maxWideScan = Math.min(POPULAR_STOCKS.length, 300); // [v3.9.1] 300개로 축소 → 스캔 시간 3분 이내로 보장
         const alreadyInMap = new Set(candidateMap.keys());
 
         for (let i = 0; i < maxWideScan; i++) {
@@ -615,6 +624,7 @@ async function runDeepMarketScan(force = false) {
 
         if (hits === 0) {
             console.log("[Radar] 데이터를 가져오지 못했습니다. 이전 캐시를 유지합니다.");
+            scanLock = false; // [v3.9.1] early return 시 lock 해제!
             return;
         }
 
@@ -965,8 +975,12 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar] ====== 2단계 하이브리드 레이더 임무 완료! ======`);
 
     } catch (e) {
-        console.error("[Radar] Worker Error:", e.message);
+        console.error("[Radar] Worker Error:", e.message, e.stack ? e.stack.split('\n')[1] : '');
         marketAnalysisReport.status = marketAnalysisReport.updateTime ? 'READY' : 'ERROR';
+    } finally {
+        // [v3.9.1] 반드시 lock 해제!
+        scanLock = false;
+        console.log(`[Worker] 🔓 스캔 락 해제 완료. 상태: ${marketAnalysisReport.status}`);
     }
 }
 
