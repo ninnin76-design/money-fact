@@ -37,14 +37,14 @@ const Ticker = ({ items = [] }) => {
 
     return (
         <View style={styles.container}>
-            {/* Hidden measuring container to get real width - it must NOT have position absolute for width expansion */}
-            <View style={{ position: 'absolute', top: -1000, left: 0 }}>
+            {/* Hidden measuring container to get real width */}
+            <View style={{ position: 'absolute', top: -1000, left: 0, width: 10000, flexDirection: 'row' }}>
                 <View
-                    style={[styles.scrollContainer, { width: undefined }]}
+                    style={[styles.scrollContainer, { width: undefined, alignSelf: 'flex-start' }]}
                     onLayout={onLayout}
                 >
                     {items.map((item, idx) => (
-                        <Text key={`m-${idx}`} style={styles.text} numberOfLines={1}>
+                        <Text key={`m-${idx}`} style={[styles.text, { flexShrink: 0 }]} numberOfLines={1} ellipsizeMode="clip">
                             {item}  |
                         </Text>
                     ))}
@@ -52,9 +52,9 @@ const Ticker = ({ items = [] }) => {
             </View>
 
             {/* Actual Animated Ticker */}
-            <Animated.View style={[styles.scrollContainer, { transform: [{ translateX: scrollX }] }]}>
+            <Animated.View style={[styles.scrollContainer, { transform: [{ translateX: scrollX }], width: contentWidth + SCREEN_WIDTH }]}>
                 {items.map((item, index) => (
-                    <Text key={index} style={styles.text} numberOfLines={1}>
+                    <Text key={index} style={[styles.text, { flexShrink: 0 }]} numberOfLines={1} ellipsizeMode="clip">
                         {item}  <Text style={{ color: '#555' }}>|</Text>
                     </Text>
                 ))}

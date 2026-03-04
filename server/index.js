@@ -1020,9 +1020,14 @@ if (marketAnalysisReport.updateTime) {
     const _lastKST = new Date(new Date(marketAnalysisReport.updateTime).getTime() + 9 * 60 * 60 * 1000);
     _lastUpdateStr = `${_lastKST.getUTCFullYear()}-${String(_lastKST.getUTCMonth() + 1).padStart(2, '0')}-${String(_lastKST.getUTCDate()).padStart(2, '0')}`;
 }
-const shouldScanNow = !marketAnalysisReport.updateTime || (_lastUpdateStr !== _todayStr);
-if (shouldScanNow) {
-    console.log(`[Server] 데이터가 오래됨 또는 없음! 마지막: ${_lastUpdateStr || '없음'}, 오늘: ${_todayStr}. 즉시 스캔 시작...`);
+const snapshotDate = marketAnalysisReport.updateTime?.split('T')[0] || '';
+const isSellListEmpty = Object.values(marketAnalysisReport.sellData || {}).every(list => !list || list.length === 0);
+const _hour = _kstNow.getUTCHours();
+const _day = _kstNow.getUTCDay();
+const _isMarketOpen = (_hour >= 9 && _hour < 16 && _day >= 1 && _day <= 5);
+
+if (_isMarketOpen || snapshotDate !== _todayStr || isSellListEmpty) {
+    console.log(`[Server] ${_isMarketOpen ? '장중이거나' : ''}${snapshotDate !== _todayStr ? '데이터가 옛날 것이거나' : ''}${isSellListEmpty ? '매도 리스트가 비어 있어' : ''} 즉시 스캔 시작...`);
     runDeepMarketScan(true);
 } else {
     console.log(`[Server] 데이터가 오늘(${_todayStr}) 것입니다. 정기 스케줄로 갱신합니다.`);
@@ -1065,8 +1070,10 @@ console.log(`[Server] Loaded ${POPULAR_STOCKS.length} unique stocks (Deduplicate
  * - 현재 프로젝트 정책: 0(주말/휴장/보합)은 무시하고 연속성을 유지하도록 통일 (v3.9.9)
  */
 function analyzeStreak(daily, inv) {
-    let buyStreak = 0, sellStreak = 0;
     if (!daily || daily.length === 0) return { buyStreak: 0, sellStreak: 0 };
+
+    let buyStreak = 0, sellStreak = 0;
+    let firstDirection = 0; // 1: buy, -1: sell
 
     for (let j = 0; j < daily.length; j++) {
         const d = daily[j];
@@ -1078,15 +1085,18 @@ function analyzeStreak(daily, inv) {
         else if (inv === '2') net = fQty;
         else if (inv === '1') net = oQty;
 
-        if (net > 0) {
-            buyStreak++;
-            if (sellStreak > 0) break;
-        } else if (net < 0) {
-            sellStreak++;
-            if (buyStreak > 0) break;
+        if (net === 0) continue; // 0인 날은 건너뜀 (연속성 유지)
+
+        if (firstDirection === 0) {
+            firstDirection = net > 0 ? 1 : -1;
+        }
+
+        if (firstDirection === 1) {
+            if (net > 0) buyStreak++;
+            else break;
         } else {
-            // [v3.9.9 통일] 0인 날은 건너뜁니다 (연속성 유지)
-            continue;
+            if (net < 0) sellStreak++;
+            else break;
         }
     }
     return { buyStreak, sellStreak };
@@ -1108,14 +1118,27 @@ function calculateVWAP(daily, days = 5) {
     return totalVol === 0 ? 0 : Math.round(totalValue / totalVol);
 }
 
+// [v3.8.6] 히든 매집 감지 로직 고도화: 최근 5거래일 변동성(고가-저가) 기반 횡보 판정
 function checkHidden(daily, threshold = 3) {
     if (!daily || daily.length < 5) return false;
-    let totalVolatiltiy = 0;
+    let totalVolatility = 0;
     for (let j = 0; j < 5; j++) {
-        const changeRate = Math.abs(parseFloat(daily[j].prdy_ctrt || 0));
-        totalVolatiltiy += changeRate;
+        const row = daily[j];
+        const high = parseInt(row.stck_hgpr || 0);
+        const low = parseInt(row.stck_lwpr || 0);
+        const close = parseInt(row.stck_clpr || 1);
+
+        let dayVolatility = 0;
+        if (high > 0 && low > 0) {
+            // 가이드 원칙: (고가 - 저가) / 종가
+            dayVolatility = ((high - low) / close) * 100;
+        } else {
+            // 데이터 미비 시 전일비(prdy_ctrt)의 1.2배를 일중 변동성으로 추정 적용
+            dayVolatility = Math.abs(parseFloat(row.prdy_ctrt || 0)) * 1.2;
+        }
+        totalVolatility += dayVolatility;
     }
-    const avgVol = totalVolatiltiy / 5;
+    const avgVol = totalVolatility / 5;
     const fRes = analyzeStreak(daily, '2');
     const iRes = analyzeStreak(daily, '1');
     // 변동성 3% 미만 + 외인 또는 기관의 연속 순매수가 기준치 이상
