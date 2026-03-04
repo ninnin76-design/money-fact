@@ -5,11 +5,17 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 const { width } = Dimensions.get('window');
 
 const SectorHeatmap = ({ sectors = [] }) => {
+    const kstDate = new Date(new Date().getTime() + (new Date().getTimezoneOffset() + 540) * 60000);
+    const hour = kstDate.getHours();
+    const isWorkingHours = hour >= 9 && hour < 20;
+
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
                 <Text style={styles.title}>📈 섹터별 자금 흐름 TOP</Text>
-                <Text style={styles.noticeText}>*정확한 수급은 장 마감 후 반영</Text>
+                <Text style={[styles.noticeText, !isWorkingHours && { color: '#00ff00', fontWeight: 'bold' }]}>
+                    {isWorkingHours ? '*장중 실시간 예상치' : '✅ 당일 최종 확정'}
+                </Text>
             </View>
             <View style={styles.grid}>
                 {sectors.map((sector, index) => {

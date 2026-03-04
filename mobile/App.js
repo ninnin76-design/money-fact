@@ -646,7 +646,7 @@ function MainApp() {
 
       if (shouldFetchSnapshot) {
         try {
-          snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot`, { timeout: 20000 });
+          snapshotRes = await axios.get(`${SERVER_URL}/api/snapshot?t=${Date.now()}`, { timeout: 20000 });
           if (snapshotRes.data) {
             const snap = snapshotRes.data;
             const allBuy = snap.buyData || {};
@@ -729,6 +729,15 @@ function MainApp() {
                 const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 fullTimeStr = `${dateStr} ${timeStr}`;
                 setLastUpdate(fullTimeStr);
+
+                // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면, 서버가 방금 깨어나 스캔을 시작했을 수 있습니다.
+                // 2분 뒤에 자동으로 한 번 더 갱신하여 최신 데이터를 가져옵니다.
+                if (snap.updateTime && StockService.isMarketOpen() && !silent) {
+                  const diff = Date.now() - updateDate.getTime();
+                  if (diff > 20 * 60 * 1000) {
+                    setTimeout(() => refreshData(null, true), 120 * 1000);
+                  }
+                }
 
                 // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
                 const localSnapshot = {
@@ -1355,7 +1364,7 @@ function MainApp() {
           </View>
 
           <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {settingAccumStreak}일↑)</Text>
-          {analyzedStocks.filter(s => s.isHiddenAccumulation)
+          {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak))
             .map(s => (
               <StockCard key={s.code} stock={s} onPress={() => handleOpenDetail(s)} />
             ))}
@@ -1764,8 +1773,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.versionText}>Money Fact Premium v3.8.7 Gold Edition</Text>
-            <Text style={styles.footerVersion}>v3.8.7 Build 20260304 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v3.8.8 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v3.8.8 Build 20260304 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1778,7 +1787,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.7</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v3.8.8</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

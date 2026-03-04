@@ -1045,15 +1045,20 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
 // [v3.9.8] 앱의 스냅샷 요청 시에도 데이터 신선도를 체크하여 필요시 스캐너 가동
 app.get('/api/snapshot', (req, res) => {
-    const isStale = (marketAnalysisReport.updateTime &&
-        new Date().getDate() !== new Date(marketAnalysisReport.updateTime).getDate());
+    // [v3.9.9] 데이터 신선도 체크 (20분 기준)
+    const now = new Date();
+    const lastUpdate = marketAnalysisReport.updateTime ? new Date(marketAnalysisReport.updateTime) : new Date(0);
+    const diffMin = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+
+    // 20분 이상 지났거나 날짜가 바뀌었으면 강제 스캔 트리거
+    const isStale = diffMin > 20 || now.getDate() !== lastUpdate.getDate();
 
     // 비동기로 실행하여 응답 지연 방지
-    runDeepMarketScan(false);
+    runDeepMarketScan(isStale);
 
     res.json({
         ...marketAnalysisReport,
-        _scanTriggered: isStale ? 'STALE_FORCE' : 'CHECKED'
+        _scanTriggered: isStale ? 'FORCE' : 'CHECKED'
     });
 });
 
