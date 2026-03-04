@@ -1123,7 +1123,7 @@ function calculateVWAP(daily, days = 5) {
     return totalVol === 0 ? 0 : Math.round(totalValue / totalVol);
 }
 
-// [v3.8.6] 히든 매집 감지 로직 고도화: 최근 5거래일 변동성(고가-저가) 기반 횡보 판정
+// [v3.9.9] 히든 매집 감지 로직 고도화: 횡보 판정 강화
 function checkHidden(daily, threshold = 3) {
     if (!daily || daily.length < 5) return false;
     let totalVolatility = 0;
@@ -1135,19 +1135,26 @@ function checkHidden(daily, threshold = 3) {
 
         let dayVolatility = 0;
         if (high > 0 && low > 0) {
-            // 가이드 원칙: (고가 - 저가) / 종가
             dayVolatility = ((high - low) / close) * 100;
         } else {
-            // 데이터 미비 시 전일비(prdy_ctrt)의 1.2배를 일중 변동성으로 추정 적용
-            dayVolatility = Math.abs(parseFloat(row.prdy_ctrt || 0)) * 1.2;
+            dayVolatility = Math.abs(parseFloat(row.prdy_ctrt || 0));
         }
         totalVolatility += dayVolatility;
     }
     const avgVol = totalVolatility / 5;
+
+    // 5일간 전체 누적 등락률 (박스권 횡보 확인)
+    const currentClose = parseInt(daily[0].stck_clpr || 0);
+    const fiveDaysAgoClose = parseInt(daily[4].stck_clpr || 1);
+    const totalChange = ((currentClose - fiveDaysAgoClose) / fiveDaysAgoClose) * 100;
+
     const fRes = analyzeStreak(daily, '2');
     const iRes = analyzeStreak(daily, '1');
-    // 변동성 3% 미만 + 외인 또는 기관의 연속 순매수가 기준치 이상
-    return avgVol < 3 && (fRes.buyStreak >= threshold || iRes.buyStreak >= threshold);
+
+    // 변동성 3.0% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
+    return avgVol < 3.0 &&
+        Math.abs(totalChange) < 3.0 &&
+        (fRes.buyStreak >= threshold || iRes.buyStreak >= threshold);
 }
 
 // --- Cloud Sync for Mobile Data Persistence (File + Firebase) ---

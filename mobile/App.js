@@ -759,6 +759,23 @@ function MainApp() {
       const results = [...snapshotStocks];
       const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
 
+      // [v3.9.0] 추천 개선책 반영: 관심종목(My Stocks)을 분석 루프 시작 전 미리 결과 리스트에 등록
+      // 이렇게 하면 '수급 분석 중...' 뱅글뱅글 상태를 즉시 해소하고 기존 데이터라도 먼저 보여줍니다.
+      myStocks.forEach(mystock => {
+        if (!snapshotExistingCodes.has(mystock.code)) {
+          const prev = analyzedStocks.find(s => s.code === mystock.code);
+          results.push(prev || {
+            ...mystock,
+            fStreak: 0, iStreak: 0, sentiment: 50, price: 0,
+            isHiddenAccumulation: false,
+            isWaiting: true
+          });
+          snapshotExistingCodes.add(mystock.code);
+        }
+      });
+      // 초기 고속 로딩을 위해 즉시 반영 (내 종목들의 자리를 미리 확보)
+      setAnalyzedStocks([...results]);
+
       // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
       // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
       analyzedStocks.forEach(prev => {

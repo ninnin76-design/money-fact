@@ -219,27 +219,36 @@ export const StockService = {
     checkHiddenAccumulation(dailyData, streakThreshold = 3) {
         if (!dailyData || dailyData.length < 5) return false;
 
-        // Check volatility for last 5 days (< 3% average)
-        let totalVolatiltiy = 0;
+        // [v3.9.9] 더욱 정교한 히든 매집 포착 로직
+        // 1. 5일간의 가격 변동폭 (평균 고-저차)
+        let totalDailyRange = 0;
         for (let i = 0; i < 5; i++) {
             const close = parseInt(dailyData[i].stck_clpr);
-
             if (dailyData[i].stck_hgpr && dailyData[i].stck_lwpr) {
                 const high = parseInt(dailyData[i].stck_hgpr);
                 const low = parseInt(dailyData[i].stck_lwpr);
-                totalVolatiltiy += ((high - low) / close) * 100;
+                totalDailyRange += ((high - low) / close) * 100;
             } else {
-                // Fallback: Use absolute daily change % if High/Low missing
-                const changeRate = Math.abs(parseFloat(dailyData[i].prdy_ctrt || 0));
-                totalVolatiltiy += changeRate;
+                totalDailyRange += Math.abs(parseFloat(dailyData[i].prdy_ctrt || 0));
             }
         }
-        const avgVol = totalVolatiltiy / 5;
+        const avgDailyRange = totalDailyRange / 5;
 
+        // 2. 5일 전 종가 대비 현재가 등락폭 (박스권 횡보 확인)
+        const currentClose = parseInt(dailyData[0].stck_clpr);
+        const fiveDayAgoClose = parseInt(dailyData[4].stck_clpr);
+        const fiveDayChange = ((currentClose - fiveDayAgoClose) / fiveDayAgoClose) * 100;
+
+        // 3. 수급 분석
         const { fStreak, iStreak } = this.analyzeSupply(dailyData);
 
-        // Hidden if Volatility is low but either F or I is buying for streakThreshold+ days
-        return avgVol < 3 && (fStreak >= streakThreshold || iStreak >= streakThreshold);
+        // [최종 기준]
+        // - 평균 일일 변동성 3.0% 미만 (고요함)
+        // - 5일간 전체 가격 변화가 -3% ~ +3% 사이 (횡보)
+        // - 외인 또는 기관의 매집 일수가 기준치 이상
+        return avgDailyRange < 3.0 &&
+            Math.abs(fiveDayChange) < 3.0 &&
+            (fStreak >= streakThreshold || iStreak >= streakThreshold);
     },
 
     calculateVWAP(dailyData, days = 5) {
