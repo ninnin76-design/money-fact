@@ -897,9 +897,6 @@ function MainApp() {
               if (vwap > 0 && priceVal < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
               if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
-
-            // [v3.9.8] 인크리멘탈 업데이트: 한 종목씩 분석될 때마다 즉시 반영하여 '분석중' 상태를 빠르게 해소
-            setAnalyzedStocks([...results]);
           } else {
             const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false };
             const existingIdx = results.findIndex(r => r.code === stock.code);
@@ -912,6 +909,9 @@ function MainApp() {
           if (existingIdx >= 0) results[existingIdx] = errorStock;
           else results.push(errorStock);
         }
+
+        // [v3.9.9] 인크리멘탈 업데이트 위치 상향: 성공/실패/데이터없음 모든 경우에 즉시 반영하여 '분석중' 상태를 해소
+        setAnalyzedStocks([...results]);
       }
       setAnalyzedStocks(results);
 
@@ -1012,8 +1012,8 @@ function MainApp() {
       } else if (searchQuery.length === 6 && /^\d+$/.test(searchQuery)) {
         code = searchQuery;
 
-        // [v3.6 최적화] 서버 스냅샷에 이미 데이터가 있으면 API 호출 없이 이름 확인!
-        const snapshotStock = allStocksData.find(s => s.code === code);
+        // [v3.9.9] typo 수정: allStocksData -> analyzedStocks
+        const snapshotStock = analyzedStocks.find(s => s.code === code);
         if (snapshotStock && snapshotStock.name) {
           name = snapshotStock.name;
         } else {
