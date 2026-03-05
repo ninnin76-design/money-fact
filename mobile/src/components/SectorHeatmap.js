@@ -7,7 +7,7 @@ const { width } = Dimensions.get('window');
 const SectorHeatmap = ({ sectors = [] }) => {
     const kstDate = new Date(new Date().getTime() + (new Date().getTimezoneOffset() + 540) * 60000);
     const hour = kstDate.getHours();
-    const isWorkingHours = hour >= 9 && hour < 20;
+    const isWorkingHours = hour >= 9 && hour < 16;
 
     return (
         <View style={styles.container}>
@@ -19,8 +19,10 @@ const SectorHeatmap = ({ sectors = [] }) => {
             </View>
             <View style={styles.grid}>
                 {sectors.map((sector, index) => {
-                    const isPositive = sector.flow >= 0;
+                    const flowVal = (sector.flow !== null && sector.flow !== undefined && !isNaN(sector.flow)) ? sector.flow : 0;
+                    const isPositive = flowVal >= 0;
                     const formatFlow = (val) => {
+                        if (val === null || val === undefined || isNaN(val)) return '0억';
                         const absVal = Math.abs(val);
                         if (absVal >= 10000) {
                             return (val / 10000).toFixed(1) + '조';
@@ -47,7 +49,7 @@ const SectorHeatmap = ({ sectors = [] }) => {
                                     adjustsFontSizeToFit={true}
                                     minimumFontScale={0.5}
                                 >
-                                    {isPositive ? '↑' : '↓'} {formatFlow(sector.flow)}
+                                    {isPositive ? '↑' : '↓'} {formatFlow(flowVal)}
                                 </Text>
                             </View>
                         </View>

@@ -437,6 +437,7 @@ function MainApp() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [manualModal, setManualModal] = useState(false);
   const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
+  const [syncTime, setSyncTime] = useState(null); // [v3.9.4] 모바일 데이터 동기화 시점 (서버에서 데이터를 성공적으로 가져온 시각)
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -518,20 +519,22 @@ function MainApp() {
   };
 
   useEffect(() => {
+    // [v3.9.4] 10분 주기로 서버를 깨우고 최신 데이터를 가져옵니다.
+    // 서버는 15분마다 자체 스캔을 돌리므로, 10분 주기면 스캔 완료 후 최대 10분 내로 새 데이터를 받을 수 있습니다.
     const timer = setInterval(() => {
       const open = StockService.isMarketOpen();
       setIsMarketOpen(open);
 
-      // [v3.9.2] 장 마감 직후에도 최종 확정 데이터를 가져올 수 있도록 조건을 완화합니다.
-      // (오후 6시까지는 주기적으로 서버 데이터를 체크합니다)
+      // [v3.9.4] 장 마감 직후에도 최종 확정 데이터를 가져올 수 있도록 조건을 완화합니다.
+      // (오후 7시까지는 주기적으로 서버 데이터를 체크합니다)
       const now = new Date();
       const kstHour = (now.getUTCHours() + 9) % 24;
       const isCheckTime = open || (kstHour >= 15 && kstHour < 19);
 
       if (isCheckTime && tab !== 'settings') {
-        refreshData(undefined, true); // Silent refresh
+        refreshData(undefined, true); // Silent refresh → 서버에서 데이터를 가져오면 확정 시간도 자동 갱신
       }
-    }, 10 * 60 * 1000); // 10분 단위로 단축하여 신선도 유지 (v3.9.2)
+    }, 10 * 60 * 1000); // [v3.9.4] 10분 주기로 서버를 깨워서 데이터 갱신
     return () => clearInterval(timer);
   }, [tab, myStocks]);
 
@@ -740,6 +743,12 @@ function MainApp() {
                 const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 fullTimeStr = `${dateStr} ${timeStr}`;
                 setLastUpdate(fullTimeStr);
+
+                // [v3.9.4] 서버에서 데이터를 성공적으로 가져온 시점을 동기화 시각으로 기록
+                const syncNow = new Date();
+                const syncDateStr = syncNow.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+                const syncTimeStr = syncNow.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                setSyncTime(`${syncDateStr} ${syncTimeStr}`);
 
                 // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면, 서버가 방금 깨어나 스캔을 시작했을 수 있습니다.
                 // 2분 뒤에 자동으로 한 번 더 갱신하여 최신 데이터를 가져옵니다.
@@ -1340,7 +1349,7 @@ function MainApp() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Smartphone size={10} color="rgba(255,255,255,0.5)" />
               <Text style={styles.updateText}>
-                [동기화] {new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                [동기화] {syncTime || '대기 중...'}
               </Text>
             </View>
           </View>
@@ -1781,8 +1790,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v3.8.8 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v3.8.8 Build 20260304 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v3.9.5 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v3.9.5 Build 20260305 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >

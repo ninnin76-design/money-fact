@@ -52,49 +52,48 @@ const MARKET_WATCH_STOCKS = [
     { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' }
 ];
 
-// 섹터별 관심종목 70개 - 서버 스캔 시 무조건 포함!
 const SECTOR_WATCH_STOCKS = [
     // 자동차 및 전자부품
-    { name: '현대차', code: '005380' }, { name: '현대차우', code: '005385' },
-    { name: '현대모비스', code: '012330' }, { name: '기아', code: '000270' },
-    { name: '삼성전기', code: '009150' }, { name: '삼성전기우', code: '009155' },
+    { name: '현대차', code: '005380', sector: '자동차 및 전자부품' }, { name: '현대차우', code: '005385', sector: '자동차 및 전자부품' },
+    { name: '현대모비스', code: '012330', sector: '자동차 및 전자부품' }, { name: '기아', code: '000270', sector: '자동차 및 전자부품' },
+    { name: '삼성전기', code: '009150', sector: '자동차 및 전자부품' }, { name: '삼성전기우', code: '009155', sector: '자동차 및 전자부품' },
     // 이차전지
-    { name: '삼성SDI', code: '006400' }, { name: 'LG에너지솔루션', code: '373220' },
-    { name: 'LG화학', code: '051910' }, { name: 'POSCO홀딩스', code: '005490' },
-    { name: '에코프로', code: '086520' }, { name: '에코프로비엠', code: '247540' },
-    { name: '엘앤에프', code: '066970' }, { name: '포스코퓨처엠', code: '003670' },
-    { name: '나노신소재', code: '121600' }, { name: '에코프로머티', code: '450080' },
-    { name: '상신이디피', code: '091580' }, { name: '코스모화학', code: '005420' },
+    { name: '삼성SDI', code: '006400', sector: '이차전지' }, { name: 'LG에너지솔루션', code: '373220', sector: '이차전지' },
+    { name: 'LG화학', code: '051910', sector: '이차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '이차전지' },
+    { name: '에코프로', code: '086520', sector: '이차전지' }, { name: '에코프로비엠', code: '247540', sector: '이차전지' },
+    { name: '엘앤에프', code: '066970', sector: '이차전지' }, { name: '포스코퓨처엠', code: '003670', sector: '이차전지' },
+    { name: '나노신소재', code: '121600', sector: '이차전지' }, { name: '에코프로머티', code: '450080', sector: '이차전지' },
+    { name: '상신이디피', code: '091580', sector: '이차전지' }, { name: '코스모화학', code: '005420', sector: '이차전지' },
     // 엔터 및 플랫폼
-    { name: '하이브', code: '352820' }, { name: '와이지엔터테인먼트', code: '122870' },
-    { name: 'JYP Ent.', code: '035900' }, { name: '에스엠(SM)', code: '041510' },
-    { name: 'TCC스틸', code: '002710' }, { name: '디어유', code: '376300' },
-    { name: '카카오', code: '035720' }, { name: 'NAVER', code: '035420' },
+    { name: '하이브', code: '352820', sector: '엔터 및 플랫폼' }, { name: '와이지엔터테인먼트', code: '122870', sector: '엔터 및 플랫폼' },
+    { name: 'JYP Ent.', code: '035900', sector: '엔터 및 플랫폼' }, { name: '에스엠(SM)', code: '041510', sector: '엔터 및 플랫폼' },
+    { name: 'TCC스틸', code: '002710', sector: '엔터 및 플랫폼' }, { name: '디어유', code: '376300', sector: '엔터 및 플랫폼' },
+    { name: '카카오', code: '035720', sector: '엔터 및 플랫폼' }, { name: 'NAVER', code: '035420', sector: '엔터 및 플랫폼' },
     // 로봇 및 에너지
-    { name: '레인보우로보틱스', code: '277810' }, { name: '티로보틱스', code: '117730' },
-    { name: '씨메스', code: '475400' }, { name: '클로봇', code: '466100' },
-    { name: 'HD현대에너지솔루션', code: '322000' }, { name: 'OCI홀딩스', code: '010060' },
+    { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' }, { name: '티로보틱스', code: '117730', sector: '로봇 및 에너지' },
+    { name: '씨메스', code: '475400', sector: '로봇 및 에너지' }, { name: '클로봇', code: '466100', sector: '로봇 및 에너지' },
+    { name: 'HD현대에너지솔루션', code: '322000', sector: '로봇 및 에너지' }, { name: 'OCI홀딩스', code: '010060', sector: '로봇 및 에너지' },
     // 반도체
-    { name: '삼성전자', code: '005930' }, { name: '삼성전자우', code: '005935' },
-    { name: 'SK하이닉스', code: '000660' }, { name: '와이씨', code: '232140' },
-    { name: 'HPSP', code: '403870' }, { name: '테크윙', code: '089030' },
-    { name: '하나머티리얼즈', code: '166090' }, { name: '하나마이크론', code: '067310' },
-    { name: '유진테크', code: '084370' }, { name: '피에스케이홀딩스', code: '031980' },
-    { name: '피에스케이', code: '319660' }, { name: '에스티아이(STI)', code: '039440' },
-    { name: '디아이(DI)', code: '003160' }, { name: '에스앤에스텍', code: '101490' },
-    { name: '이오테크닉스', code: '039030' }, { name: '원익IPS', code: '240810' },
-    { name: 'ISC', code: '095340' }, { name: '두산테스나', code: '131970' },
-    { name: '에프에스티', code: '036810' }, { name: '한화비전', code: '489790' },
-    { name: '가온칩스', code: '399720' }, { name: '에이디테크놀로지', code: '158430' },
-    { name: '주성엔지니어링', code: '036930' }, { name: '한미반도체', code: '042700' },
-    { name: '케이씨텍', code: '281820' }, { name: '원익QnC', code: '074600' },
-    { name: '유니샘', code: '036200' }, { name: '티씨케이', code: '064760' },
+    { name: '삼성전자', code: '005930', sector: '반도체' }, { name: '삼성전자우', code: '005935', sector: '반도체' },
+    { name: 'SK하이닉스', code: '000660', sector: '반도체' }, { name: '와이씨', code: '232140', sector: '반도체' },
+    { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '테크윙', code: '089030', sector: '반도체' },
+    { name: '하나머티리얼즈', code: '166090', sector: '반도체' }, { name: '하나마이크론', code: '067310', sector: '반도체' },
+    { name: '유진테크', code: '084370', sector: '반도체' }, { name: '피에스케이홀딩스', code: '031980', sector: '반도체' },
+    { name: '피에스케이', code: '319660', sector: '반도체' }, { name: '에스티아이(STI)', code: '039440', sector: '반도체' },
+    { name: '디아이(DI)', code: '003160', sector: '반도체' }, { name: '에스앤에스텍', code: '101490', sector: '반도체' },
+    { name: '이오테크닉스', code: '039030', sector: '반도체' }, { name: '원익IPS', code: '240810', sector: '반도체' },
+    { name: 'ISC', code: '095340', sector: '반도체' }, { name: '두산테스나', code: '131970', sector: '반도체' },
+    { name: '에프에스티', code: '036810', sector: '반도체' }, { name: '한화비전', code: '489790', sector: '반도체' },
+    { name: '가온칩스', code: '399720', sector: '반도체' }, { name: '에이디테크놀로지', code: '158430', sector: '반도체' },
+    { name: '주성엔지니어링', code: '036930', sector: '반도체' }, { name: '한미반도체', code: '042700', sector: '반도체' },
+    { name: '케이씨텍', code: '281820', sector: '반도체' }, { name: '원익QnC', code: '074600', sector: '반도체' },
+    { name: '유니샘', code: '036200', sector: '반도체' }, { name: '티씨케이', code: '064760', sector: '반도체' },
     // 바이오 및 헬스케어
-    { name: '한올바이오파마', code: '009420' }, { name: '코오롱티슈진', code: '950160' },
-    { name: '한미약품', code: '128940' }, { name: 'HLB', code: '028300' },
-    { name: '에이비엘바이오', code: '298380' }, { name: '인벤티지랩', code: '389470' },
-    { name: '퓨쳐켐', code: '220100' }, { name: '리가켐바이오', code: '141080' },
-    { name: '알테오젠', code: '196170' }, { name: '오스코텍', code: '039200' },
+    { name: '한올바이오파마', code: '009420', sector: '바이오 및 헬스케어' }, { name: '코오롱티슈진', code: '950160', sector: '바이오 및 헬스케어' },
+    { name: '한미약품', code: '128940', sector: '바이오 및 헬스케어' }, { name: 'HLB', code: '028300', sector: '바이오 및 헬스케어' },
+    { name: '에이비엘바이오', code: '298380', sector: '바이오 및 헬스케어' }, { name: '인벤티지랩', code: '389470', sector: '바이오 및 헬스케어' },
+    { name: '퓨쳐켐', code: '220100', sector: '바이오 및 헬스케어' }, { name: '리가켐바이오', code: '141080', sector: '바이오 및 헬스케어' },
+    { name: '알테오젠', code: '196170', sector: '바이오 및 헬스케어' }, { name: '오스코텍', code: '039200', sector: '바이오 및 헬스케어' }
 ];
 
 const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
@@ -471,50 +470,8 @@ async function runDeepMarketScan(force = false) {
         const totalCandidates = candidateMap.size;
         console.log(`[Radar] ===== 1단계 완료: 총 ${totalCandidates}개 후보 확보! =====`);
 
-        // [v3.6.2] 시장 전체 섹터별 자금 흐름 (2,800개 종목 대변)을 먼저 가져옵니다.
-        async function fetchOverallSectors(token) {
-            const sectorsToTrack = [
-                { name: '반도체(전기전자)', code: '0013', div: 'U' },
-                { name: '자동차(운수장비)', code: '0015', div: 'U' },
-                { name: '바이오(의약품)', code: '0006', div: 'U' },
-                { name: '이차전지(화학)', code: '0005', div: 'U' },
-                { name: '엔터/SW(서비스)', code: '0021', div: 'U' },
-                { name: '금융/지주', code: '0018', div: 'U' },
-                { name: 'IT 하드웨어', code: '1012', div: 'U' },
-                { name: '코스닥 제약', code: '1029', div: 'U' },
-                { name: '기계/장비', code: '0009', div: 'U' }
-            ];
-
-            const results = [];
-            for (const s of sectorsToTrack) {
-                try {
-                    await new Promise(r => setTimeout(r, 80));
-                    const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
-                        headers: {
-                            authorization: `Bearer ${token}`,
-                            appkey: APP_KEY,
-                            appsecret: APP_SECRET,
-                            tr_id: 'FHKUP03500100',
-                            custtype: 'P'
-                        },
-                        params: {
-                            FID_COND_MRKT_DIV_CODE: s.div,
-                            FID_INPUT_ISCD: s.code
-                        }
-                    });
-                    const d = res.data.output;
-                    if (d) {
-                        // [v3.9.8] prdy_ 접두사 제거 (전일 데이터가 아닌 당일 데이터 사용!)
-                        const foreign = parseInt(d.frgn_ntby_tr_pbmn || 0);
-                        const institution = parseInt(d.orgn_ntby_tr_pbmn || 0);
-                        results.push({ name: s.name, flow: Math.round((foreign + institution) / 100) });
-                    }
-                } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
-            }
-            return results.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6);
-        }
-
-        const marketSectorsResult = await fetchOverallSectors(token);
+        // [v3.9.5] 고장난 KIS 업종별 수급 API 호출 부분 완전 제거 (시간 지연 방지)
+        // 대신 서버 구동 시 강제로 스캔된 핵심 70종목의 순매수 대금을 합산하는 방식 사용
 
         // [v3.6.3] 대한민국 시장 전체(2,800개 종목) 자금 흐름 가져오기
         async function fetchMarketTotalFlow(token) {
@@ -542,8 +499,8 @@ async function runDeepMarketScan(force = false) {
                         }
                     });
                     const d = res.data.output;
-                    if (d) {
-                        // [v3.9.8] prdy_ 접두사 제거 (전일 데이터가 아닌 당일 데이터 사용!)
+                    if (d && typeof d === 'object') {
+                        // [v3.9.2] 안전한 파싱
                         totalF += parseInt(d.frgn_ntby_tr_pbmn || 0);
                         totalI += parseInt(d.orgn_ntby_tr_pbmn || 0);
                         pnsn += parseInt(d.pnsn_ntby_tr_pbmn || 0);
@@ -684,7 +641,10 @@ async function runDeepMarketScan(force = false) {
         newBuyData['sectors'] = [];
         // [v3.9.0] sectorStockCodes는 2단계 시작 시 이미 선언됨 (위 참조)
 
-        const sectorMap = {};
+        const sectorMap = {
+            '반도체': 0, '이차전지': 0, '바이오 및 헬스케어': 0,
+            '자동차 및 전자부품': 0, '로봇 및 에너지': 0, '엔터 및 플랫폼': 0
+        };
         // 2,800개 전 종목 수급 데이터를 기본값으로 사용
         const instTotals = {
             pnsn: marketTotalFlow.pnsn || 0,
@@ -696,12 +656,14 @@ async function runDeepMarketScan(force = false) {
 
         historyData.forEach((val, code) => {
             const d = val.daily[0];
-            const netBuy = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
-            const pnsnBuy = parseInt(d.pnsn_ntby_qty || 0);
-            const ivtgBuy = parseInt(d.ivtg_ntby_qty || 0);
-            const insBuy = parseInt(d.ins_ntby_qty || 0);
+            if (!d || typeof d !== 'object') return; // [v3.9.2] 안전 조치
 
-            const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
+            const netBuy = (parseInt(d.frgn_ntby_qty) || 0) + (parseInt(d.orgn_ntby_qty) || 0);
+            const pnsnBuy = parseInt(d.pnsn_ntby_qty || 0) || 0;
+            const ivtgBuy = parseInt(d.ivtg_ntby_qty || 0) || 0;
+            const insBuy = parseInt(d.ins_ntby_qty || 0) || 0;
+
+            const mwc = SECTOR_WATCH_STOCKS.find(s => s.code === code);
             if (mwc && mwc.sector) {
                 // [v3.8.3] 수량 * 현재가 공식을 통해 자금의 실제 규모(금액)를 계산 후 억 단위로 변환
                 const amount = Math.round((netBuy * parseInt(val.price || 0)) / 100000000);
@@ -785,17 +747,10 @@ async function runDeepMarketScan(force = false) {
         marketAnalysisReport.sellData = newSellData;
         marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
 
-        if (marketSectorsResult && marketSectorsResult.length > 0) {
-            // [v3.8.2] 외부 API 데이터 기반 섹터 정렬 (확실하게 절대값 큰 순서)
-            marketSectorsResult.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
-            marketAnalysisReport.sectors = marketSectorsResult.slice(0, 6);
-            marketAnalysisReport.instFlow = instTotals;
-        } else {
-            // 자체 집계 데이터 사용 시에도 정렬 보장
-            sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
-            marketAnalysisReport.sectors = sectorList.slice(0, 6);
-            marketAnalysisReport.instFlow = instTotals;
-        }
+        // [v3.9.5] 70개 핵심 종목 기반 자체 집계 데이터 사용 및 정렬 보장
+        sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+        marketAnalysisReport.sectors = sectorList.slice(0, 6);
+        marketAnalysisReport.instFlow = instTotals;
         // [v3.9.8] 전광판(Ticker)용 동적 텍스트 생성 로직
         const tickerItems = [];
         const fF = instTotals.foreign || 0;
@@ -1151,8 +1106,12 @@ function checkHidden(daily, threshold = 3) {
     const fRes = analyzeStreak(daily, '2');
     const iRes = analyzeStreak(daily, '1');
 
-    // 변동성 2.5% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
+    // [v3.9.2] 변동성 2.5% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
+    // + 당일 등락률도 3% 이내여야 함 (이미 튄 종목 제외)
+    const todayChange = Math.abs(parseFloat(daily[0].prdy_ctrt || 0));
+
     return avgVol < 2.5 &&
+        todayChange < 3.0 &&
         Math.abs(totalChange) < 3.0 &&
         (fRes.buyStreak >= threshold || iRes.buyStreak >= threshold);
 }
