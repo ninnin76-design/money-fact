@@ -223,11 +223,11 @@ export const StockService = {
         // 1. 5일간의 가격 변동폭 (평균 고-저차)
         let totalDailyRange = 0;
         for (let i = 0; i < 5; i++) {
-            const close = parseInt(dailyData[i].stck_clpr);
+            const close = parseInt(dailyData[i].stck_clpr || 1);
             if (dailyData[i].stck_hgpr && dailyData[i].stck_lwpr) {
                 const high = parseInt(dailyData[i].stck_hgpr);
                 const low = parseInt(dailyData[i].stck_lwpr);
-                totalDailyRange += ((high - low) / close) * 100;
+                totalDailyRange += ((high - low) / (close || 1)) * 100;
             } else {
                 totalDailyRange += Math.abs(parseFloat(dailyData[i].prdy_ctrt || 0));
             }
@@ -235,18 +235,22 @@ export const StockService = {
         const avgDailyRange = totalDailyRange / 5;
 
         // 2. 5일 전 종가 대비 현재가 등락폭 (박스권 횡보 확인)
-        const currentClose = parseInt(dailyData[0].stck_clpr);
-        const fiveDayAgoClose = parseInt(dailyData[4].stck_clpr);
-        const fiveDayChange = ((currentClose - fiveDayAgoClose) / fiveDayAgoClose) * 100;
+        const currentClose = parseInt(dailyData[0].stck_clpr || 0);
+        const fiveDayAgoClose = parseInt(dailyData[4].stck_clpr || 0);
+
+        // 0 나누기 방지
+        const fiveDayChange = fiveDayAgoClose > 0
+            ? ((currentClose - fiveDayAgoClose) / fiveDayAgoClose) * 100
+            : 0;
 
         // 3. 수급 분석
         const { fStreak, iStreak } = this.analyzeSupply(dailyData);
 
         // [최종 기준]
         // - 평균 일일 변동성 2.5% 미만 (고요함)
-        // - 당일 등락률 3% 미만 (급등락 제외)
+        // - 당일 등락률 3% 미만 (급등락 제외 / 이미 튄 종목은 매집 초기라 보기 힘듦)
         // - 5일간 전체 가격 변화가 -3% ~ +3% 사이 (횡보)
-        // - 외인 또는 기관의 매집 일수가 기준치 이상
+        // - 외인 또는 기관의 매집 일수가 기준치(streakThreshold) 이상
         const todayChange = Math.abs(parseFloat(dailyData[0].prdy_ctrt || 0));
 
         return avgDailyRange < 2.5 &&

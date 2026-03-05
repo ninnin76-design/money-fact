@@ -295,10 +295,10 @@ async function runDeepMarketScan(force = false) {
 
     console.log(`[Worker] Server(UTC): ${now.toISOString()}, KST: ${kstDateStr} ${hour}:${String(minute).padStart(2, '0')}, Day: ${day}, Force: ${force}`);
 
-    // [v3.9.0 최적화] 시장 감시 시간: 오전 8시 ~ 오후 8시 (20:00) KST
-    // 오후 3:30 이후 시간외 및 야간 거래 수급까지 15분마다 추적하여 8시에 최종 확정합니다.
+    // [v3.9.9] 시장 감시 시간: 오전 8시 ~ 오후 10시 (22:00) KST
+    // 오후 3:30 장 마감 후에도 최종 기관 집계(주로 18~20시)까지 반영하기 위해 시간을 연장합니다.
     const isWeekend = (day === 0 || day === 6);
-    const isMarketOpen = (hour >= 8 && hour <= 20) && !isWeekend;
+    const isMarketOpen = (hour >= 8 && hour <= 22) && !isWeekend;
     const hasNoData = !marketAnalysisReport.updateTime;
 
     // [v3.9.8] 가동 주기 쓰로틀링 (15분 이내 중복 스캔 방지)
@@ -551,14 +551,27 @@ async function runDeepMarketScan(force = false) {
                 });
                 const daily = invRes.data.output || [];
 
-                // [코다리 부장 터치] 장중이라면 잠정치를 가져와서 오늘 데이터를 보정합니다!
+                // [v3.9.5] 장중 데이터 보정: 날짜 정합성 확인 후 잠정치(Interim) 반영
+                const todayStr = kstDateStr.replace(/-/g, '');
                 if (isMarketOpen && daily.length > 0) {
-                    const d0 = daily[0];
+                    let d0 = daily[0];
+                    // 만약 첫 번째 데이터 날짜가 오늘이 아니면, 오늘 자리를 새로 만들어 준 후 잠정치를 채웁니다.
+                    if (d0.stck_bsop_date !== todayStr) {
+                        daily.unshift({
+                            stck_bsop_date: todayStr,
+                            frgn_ntby_qty: '0',
+                            orgn_ntby_qty: '0',
+                            stck_clpr: d0.stck_clpr, // 종가/현재가 대략 복사
+                            prdy_ctrt: '0'
+                        });
+                        d0 = daily[0];
+                    }
+
                     const fVal = parseInt(d0.frgn_ntby_qty || 0);
                     const oVal = parseInt(d0.orgn_ntby_qty || 0);
 
-                    // 값이 비어있거나 0인 경우(장중 미지급) 잠정치 조회
-                    if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
+                    // 값이 0이거나 비어있는 경우 잠정치(FHKST01012100) 데이터로 보정
+                    if ((fVal === 0 && oVal === 0) || force) {
                         try {
                             const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
                                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
@@ -567,7 +580,7 @@ async function runDeepMarketScan(force = false) {
                             const prov = provRes.data.output;
                             if (prov) {
                                 d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
-                                d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0'; // 기관 합계로 보정
+                                d0.orgn_ntby_qty = prov.orgn_ntby_qty || '0'; // [FIXED] ivtg -> orgn 전수 데이터로 변경
                             }
                         } catch (provErr) { /* ignore */ }
                     }
@@ -1090,7 +1103,7 @@ function checkHidden(daily, threshold = 3) {
 
         let dayVolatility = 0;
         if (high > 0 && low > 0) {
-            dayVolatility = ((high - low) / close) * 100;
+            dayVolatility = ((high - low) / (close || 1)) * 100;
         } else {
             dayVolatility = Math.abs(parseFloat(row.prdy_ctrt || 0));
         }
@@ -1100,16 +1113,19 @@ function checkHidden(daily, threshold = 3) {
 
     // 5일간 전체 누적 등락률 (박스권 횡보 확인)
     const currentClose = parseInt(daily[0].stck_clpr || 0);
-    const fiveDaysAgoClose = parseInt(daily[4].stck_clpr || 1);
-    const totalChange = ((currentClose - fiveDaysAgoClose) / fiveDaysAgoClose) * 100;
+    const fiveDaysAgoClose = parseInt(daily[4].stck_clpr || 0);
+
+    // 0 나누기 방지
+    const totalChange = fiveDaysAgoClose > 0
+        ? ((currentClose - fiveDaysAgoClose) / fiveDaysAgoClose) * 100
+        : 0;
 
     const fRes = analyzeStreak(daily, '2');
     const iRes = analyzeStreak(daily, '1');
 
-    // [v3.9.2] 변동성 2.5% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
-    // + 당일 등락률도 3% 이내여야 함 (이미 튄 종목 제외)
     const todayChange = Math.abs(parseFloat(daily[0].prdy_ctrt || 0));
 
+    // [최종 기준] 변동성 2.5% 미만 + 당일 3% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
     return avgVol < 2.5 &&
         todayChange < 3.0 &&
         Math.abs(totalChange) < 3.0 &&
@@ -1325,7 +1341,7 @@ app.post('/api/my-portfolio/analyze', async (req, res) => {
                         const prov = provRes.data.output;
                         if (prov) {
                             d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
-                            d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0';
+                            d0.orgn_ntby_qty = prov.orgn_ntby_qty || '0'; // [FIXED] ivtg -> orgn 전수 데이터로 변경
                         }
                     } catch (e) { }
                 }
@@ -1406,6 +1422,61 @@ app.post('/api/portfolio/recommend', async (req, res) => {
         };
     }));
     res.json({ portfolio: detailedPortfolio });
+});
+
+// [v3.9.9] 종목별 일별 데이터 프록시 API (앱에서 직접 KIS API 호출 실패 시 서버 경유 폴백용)
+app.get('/api/stock-daily/:code', async (req, res) => {
+    const { code } = req.params;
+    if (!code || code.length !== 6) return res.status(400).json({ error: 'Invalid stock code' });
+
+    try {
+        const token = await getAccessToken();
+        if (!token) return res.status(500).json({ error: 'Token unavailable' });
+
+        // 150ms 간격으로 TPS 방어
+        const fetchKIS = async (trId, params) => {
+            const urlPath = trId === 'FHKST01010900' ? 'inquire-investor' : 'inquire-daily-price';
+            const r = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/${urlPath}`, {
+                headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: trId, custtype: 'P' },
+                params
+            });
+            return r.data.output || [];
+        };
+
+        const baseParams = { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' };
+
+        // 투자자 데이터 + 가격 데이터 동시 조회
+        const [investorData, priceData] = await Promise.all([
+            fetchKIS('FHKST01010900', baseParams),
+            fetchKIS('FHKST01010400', baseParams)
+        ]);
+
+        if (!investorData || investorData.length === 0) {
+            return res.json({ daily: [], source: 'server_proxy_empty' });
+        }
+
+        // 투자자 데이터에 가격 데이터 병합 (캔들차트 + VWAP에 필요)
+        const merged = investorData.map((inv, idx) => {
+            const priceItem = priceData.find(p => p.stck_bsop_date === inv.stck_bsop_date) || priceData[idx] || priceData[0];
+            if (priceItem) {
+                return {
+                    ...inv,
+                    stck_clpr: priceItem.stck_clpr,
+                    stck_hgpr: priceItem.stck_hgpr,
+                    stck_lwpr: priceItem.stck_lwpr,
+                    stck_oprc: priceItem.stck_oprc,
+                    acml_vol: priceItem.acml_vol
+                };
+            }
+            return inv;
+        });
+
+        console.log(`[Proxy] 종목 ${code} 일별 데이터 ${merged.length}건 전달`);
+        res.json({ daily: merged, source: 'server_proxy' });
+    } catch (e) {
+        console.error(`[Proxy] Stock daily error for ${code}:`, e.message);
+        res.status(500).json({ error: 'Fetch failed', message: e.message });
+    }
 });
 
 // (Legacy duplicate routes removed - now handled by Cloud Sync system above)

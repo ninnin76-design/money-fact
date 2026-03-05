@@ -844,18 +844,38 @@ function MainApp() {
           continue;
         }
 
-        // [v3.6.2] 장 마감 시간에 스냅샷에 없는 종목은 KIS API 호출을 건너뜁니다.
+        // [v3.9.9] 장 마감 시간에 스냅샷에 없는 종목 처리
         if (!StockService.isMarketOpen() && !forceFetch) {
-          // [v3.7.1] 서버 스냅샷에 없더라도 내 명사산 리 리스트(results)에는 일단 추가해 둡니다. (사라짐 방지)
-          // 기존에 분석된(analyzedStocks) 정보가 있다면 그것을 재사용하고, 없으면 0으로 초기화합니다.
           const prev = analyzedStocks.find(s => s.code === stock.code);
-          if (prev) {
-            if (!results.some(r => r.code === stock.code)) {
-              results.push(prev);
-            }
+          const existingIdx = results.findIndex(r => r.code === stock.code);
+
+          if (prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
+            // 기존에 정확하게 분석된 데이터가 있으면 그대로 재사용
+            const updated = { ...prev, isWaiting: false, noData: false };
+            if (existingIdx >= 0) results[existingIdx] = updated;
+            else results.push(updated);
           } else {
-            if (!results.some(r => r.code === stock.code)) {
-              results.push({ ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false });
+            // 신규 종목: 서버 프록시로 실제 데이터 조회 시도
+            try {
+              const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 15000 });
+              if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
+                const proxyDaily = proxyRes.data.daily;
+                const analysis = StockService.analyzeSupply(proxyDaily);
+                const vwap = StockService.calculateVWAP(proxyDaily, settingBuyStreak);
+                const hidden = StockService.checkHiddenAccumulation(proxyDaily, settingAccumStreak);
+                const currentPrice = parseInt(proxyDaily[0].stck_clpr || 0) || 0;
+                const realData = { ...stock, ...analysis, vwap, price: currentPrice, isHiddenAccumulation: hidden, isWaiting: false, noData: false };
+                if (existingIdx >= 0) results[existingIdx] = realData;
+                else results.push(realData);
+              } else {
+                const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+                if (existingIdx >= 0) results[existingIdx] = noDataStock;
+                else results.push(noDataStock);
+              }
+            } catch (proxyErr) {
+              const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+              if (existingIdx >= 0) results[existingIdx] = noDataStock;
+              else results.push(noDataStock);
             }
           }
           continue;
@@ -1266,14 +1286,24 @@ function MainApp() {
     setDetailModal(true);
     setFetchingDetail(true);
     try {
-      const history = await StockService.getInvestorData(stock.code, true);
+      // [v3.9.9] 1차: 앱에서 직접 KIS API 호출
+      let history = await StockService.getInvestorData(stock.code, true);
+
+      // [v3.9.9] 2차: 직접 호출 실패 시 서버 프록시 경유 (서버는 안정적인 공유 토큰 보유)
+      if (!history || history.length === 0) {
+        try {
+          const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 15000 });
+          if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
+            history = proxyRes.data.daily;
+          }
+        } catch (proxyErr) {
+          // 서버 프록시도 실패 - 결국 캐시 데이터로 표시
+        }
+      }
+
       if (history && history.length > 0) {
         const analysis = StockService.analyzeSupply(history);
         const vwap = StockService.calculateVWAP(history, settingBuyStreak);
-        // [최종 기준]
-        // - 평균 일일 변동성 2.5% 미만 (고요함)
-        // - 5일간 전체 가격 변화가 -3% ~ +3% 사이 (횡보)
-        // - 외인 또는 기관의 매집 일수가 기준치 이상
         const hidden = StockService.checkHiddenAccumulation(history, settingAccumStreak);
 
         // 현재가 (실시간 가격이 있다면 유지, 없다면 히스토리 첫날 가격)
@@ -1300,15 +1330,15 @@ function MainApp() {
           return [...prev, newStockData];
         });
       } else {
-        // If no history, clear waiting state and ensure stock is still visible
+        // 데이터를 전혀 가져오지 못한 경우 - 기존 스냅샷 데이터라도 유지
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...next[idx], isWaiting: false }; // Clear waiting state
+            next[idx] = { ...next[idx], isWaiting: false };
             return next;
           }
-          return prev; // Should not happen if stock was already in analyzedStocks
+          return prev;
         });
       }
     } catch (e) {
@@ -1317,7 +1347,7 @@ function MainApp() {
         const idx = prev.findIndex(s => s.code === stock.code);
         if (idx >= 0) {
           const next = [...prev];
-          next[idx] = { ...next[idx], isWaiting: false }; // Clear waiting state
+          next[idx] = { ...next[idx], isWaiting: false };
           return next;
         }
         return prev;
@@ -1338,15 +1368,14 @@ function MainApp() {
           {isMarketOpen && <Text style={[styles.liveBadge, { marginLeft: 6, marginTop: 0 }]}>LIVE</Text>}
         </View>
         {lastUpdate && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+          <View style={{ flexDirection: 'column', marginTop: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Server size={10} color={isServerUpdating ? "#fcc419" : "rgba(255,255,255,0.5)"} />
               <Text style={[styles.updateText, isServerUpdating && { color: '#fcc419' }]}>
                 {isServerUpdating ? "[업데이트] 서버 확인 중..." : `[확정] ${lastUpdate}`}
               </Text>
             </View>
-            <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
               <Smartphone size={10} color="rgba(255,255,255,0.5)" />
               <Text style={styles.updateText}>
                 [동기화] {syncTime || '대기 중...'}
@@ -1423,12 +1452,18 @@ function MainApp() {
           </View>
 
           <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {settingAccumStreak}일↑)</Text>
-          {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak))
-            .map(s => (
-              <StockCard key={s.code} stock={s} onPress={() => handleOpenDetail(s)} />
-            ))}
-          {analyzedStocks.filter(s => s.isHiddenAccumulation).length === 0
-            && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
+          {loading && analyzedStocks.length === 0 ? (
+            <ActivityIndicator size="large" color="#3182f6" style={{ marginTop: 20 }} />
+          ) : (
+            <>
+              {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak))
+                .map(s => (
+                  <StockCard key={s.code} stock={s} onPress={() => handleOpenDetail(s)} />
+                ))}
+              {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak)).length === 0
+                && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
+            </>
+          )}
           <View style={{ height: 40 }} />
         </ScrollView>
       );
@@ -1790,8 +1825,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v3.9.5 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v3.9.5 Build 20260305 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v3.9.6 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v3.9.6 Build 20260305 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
