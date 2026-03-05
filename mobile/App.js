@@ -10,7 +10,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
   AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2, ChevronUp, ChevronDown, Folder, Heart,
-  Server, Smartphone
+  Server, Smartphone, Flame, Thermometer as ThermoIcon, Loader2
 } from 'lucide-react-native';
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
@@ -883,7 +883,8 @@ function MainApp() {
               ...analysis,
               vwap,
               isHiddenAccumulation: hidden,
-              price: currentPrice
+              price: currentPrice,
+              isWaiting: false
             };
 
             const existingIdx = results.findIndex(r => r.code === stock.code);
@@ -894,19 +895,10 @@ function MainApp() {
             }
 
             if (stock.sector) {
-              // [v3.8.3] StockService.getNetBuyAmount는 이미 (수량 * 가격)을 반환하므로 중복 곱셈 제거
               const netBuyAmount = netBuy;
               sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuyAmount;
             }
 
-            // Sum inst sub-types (금액 기준으로 합산)
-            instTotals.pnsn += pnsnBuy;
-            instTotals.ivtg += ivtgBuy;
-            instTotals.ins += insBuy;
-            instTotals.foreign += (StockService.getNetBuyAmount(data, 1, 'F'));
-            instTotals.institution += (StockService.getNetBuyAmount(data, 1, 'I'));
-
-            // Ticker logic for MY stocks only
             if (isMyStockItem) {
               if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
               if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
@@ -915,13 +907,13 @@ function MainApp() {
               if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
-            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false };
+            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false };
             const existingIdx = results.findIndex(r => r.code === stock.code);
             if (existingIdx >= 0) results[existingIdx] = emptyStock;
             else results.push(emptyStock);
           }
         } catch (e) {
-          const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true };
+          const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true, isWaiting: false };
           const existingIdx = results.findIndex(r => r.code === stock.code);
           if (existingIdx >= 0) results[existingIdx] = errorStock;
           else results.push(errorStock);
@@ -1251,11 +1243,12 @@ function MainApp() {
     try {
       const history = await StockService.getInvestorData(stock.code, true);
       if (history && history.length > 0) {
-        setSelectedStockHistory(history);
-
-        // [v3.9.7] 상세 데이터를 가져왔으므로, 분석 결과를 최신화하여 모달에 반영합니다!
         const analysis = StockService.analyzeSupply(history);
         const vwap = StockService.calculateVWAP(history, settingBuyStreak);
+        // [최종 기준]
+        // - 평균 일일 변동성 2.5% 미만 (고요함)
+        // - 5일간 전체 가격 변화가 -3% ~ +3% 사이 (횡보)
+        // - 외인 또는 기관의 매집 일수가 기준치 이상
         const hidden = StockService.checkHiddenAccumulation(history, settingAccumStreak);
 
         // 현재가 (실시간 가격이 있다면 유지, 없다면 히스토리 첫날 가격)
@@ -1268,20 +1261,42 @@ function MainApp() {
           isHiddenAccumulation: hidden,
           price: currentPrice
         });
+        setSelectedStockHistory(history);
 
         // [v3.9.7] analyzedStocks에도 이 최신 정보를 업데이트하여 리스트에서도 바로 반영되게 함
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
+          const newStockData = { ...stock, ...analysis, vwap, isHiddenAccumulation: hidden, price: currentPrice, isWaiting: false };
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...next[idx], ...analysis, vwap, isHiddenAccumulation: hidden, price: currentPrice };
+            next[idx] = newStockData;
             return next;
           }
-          return [...prev, { ...stock, ...analysis, vwap, isHiddenAccumulation: hidden, price: currentPrice }];
+          return [...prev, newStockData];
+        });
+      } else {
+        // If no history, clear waiting state and ensure stock is still visible
+        setAnalyzedStocks(prev => {
+          const idx = prev.findIndex(s => s.code === stock.code);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], isWaiting: false }; // Clear waiting state
+            return next;
+          }
+          return prev; // Should not happen if stock was already in analyzedStocks
         });
       }
     } catch (e) {
-      // Detail fetch failed
+      // Detail fetch failed, clear waiting state
+      setAnalyzedStocks(prev => {
+        const idx = prev.findIndex(s => s.code === stock.code);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], isWaiting: false }; // Clear waiting state
+          return next;
+        }
+        return prev;
+      });
     } finally {
       setFetchingDetail(false);
     }
@@ -1492,35 +1507,16 @@ function MainApp() {
               </View>
               {myStocks.map(ms => {
                 const analyzed = analyzedStocks.find(s => s.code === ms.code);
-                if (analyzed) {
-                  return (
-                    <StockCard
-                      key={ms.code}
-                      stock={analyzed}
-                      onPress={() => handleOpenDetail(analyzed)}
-                      onDelete={() => handleDeleteStock(ms.code)}
-                      buyLimit={settingBuyStreak}
-                      sellLimit={settingSellStreak}
-                    />
-                  );
-                }
-                // 분석 데이터가 아직 없는 종목 → 즉시 플레이스홀더 카드 표시
+                // Always render StockCard, pass isWaiting if analysis is not yet done
                 return (
-                  <View key={ms.code} style={{ marginHorizontal: 16, marginBottom: 10, padding: 16, backgroundColor: '#16202b', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{ms.name}</Text>
-                        <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{ms.code}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <ActivityIndicator size="small" color="#3182f6" />
-                        <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>수급 분석 중...</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => handleDeleteStock(ms.code)} style={{ marginLeft: 12, padding: 4 }}>
-                        <Text style={{ color: '#f04452', fontSize: 18 }}>×</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <StockCard
+                    key={ms.code}
+                    stock={analyzed ? analyzed : { ...ms, isWaiting: true }} // Pass isWaiting true if not analyzed yet
+                    onPress={() => handleOpenDetail(analyzed ? analyzed : { ...ms, isWaiting: true })}
+                    onDelete={() => handleDeleteStock(ms.code)}
+                    buyLimit={settingBuyStreak}
+                    sellLimit={settingSellStreak}
+                  />
                 );
               })}
               {myStocks.length === 0 && <Text style={styles.emptyText}>종목을 추가해 보세요.</Text>}
@@ -1556,40 +1552,17 @@ function MainApp() {
                         {sector.stocks.map(ms => {
                           const analyzed = analyzedStocks.find(s => s.code === ms.code);
                           const isFav = myStocks.some(s => s.code === ms.code);
-                          if (analyzed) {
-                            return (
-                              <StockCard
-                                key={ms.code}
-                                stock={analyzed}
-                                onPress={() => handleOpenDetail(analyzed)}
-                                onDelete={() => handleDeleteStockFromSector(sector.id, ms.code)}
-                                buyLimit={settingBuyStreak}
-                                sellLimit={settingSellStreak}
-                                isFavorite={isFav}
-                                onFavoriteToggle={() => handleToggleFavorite(ms)}
-                              />
-                            );
-                          }
                           return (
-                            <TouchableOpacity onPress={() => handleOpenDetail({ code: ms.code, name: ms.name })} key={ms.code} style={{ marginBottom: 8, padding: 16, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', flexDirection: 'row', alignItems: 'center' }}>
-                              <TouchableOpacity onPress={() => handleToggleFavorite(ms)} style={{ marginRight: 12, padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Star size={22} color={isFav ? "#FFD700" : "#666"} fill={isFav ? "#FFD700" : "transparent"} />
-                              </TouchableOpacity>
-                              <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{ms.name}</Text>
-                                  <Text style={{ color: '#666', fontSize: 12 }}>{ms.code}</Text>
-                                </View>
-                                <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>실시간 데이터 분석 중...</Text>
-                              </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <ActivityIndicator size="small" color="#3182f6" />
-                                <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>분석 대기</Text>
-                              </View>
-                              <TouchableOpacity onPress={() => handleDeleteStockFromSector(sector.id, ms.code)} style={{ marginLeft: 15, padding: 5 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Trash2 size={20} color="#666" />
-                              </TouchableOpacity>
-                            </TouchableOpacity>
+                            <StockCard
+                              key={ms.code}
+                              stock={analyzed ? analyzed : { ...ms, isWaiting: true }}
+                              onPress={() => handleOpenDetail(analyzed ? analyzed : { ...ms, isWaiting: true })}
+                              onDelete={() => handleDeleteStockFromSector(sector.id, ms.code)}
+                              buyLimit={settingBuyStreak}
+                              sellLimit={settingSellStreak}
+                              isFavorite={isFav}
+                              onFavoriteToggle={() => handleToggleFavorite(ms)}
+                            />
                           );
                         })}
                         {sector.stocks.length === 0 && <Text style={{ color: '#666', textAlign: 'center', padding: 20 }}>등록된 종목이 없습니다.</Text>}

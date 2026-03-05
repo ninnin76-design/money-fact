@@ -1,9 +1,32 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2, Star } from 'lucide-react-native';
+import { ActivityIndicator } from 'react-native';
 
 const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFavorite = false, onFavoriteToggle = null }) => {
-    const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation } = stock;
+    const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation, isWaiting } = stock;
+
+    if (isWaiting) {
+        return (
+            <View style={[styles.card, { opacity: 0.7 }]}>
+                {onFavoriteToggle && (
+                    <View style={styles.starBtn}>
+                        <Star size={22} color="#444" fill="transparent" />
+                    </View>
+                )}
+                <View style={styles.cardContent}>
+                    <View style={styles.row1}>
+                        <Text style={styles.name}>{name}</Text>
+                        <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <ActivityIndicator size="small" color="#3182f6" />
+                            <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>분석 중</Text>
+                        </View>
+                    </View>
+                    <Text style={{ color: '#666', fontSize: 12 }}>데이터를 가져오는 중입니다...</Text>
+                </View>
+            </View>
+        );
+    }
 
     // --- 수급박스 양음블럭 & 패턴 로직 ---
     const getScore = (streak) => {

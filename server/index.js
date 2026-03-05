@@ -1151,8 +1151,8 @@ function checkHidden(daily, threshold = 3) {
     const fRes = analyzeStreak(daily, '2');
     const iRes = analyzeStreak(daily, '1');
 
-    // 변동성 3.0% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
-    return avgVol < 3.0 &&
+    // 변동성 2.5% 미만 + 5일 누적 등락 3% 이내 + 외인/기관 매집
+    return avgVol < 2.5 &&
         Math.abs(totalChange) < 3.0 &&
         (fRes.buyStreak >= threshold || iRes.buyStreak >= threshold);
 }
