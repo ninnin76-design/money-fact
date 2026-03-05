@@ -436,6 +436,7 @@ function MainApp() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [manualModal, setManualModal] = useState(false);
+  const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -621,7 +622,10 @@ function MainApp() {
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
 
     isRefreshing.current = true;
-    if (!silent) setLoading(true);
+    if (!silent) {
+      setLoading(true);
+      setIsServerUpdating(true); // 업데이트 시작 표시
+    }
 
     let snapshotRes = null;
     let fullTimeStr = lastUpdate;
@@ -755,11 +759,14 @@ function MainApp() {
                   updateTime: fullTimeStr
                 };
                 AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
+                setIsServerUpdating(false); // 업데이트 성공 시 상태 해제
               }
             }
           }
         } catch (e) {
-          // [Snapshot] Failed
+          // console.log("Snapshot fetch failed:", e);
+        } finally {
+          setIsServerUpdating(false); // 최종적으로 해제
         }
       }
 
@@ -1324,8 +1331,10 @@ function MainApp() {
         {lastUpdate && (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Server size={10} color="rgba(255,255,255,0.5)" />
-              <Text style={styles.updateText}>[확정] {lastUpdate}</Text>
+              <Server size={10} color={isServerUpdating ? "#fcc419" : "rgba(255,255,255,0.5)"} />
+              <Text style={[styles.updateText, isServerUpdating && { color: '#fcc419' }]}>
+                {isServerUpdating ? "[업데이트] 서버 확인 중..." : `[확정] ${lastUpdate}`}
+              </Text>
             </View>
             <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
