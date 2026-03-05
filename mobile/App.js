@@ -520,10 +520,17 @@ function MainApp() {
     const timer = setInterval(() => {
       const open = StockService.isMarketOpen();
       setIsMarketOpen(open);
-      if (open && tab !== 'settings') {
+
+      // [v3.9.2] 장 마감 직후에도 최종 확정 데이터를 가져올 수 있도록 조건을 완화합니다.
+      // (오후 6시까지는 주기적으로 서버 데이터를 체크합니다)
+      const now = new Date();
+      const kstHour = (now.getUTCHours() + 9) % 24;
+      const isCheckTime = open || (kstHour >= 15 && kstHour < 19);
+
+      if (isCheckTime && tab !== 'settings') {
         refreshData(undefined, true); // Silent refresh
       }
-    }, 15 * 60 * 1000); // Auto refresh every 15 mins (900000ms)
+    }, 10 * 60 * 1000); // 10분 단위로 단축하여 신선도 유지 (v3.9.2)
     return () => clearInterval(timer);
   }, [tab, myStocks]);
 
@@ -926,7 +933,9 @@ function MainApp() {
 
       // Finalize sectors (Convert raw KRW to 100M units)
       const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
-        const flow = Math.round(rawFlow / 100000000);
+        // [v3.9.2] rawFlow가 NaN이거나 null인 경우 null억 표시되는 문제 방어
+        const safeFlow = Number(rawFlow) || 0;
+        const flow = Math.round(safeFlow / 100000000);
         return { name, flow };
       });
 

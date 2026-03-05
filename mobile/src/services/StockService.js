@@ -244,9 +244,13 @@ export const StockService = {
 
         // [최종 기준]
         // - 평균 일일 변동성 2.5% 미만 (고요함)
+        // - 당일 등락률 3% 미만 (급등락 제외)
         // - 5일간 전체 가격 변화가 -3% ~ +3% 사이 (횡보)
         // - 외인 또는 기관의 매집 일수가 기준치 이상
+        const todayChange = Math.abs(parseFloat(dailyData[0].prdy_ctrt || 0));
+
         return avgDailyRange < 2.5 &&
+            todayChange < 3.0 &&
             Math.abs(fiveDayChange) < 3.0 &&
             (fStreak >= streakThreshold || iStreak >= streakThreshold);
     },
