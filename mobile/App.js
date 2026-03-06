@@ -1837,8 +1837,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v3.9.6 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v3.9.6 Build 20260305 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v3.9.9 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v3.9.9 Build 20260306 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
