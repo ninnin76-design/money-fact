@@ -438,6 +438,7 @@ function MainApp() {
   const [manualModal, setManualModal] = useState(false);
   const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
   const [syncTime, setSyncTime] = useState(null); // [v3.9.4] 모바일 데이터 동기화 시점 (서버에서 데이터를 성공적으로 가져온 시각)
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState(0); // [v4.0.0] 마지막 시도 타임스탬프 (로직용)
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -702,10 +703,12 @@ function MainApp() {
               const attemptDate = new Date(snap.lastScanAttemptTime);
               const syncTimeStr = attemptDate.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
               setSyncTime(syncTimeStr);
+              setLastSyncTimestamp(attemptDate.getTime());
             } else {
               const syncNow = new Date();
               const syncTimeStr = syncNow.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
               setSyncTime(syncTimeStr);
+              setLastSyncTimestamp(syncNow.getTime());
             }
 
             if (hasServerData) {
