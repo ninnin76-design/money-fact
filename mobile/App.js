@@ -666,9 +666,25 @@ function MainApp() {
             const allBuy = snap.buyData || {};
             const allSell = snap.sellData || {};
 
+            if (snap.status === 'SCANNING') {
+              setIsServerUpdating(true);
+              // 스캔 중이면 30초 뒤에 다시 확인 (폴링)
+              if (!silent) {
+                setTimeout(() => refreshData(null, true), 30000);
+              }
+            } else {
+              setIsServerUpdating(false);
+            }
+
             const hasServerData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
               (Object.values(allBuy).some(l => l && l.length > 0)) ||
               (Object.values(allSell).some(l => l && l.length > 0));
+
+            // [v3.9.9] 서버와 통신만 성공했다면 동기화 시각은 무조건 갱신합니다.
+            const syncNow = new Date();
+            const syncDateStr = syncNow.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+            const syncTimeStr = syncNow.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            setSyncTime(`${syncDateStr} ${syncTimeStr}`);
 
             if (hasServerData) {
               const seenCodes = new Set();
@@ -744,11 +760,7 @@ function MainApp() {
                 fullTimeStr = `${dateStr} ${timeStr}`;
                 setLastUpdate(fullTimeStr);
 
-                // [v3.9.4] 서버에서 데이터를 성공적으로 가져온 시점을 동기화 시각으로 기록
-                const syncNow = new Date();
-                const syncDateStr = syncNow.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
-                const syncTimeStr = syncNow.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-                setSyncTime(`${syncDateStr} ${syncTimeStr}`);
+                setLastUpdate(fullTimeStr);
 
                 // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면, 서버가 방금 깨어나 스캔을 시작했을 수 있습니다.
                 // 2분 뒤에 자동으로 한 번 더 갱신하여 최신 데이터를 가져옵니다.
@@ -768,14 +780,14 @@ function MainApp() {
                   updateTime: fullTimeStr
                 };
                 AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
-                setIsServerUpdating(false); // 업데이트 성공 시 상태 해제
+                // setIsServerUpdating(false); // [v3.9.9] 위에서 status에 따라 처리하므로 중복 제거
               }
             }
           }
         } catch (e) {
-          // console.log("Snapshot fetch failed:", e);
+          setIsServerUpdating(false);
         } finally {
-          setIsServerUpdating(false); // 최종적으로 해제
+          // [v3.9.9] 갱신 시도 완료 (setLoading은 여기서 해제하지 않고 각 개별 로직에서 관리)
         }
       }
 

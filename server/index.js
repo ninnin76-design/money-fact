@@ -296,7 +296,7 @@ async function runDeepMarketScan(force = false) {
     console.log(`[Worker] Server(UTC): ${now.toISOString()}, KST: ${kstDateStr} ${hour}:${String(minute).padStart(2, '0')}, Day: ${day}, Force: ${force}`);
 
     // [v3.9.9] 시장 감시 시간: 오전 8시 ~ 오후 10시 (22:00) KST
-    // 오후 3:30 장 마감 후에도 최종 기관 집계(주로 18~20시)까지 반영하기 위해 시간을 연장합니다.
+    // 장 마감 후에도 최종 기관 집계 및 분석을 위해 충분한 시간을 확보합니다.
     const isWeekend = (day === 0 || day === 6);
     const isMarketOpen = (hour >= 8 && hour <= 22) && !isWeekend;
     const hasNoData = !marketAnalysisReport.updateTime;
@@ -978,27 +978,22 @@ async function runDeepMarketScan(force = false) {
     }
 }
 
-// [v3.9.0 코다리 부장] 서버 기동 시 데이터 갱신 판단 로직 개선
-// - 데이터가 없거나 마지막 업데이트가 오늘 날짜가 아니면 즉시 강제 스캔
-// - 연휴/주말을 지나 장이 시작될 때 반드시 새 데이터를 가져오도록 보장
+// [v3.9.9 코다리 부장] 서버 기동 시 데이터 갱신 판단 로직 통일 (KST 기준)
 const _kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
 const _todayStr = `${_kstNow.getUTCFullYear()}-${String(_kstNow.getUTCMonth() + 1).padStart(2, '0')}-${String(_kstNow.getUTCDate()).padStart(2, '0')}`;
-let _lastUpdateStr = '';
-if (marketAnalysisReport.updateTime) {
-    const _lastKST = new Date(new Date(marketAnalysisReport.updateTime).getTime() + 9 * 60 * 60 * 1000);
-    _lastUpdateStr = `${_lastKST.getUTCFullYear()}-${String(_lastKST.getUTCMonth() + 1).padStart(2, '0')}-${String(_lastKST.getUTCDate()).padStart(2, '0')}`;
-}
-const snapshotDate = marketAnalysisReport.updateTime?.split('T')[0] || '';
+const snapshotDate = marketAnalysisReport.updateTime ? new Date(new Date(marketAnalysisReport.updateTime).getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0] : '';
 const isSellListEmpty = Object.values(marketAnalysisReport.sellData || {}).every(list => !list || list.length === 0);
 const _hour = _kstNow.getUTCHours();
 const _day = _kstNow.getUTCDay();
-const _isMarketOpen = (_hour >= 9 && _hour < 16 && _day >= 1 && _day <= 5);
+const _isWeekend = (_day === 0 || _day === 6);
+// 전역 감시 시간 (08:00 ~ 22:00)
+const _isGlobalWatchTime = (_hour >= 8 && _hour <= 22) && !_isWeekend;
 
-if (_isMarketOpen || snapshotDate !== _todayStr || isSellListEmpty) {
-    console.log(`[Server] ${_isMarketOpen ? '장중이거나' : ''}${snapshotDate !== _todayStr ? '데이터가 옛날 것이거나' : ''}${isSellListEmpty ? '매도 리스트가 비어 있어' : ''} 즉시 스캔 시작...`);
+if (_isGlobalWatchTime || snapshotDate !== _todayStr || isSellListEmpty) {
+    console.log(`[Server] Boot Check: ${_isGlobalWatchTime ? '감시 시간대' : ''} ${snapshotDate !== _todayStr ? '날짜 다름' : ''} → 즉시 스태프 가동`);
     runDeepMarketScan(true);
 } else {
-    console.log(`[Server] 데이터가 오늘(${_todayStr}) 것입니다. 정기 스케줄로 갱신합니다.`);
+    console.log(`[Server] Boot Check: 휴장 또는 최신 데이터 있음 (${snapshotDate}).`);
 }
 
 // [코다리 부장] setInterval은 app.listen 콜백에서 1회만 실행 (중복 방지)
