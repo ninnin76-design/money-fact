@@ -1452,7 +1452,7 @@ function MainApp() {
             </View>
           )}
 
-          <SectorHeatmap sectors={sectors} />
+          <SectorHeatmap sectors={sectors} lastUpdate={lastUpdate} isMarketOpen={isMarketOpen} />
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{info.title}</Text>
             <View style={styles.row}>
@@ -1494,7 +1494,7 @@ function MainApp() {
         <ScrollView style={styles.scroll}>
           <MarketStatusHeader />
           <Text style={styles.sectionTitle}>
-            {isMarketOpen ? "실시간 수급 연속 매매" : "금일 수급 연속 매매 TOP"}
+            {isMarketOpen ? "실시간 수급 연속 매매" : `${lastUpdate && lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/) ? `${parseInt(lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/)[1], 10)}.${parseInt(lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/)[2], 10)}` : '당일'} 최종 수급 매매 TOP`}
             <Text style={{ fontSize: 13, color: '#888', fontWeight: 'normal' }}>
               {` (기준: ${tradingType === 'BUY' ? settingBuyStreak : settingSellStreak}일↑)`}
             </Text>
@@ -1837,8 +1837,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v3.9.9 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v3.9.9 Build 20260306 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.0 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.0 Build 20260306 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >

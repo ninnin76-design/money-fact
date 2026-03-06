@@ -38,8 +38,12 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, './')));
 
 const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443';
-const APP_KEY = process.env.KIS_APP_KEY || 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
-const APP_SECRET = process.env.KIS_APP_SECRET || 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
+let APP_KEY = process.env.KIS_APP_KEY || 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
+let APP_SECRET = process.env.KIS_APP_SECRET || 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
+
+// [v3.9.9] 일일 토큰 발급 한도 초과(EGW00103) 시 교체할 여벌 키 (모바일앱 기본 키 기준 고정)
+const FALLBACK_APP_KEY = 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34';
+const FALLBACK_APP_SECRET = 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=';
 
 const MARKET_WATCH_STOCKS = [
     { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' },
@@ -166,11 +170,19 @@ async function getAccessToken() {
             return newToken;
         } catch (e) {
             console.error("[Token] Failed to get token:", e.response?.data || e.message);
+            // [v3.9.9] 토큰 발급 한도 초과 (EGW00103) 등일 때 Fallback 키로 자동 전환
+            if (e.response?.data?.error_code === 'EGW00103' && APP_KEY !== FALLBACK_APP_KEY) {
+                console.log("⚠️ 토큰 발급 한도 초과! 여벌(Fallback) KIS API KEY로 교체하여 재시도합니다.");
+                APP_KEY = FALLBACK_APP_KEY;
+                APP_SECRET = FALLBACK_APP_SECRET;
+                tokenRequestPromise = null;
+                return getAccessToken();
+            }
+
             // If 403 (Rate Limit), wait 65s and retry once
-            if (e.response?.status === 403) {
+            if (e.response?.status === 403 || e.response?.status === 429) {
                 console.log("[Token] Rate Limit Hit! Waiting 65s for retry...");
                 await new Promise(r => setTimeout(r, 65000));
-                // Clear promise before recursive call to allow new request
                 tokenRequestPromise = null;
                 return getAccessToken();
             }
@@ -1017,7 +1029,10 @@ app.get('/api/snapshot', (req, res) => {
     const isStale = diffMin > 20 || now.getDate() !== lastUpdate.getDate();
 
     // 비동기로 실행하여 응답 지연 방지
-    runDeepMarketScan(isStale);
+    // [v3.9.9] 응답을 먼저 보내고 스캔을 시작하도록 지연 (응답 상태 오염 방지)
+    if (isStale) {
+        setTimeout(() => runDeepMarketScan(true), 1500);
+    }
 
     res.json({
         ...marketAnalysisReport,

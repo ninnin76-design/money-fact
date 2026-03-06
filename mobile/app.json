@@ -2,7 +2,7 @@
   "expo": {
     "name": "Money Fact",
     "slug": "mobile",
-    "version": "3.9.9",
+    "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
