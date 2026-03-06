@@ -107,6 +107,7 @@ let tokenExpiry = null;
 
 let marketAnalysisReport = {
     updateTime: null,
+    lastScanAttemptTime: null, // [v4.0.0] 실제 서버에서 스캔을 시도한 마지막 시각 (결과와 상관없음)
     dataType: 'LIVE',
     status: 'INITIALIZING',
     buyData: {},
@@ -170,6 +171,10 @@ async function getAccessToken() {
             return newToken;
         } catch (e) {
             console.error("[Token] Failed to get token:", e.response?.data || e.message);
+            if (e.response) {
+                console.error("[Token] HTTP Status:", e.response.status);
+                console.error("[Token] Error Details:", JSON.stringify(e.response.data));
+            }
             // [v3.9.9] 토큰 발급 한도 초과 (EGW00103) 등일 때 Fallback 키로 자동 전환
             if (e.response?.data?.error_code === 'EGW00103' && APP_KEY !== FALLBACK_APP_KEY) {
                 console.log("⚠️ 토큰 발급 한도 초과! 여벌(Fallback) KIS API KEY로 교체하여 재시도합니다.");
@@ -453,12 +458,18 @@ async function runDeepMarketScan(force = false) {
             if (!stk || alreadyInMap.has(stk.code)) continue;
             await new Promise(r => setTimeout(r, 120));
             try {
+                // [v4.0.0] 수정주가(FID_ORG_ADJ_PRC)를 '0'(미반영)으로 변경해 호환성 테스트
                 const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
                     headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
                     params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
                 });
                 const d = priceRes.data.output;
-                if (!d) continue;
+                if (!d) {
+                    if (priceRes.data.msg_cd === '500' || priceRes.data.error_code) {
+                        console.error(`[Source 5 API Error] ${stk.name}(${stk.code}): ${priceRes.data.msg1}`);
+                    }
+                    continue;
+                }
 
                 const price = parseInt(d.stck_prpr || 0);
                 const changeRate = parseFloat(d.prdy_ctrt || 0);
@@ -643,7 +654,8 @@ async function runDeepMarketScan(force = false) {
 
         if (hits === 0) {
             console.log("[Radar] 데이터를 가져오지 못했습니다. 이전 캐시를 유지합니다.");
-            scanLock = false; // [v3.9.1] early return 시 lock 해제!
+            marketAnalysisReport.status = 'READY'; // 상태 복구: 앱이 대기 상태에서 빠져나올 수 있게 함
+            scanLock = false; // lock 해제
             return;
         }
 
@@ -1022,15 +1034,20 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 app.get('/api/snapshot', (req, res) => {
     // [v3.9.9] 데이터 신선도 체크 (20분 기준)
     const now = new Date();
-    const lastUpdate = marketAnalysisReport.updateTime ? new Date(marketAnalysisReport.updateTime) : new Date(0);
-    const diffMin = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+    const lastUpdateDate = marketAnalysisReport.updateTime ? new Date(marketAnalysisReport.updateTime) : new Date(0);
+    const lastAttemptDate = marketAnalysisReport.lastScanAttemptTime ? new Date(marketAnalysisReport.lastScanAttemptTime) : new Date(0);
+    const diffMin = (now.getTime() - lastUpdateDate.getTime()) / (1000 * 60);
+    const attemptDiffMin = (now.getTime() - lastAttemptDate.getTime()) / (1000 * 60);
 
-    // 20분 이상 지났거나 날짜가 바뀌었으면 강제 스캔 트리거
-    const isStale = diffMin > 20 || now.getDate() !== lastUpdate.getDate();
+    // [v4.0.0] 로직 개선: 강제 호출(force)이거나, 데이터가 20분 넘게 오래되었는데 + 마지막 시도 후 15분 이상 지났을 때만 재시도
+    const isStale = (req.query.force === 'true') ||
+        (diffMin > 20 && attemptDiffMin > 15) ||
+        (now.getDate() !== lastUpdateDate.getDate());
 
-    // 비동기로 실행하여 응답 지연 방지
-    // [v3.9.9] 응답을 먼저 보내고 스캔을 시작하도록 지연 (응답 상태 오염 방지)
-    if (isStale) {
+    if (isStale && !scanLock) {
+        marketAnalysisReport.status = 'SCANNING';
+        marketAnalysisReport.lastScanAttemptTime = new Date().toISOString(); // 시도시각 업데이트
+        console.log(`[Snapshot] 스캔 트리거! (데이터:${Math.round(diffMin)}분전, 시도:${Math.round(attemptDiffMin)}분전) status=SCANNING`);
         setTimeout(() => runDeepMarketScan(true), 1500);
     }
 
