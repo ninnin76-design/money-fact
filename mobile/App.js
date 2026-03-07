@@ -725,11 +725,20 @@ function MainApp() {
                 (list || []).forEach(item => {
                   if (!seenCodes.has(item.code)) {
                     seenCodes.add(item.code);
+                    const streak = parseInt(item.streak || 0);
+                    let fs = (item.fStreak !== undefined) ? item.fStreak : (isBuy ? streak : -streak);
+                    let is = (item.iStreak !== undefined) ? item.iStreak : 0;
+
+                    // [v4.0.6] 보정: 매도 리스트에 있는데 fStreak/iStreak이 모두 양수이면 streak 값을 매도값으로 강제 적용
+                    if (!isBuy && fs >= 0 && is >= 0 && streak > 0) {
+                      fs = -streak;
+                    }
+
                     snapshotStocks.push({
                       name: item.name, code: item.code, price: parseInt(item.price || 0) || 0,
-                      fStreak: (item.fStreak !== undefined) ? item.fStreak : (isBuy ? (parseInt(item.streak) || 0) : -(parseInt(item.streak) || 0)),
-                      iStreak: (item.iStreak !== undefined) ? item.iStreak : 0,
-                      sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + (parseInt(item.streak) || 0) * 10) : (50 - (parseInt(item.streak) || 0) * 10)),
+                      fStreak: fs,
+                      iStreak: is,
+                      sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + streak * 10) : (50 - streak * 10)),
                       vwap: item.vwap || 0,
                       isHiddenAccumulation: item.isHiddenAccumulation || false
                     });
@@ -746,12 +755,19 @@ function MainApp() {
                 (list || []).forEach(item => {
                   const existing = snapshotStocks.find(s => s.code === item.code);
                   if (existing) {
+                    const s = parseInt(item.streak || 0);
                     // 이미 존재하는 종목이면 streak 정보 중 더 극단적인 값을 취함 (매수는 더 크게, 매도는 더 작게)
                     if (item.fStreak !== undefined) {
-                      existing.fStreak = isBuy ? Math.max(existing.fStreak, item.fStreak) : Math.min(existing.fStreak, item.fStreak);
+                      if (isBuy) existing.fStreak = Math.max(existing.fStreak, item.fStreak);
+                      else existing.fStreak = Math.min(existing.fStreak, item.fStreak);
                     }
                     if (item.iStreak !== undefined) {
-                      existing.iStreak = isBuy ? Math.max(existing.iStreak, item.iStreak) : Math.min(existing.iStreak, item.iStreak);
+                      if (isBuy) existing.iStreak = Math.max(existing.iStreak, item.iStreak);
+                      else existing.iStreak = Math.min(existing.iStreak, item.iStreak);
+                    }
+                    // 여전히 부호가 리스트 타입과 맞지 않으면 강제 보정
+                    if (!isBuy && existing.fStreak >= 0 && existing.iStreak >= 0 && s > 0) {
+                      existing.fStreak = -s;
                     }
                     // 매도 데이터에서 온 경우 sentiment 낮게 조정
                     if (!isBuy && existing.sentiment > 50) {
@@ -832,16 +848,20 @@ function MainApp() {
       const snapshotExistingCodes = new Set(results.map(s => s.code));
 
       // [v3.9.0] 추천 개선책 반영: 관심종목(My Stocks)을 분석 루프 시작 전 미리 결과 리스트에 등록
-      // 이렇게 하면 '수급 분석 중...' 뱅글뱅글 상태를 즉시 해소하고 기존 데이터라도 먼저 보여줍니다.
+      // [v4.0.7] 분석 중에도 기존 데이터를 유지하여 '분석 중' 깜빡임을 원천 차단합니다.
       myStocks.forEach(mystock => {
         if (!snapshotExistingCodes.has(mystock.code)) {
           const prev = analyzedStocks.find(s => s.code === mystock.code);
-          results.push(prev || {
-            ...mystock,
-            fStreak: 0, iStreak: 0, sentiment: 50, price: 0,
-            isHiddenAccumulation: false,
-            isWaiting: true
-          });
+          if (prev) {
+            results.push(prev); // 기존 데이터 그대로 유지
+          } else {
+            results.push({
+              ...mystock,
+              fStreak: 0, iStreak: 0, sentiment: 50, price: 0,
+              isHiddenAccumulation: false,
+              isWaiting: true // 정말 처음인 경우에만 분석 중 표시
+            });
+          }
           snapshotExistingCodes.add(mystock.code);
         }
       });
@@ -874,8 +894,8 @@ function MainApp() {
         results.splice(1000);
       }
 
-      // [v3.9.8] 전광판 텍스트 설정 (서버에서 받은 것이 있으면 우선 사용)
-      const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : ["전체 시장 수급을 분석 중입니다..", "실시간 섹터 흐름 확인 중"];
+      // [v4.0.6] 전광판 텍스트 설정 (서버 데이터 우선, 없으면 비움으로 시작하여 '분석중' 문구 해소)
+      const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : [];
       // [v3.9.9] 관심종목(My Stock)을 최상위 우선순위로 배치하여 '분석중' 상태를 즉시 해소합니다.
       const myStockCodes = new Set(myStocks.map(ms => ms.code));
       const combined = [...myStocks];
@@ -887,9 +907,14 @@ function MainApp() {
       const instTotals = { pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 };
 
       for (const stock of combined) {
-        // [v3.9.9] 관심종목(My Stock)은 사용자가 직접 새로고침을 누르거나 장중인 경우, 서버 스냅샷이 있더라도 무조건 실시간 조회를 수행하여 정확도를 높입니다.
         const isMyStockItem = myStockCodes.has(stock.code);
-        if (snapshotExistingCodes.has(stock.code) && !(isMyStockItem && (StockService.isMarketOpen() || isUserAction))) {
+
+        // [v4.0.6] 기존 스냅샷 데이터가 있더라도, 가격이 0원(오류)이거나 'isWaiting' 상태라면 
+        // 데이터 누락으로 간주하고 재분석 또는 재조회 로직을 태웁니다.
+        const existingData = results.find(r => r.code === stock.code);
+        const isDataInvalid = !existingData || existingData.price === 0 || existingData.isWaiting;
+
+        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid && !(isMyStockItem && (StockService.isMarketOpen() || isUserAction))) {
           continue;
         }
 
@@ -981,7 +1006,11 @@ function MainApp() {
 
             const existingIdx = results.findIndex(r => r.code === stock.code);
             if (existingIdx >= 0) {
-              results[existingIdx] = newStockData;
+              // [v4.0.6] 방어 로직: 새로 가져온 가격이 0원인데 기존 가격이 있다면 기존 것을 보존
+              if (currentPrice === 0 && results[existingIdx].price > 0) {
+                currentPrice = results[existingIdx].price;
+              }
+              results[existingIdx] = { ...newStockData, price: currentPrice };
             } else {
               results.push(newStockData);
             }
@@ -1005,16 +1034,31 @@ function MainApp() {
             else results.push(emptyStock);
           }
         } catch (e) {
-          const errorStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, error: true, isWaiting: false };
           const existingIdx = results.findIndex(r => r.code === stock.code);
+          const prevData = existingIdx >= 0 ? results[existingIdx] : null;
+
+          const errorStock = {
+            ...stock,
+            fStreak: prevData ? prevData.fStreak : 0,
+            iStreak: prevData ? prevData.iStreak : 0,
+            sentiment: prevData ? prevData.sentiment : 50,
+            vwap: prevData ? prevData.vwap : 0,
+            price: prevData ? prevData.price : 0,
+            isHiddenAccumulation: prevData ? prevData.isHiddenAccumulation : false,
+            error: true,
+            isWaiting: false
+          };
           if (existingIdx >= 0) results[existingIdx] = errorStock;
           else results.push(errorStock);
         }
 
-        // [v3.9.9] 인크리멘탈 업데이트 위치 상향: 성공/실패/데이터없음 모든 경우에 즉시 반영하여 '분석중' 상태를 해소
-        setAnalyzedStocks([...results]);
+        // [v4.0.7] 중요 종목(관심종목) 업데이트 시 즉시 반영하되, 전체 루프가 너무 길어지는 것 방지
+        const existingIdx = results.findIndex(r => r.code === stock.code);
+        if (isMyStockItem || (existingIdx % 5 === 0)) {
+          setAnalyzedStocks([...results]);
+        }
       }
-      setAnalyzedStocks(results);
+      setAnalyzedStocks([...results]);
 
       // Finalize sectors (Convert raw KRW to 100M units)
       const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
@@ -1024,17 +1068,22 @@ function MainApp() {
         return { name, flow };
       });
 
-      // [v3.8.2] 서버 스냅샷 데이터(전체 시장)가 이미 있다면, 관심종목 위주의 로컬 계산 데이터로 덮어쓰지 않습니다.
-      const hasServerMarketData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
-      const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
-
+      // [v4.0.6] 섹터 및 수급 데이터 최종 반영 로직 강화
+      // 서버에서 전달해준 '전체 시장 데이터'가 있다면 그것을 최우선으로 유지합니다.
+      // 서버 데이터가 없고, 앱에서도 처음 계산하는 경우에만 로컬 계산값(부분 데이터)을 사용합니다.
       if (!hasServerMarketData) {
-        // [v4.0.5] 서버 스냅샷 응답이 없어 로컬 데이터를 재활용하는 경우, 섹터 변형 방지
-        if (snapshotStocks.length === 0 && sectors.length > 0) {
-          // Do nothing (keep existing)
+        const hasExistingFullData = sectors.some(s => Math.abs(s.flow) > 100); // 100억 이상의 큰 흐름이 이미 있다면 전체 데이터로 간주
+
+        if (hasExistingFullData) {
+          // 이미 전체 시장 데이터가 표시 중이면, 관심종목 위주의 '부분 계산 데이터'로 덮어쓰지 않고 유지합니다.
+          console.log("[v4.0.6] 전체 시장 섹터 데이터를 보존합니다.");
         } else if (updatedSectors.length > 0 && totalFlow > 0) {
+          // 데이터가 아예 없는 초기 상태에서만 로컬 계산값을 보여줍니다.
           setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
         }
+      } else {
+        // 서버에서 최신 전체 시장 데이터를 주었다면 즉시 반영합니다.
+        setSectors([...snapshotRes.data.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
       }
       // Round inst sub-types to billion KRW
       const roundedInstTotals = {
@@ -1053,7 +1102,12 @@ function MainApp() {
         }
       }
 
-      if (tickerTexts.length > 0) setTickerItems(tickerTexts);
+      // [v4.0.6] 분석 완료 후 전광판 업데이트 (특이사항 없을 경우 기본 문구로 전환하여 초기 '분석중' 문구 삭제)
+      if (tickerTexts.length === 0) {
+        tickerTexts.push("시장의 수급 흐름을 실시간 감시 중입니다.");
+        tickerTexts.push("관심 종목의 수급 변동을 확인하세요.");
+      }
+      setTickerItems(tickerTexts);
 
       // [v3.9.9] [확정] 시간은 서버의 데이터 생성 시점을, [동기화] 시간은 현재 앱이 새로고침된 시점을 나타냅니다.
       let displayTime = "";
@@ -1906,8 +1960,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.5 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.5 Build 20260307 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.6 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.6 Build 20250607 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1920,7 +1974,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.5</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.6</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
