@@ -1410,21 +1410,25 @@ function MainApp() {
               <Server size={10} color={isServerUpdating ? "#fcc419" : "rgba(255,255,255,0.5)"} />
               <Text style={[styles.updateText, isServerUpdating && { color: '#fcc419' }]}>
                 {isServerUpdating ? "[업데이트] 서버 확인 중..." : (() => {
-                  // "03.06 18:43:21" -> "3.6 오후 6:43" 가공
+                  if (!lastUpdate) return "[확정] 데이터 없음 (확인 중...)";
                   try {
-                    const [d, t] = lastUpdate.split(' ');
-                    const dateArr = d.split('.');
-                    const timeArr = t.split(':');
-                    const month = parseInt(dateArr[0]);
-                    const day = parseInt(dateArr[1]);
-                    let hour = parseInt(timeArr[0]);
-                    const min = timeArr[1];
+                    // [v4.0.1 긴급 수정] 글자를 쪼개는 대신 Date 객체를 사용하여 안전하게 파싱합니다.
+                    const updateDate = new Date(lastUpdate);
+
+                    // 만약 이상한 글자가 들어와서 날짜로 변환이 안 된다면 fallback 실행
+                    if (isNaN(updateDate.getTime())) return `[확정] ${lastUpdate} (${syncTime || '확인 중...'} 확인 완료)`;
+
+                    const month = updateDate.getMonth() + 1;
+                    const day = updateDate.getDate();
+                    let hour = updateDate.getHours();
+                    const min = updateDate.getMinutes().toString().padStart(2, '0');
                     const ampm = hour >= 12 ? "오후" : "오전";
                     hour = hour % 12 || 12;
+
                     const formattedLast = `${month}.${day} ${ampm} ${hour}:${min}`;
                     return `[확정] ${formattedLast} (${syncTime || '확인 중...'} 확인 완료)`;
                   } catch (e) {
-                    return `[확정] ${lastUpdate}`;
+                    return `[확정] ${lastUpdate} (${syncTime || '확인 중...'} 확인 완료)`;
                   }
                 })()}
               </Text>
@@ -1873,8 +1877,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.1 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.1 Build 20260306 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.2 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.2 Build 20260306 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1887,7 +1891,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.1</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.2</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
