@@ -681,20 +681,27 @@ async function runDeepMarketScan(force = false) {
             // [v3.6.2 핵심 수정] 외인/기관 streak를 독립적으로 계산!
             // 기존에는 투자자별 루프에서 fStreak=iStreak=같은 값이 들어가는 버그가 있었습니다.
             const calcIndependentStreak = (daily, investorType) => {
-                let b = 0, s = 0;
+                if (!daily || daily.length === 0) return 0;
+                const getNet = (row) => {
+                    const fQ = parseInt(String(row.frgn_ntby_qty || 0).replace(/,/g, '')) || 0;
+                    const oQ = parseInt(String(row.orgn_ntby_qty || 0).replace(/,/g, '')) || 0;
+                    if (investorType === '2') return fQ;
+                    if (investorType === '1') return oQ;
+                    return fQ + oQ;
+                };
+
+                const firstNet = getNet(daily[0]);
+                if (firstNet === 0) return 0;
+
+                const isBuy = firstNet > 0;
+                let count = 0;
                 for (let j = 0; j < daily.length; j++) {
-                    const row = daily[j];
-                    let net = 0;
-                    const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
-                    const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
-                    if (investorType === '2') net = fQ;       // 외인
-                    else if (investorType === '1') net = oQ;   // 기관
-                    else net = fQ + oQ;                        // 합산
-                    if (net > 0) { b++; if (s > 0) break; }
-                    else if (net < 0) { s++; if (b > 0) break; }
+                    const net = getNet(daily[j]);
+                    if (isBuy && net > 0) count++;
+                    else if (!isBuy && net < 0) count++;
                     else break;
                 }
-                return b > 0 ? b : (s > 0 ? -s : 0);
+                return isBuy ? count : -count;
             };
 
             // 각 종목의 외인/기관 streak를 한 번에 독립 계산
@@ -702,61 +709,25 @@ async function runDeepMarketScan(force = false) {
             const indIStreak = calcIndependentStreak(val.daily, '1');
 
             investors.forEach(inv => {
-                let buyStreak = 0, sellStreak = 0;
+                const streakCount = calcIndependentStreak(val.daily, inv);
 
-                for (let j = 0; j < val.daily.length; j++) {
-                    const row = val.daily[j];
-                    let net = 0;
-                    const fQty = parseInt(row.frgn_ntby_qty || 0) || 0;
-                    const oQty = parseInt(row.orgn_ntby_qty || 0) || 0;
-
-                    if (inv === '0') net = fQty + oQty;
-                    else if (inv === '2') net = fQty;
-                    else if (inv === '1') net = oQty;
-
-                    if (net > 0) {
-                        buyStreak++;
-                        if (sellStreak > 0) break;
-                    } else if (net < 0) {
-                        sellStreak++;
-                        if (buyStreak > 0) break;
-                    } else break;
-                }
-
-                if (buyStreak >= 2) {
+                if (streakCount >= 2) {
                     newBuyData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: buyStreak, fStreak: indFStreak, iStreak: indIStreak
+                        streak: streakCount, fStreak: indFStreak, iStreak: indIStreak
                     });
-                }
-                if (sellStreak >= 2) {
+                } else if (streakCount <= -2) {
                     newSellData[`5_${inv}`].push({
                         name: val.name, code, price: val.price, rate: val.rate,
-                        streak: sellStreak, fStreak: indFStreak, iStreak: indIStreak
+                        streak: Math.abs(streakCount), fStreak: indFStreak, iStreak: indIStreak
                     });
                 }
             });
 
             // 70개 기본 섹터 종목은 무조건 snapshot에 포함하여 프론트에서 KIS API를 우회하도록 함
             if (sectorStockCodes.has(code)) {
-                let fSt = 0, iSt = 0;
-                const calcSt = (inv) => {
-                    let b = 0, s = 0;
-                    for (let j = 0; j < val.daily.length; j++) {
-                        const row = val.daily[j];
-                        let net = 0;
-                        const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
-                        const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
-                        if (inv === '2') net = fQ;
-                        else if (inv === '1') net = oQ;
-                        if (net > 0) { b++; if (s > 0) break; }
-                        else if (net < 0) { s++; if (b > 0) break; }
-                        else break;
-                    }
-                    return b > 0 ? b : (s > 0 ? -s : 0);
-                };
-                fSt = calcSt('2');
-                iSt = calcSt('1');
+                const fSt = calcIndependentStreak(val.daily, '2');
+                const iSt = calcIndependentStreak(val.daily, '1');
 
                 newBuyData['sectors'].push({
                     name: val.name, code, price: val.price, rate: val.rate,
@@ -766,22 +737,8 @@ async function runDeepMarketScan(force = false) {
             }
 
             // [v3.6.2] 모든 분석 종목 요약 정보를 맵에 저장 (관심종목용)
-            let allFSt = 0, allISt = 0;
-            const calcStreak = (inv) => {
-                let b = 0, s = 0;
-                for (let j = 0; j < Math.min(val.daily.length, 31); j++) {
-                    const row = val.daily[j];
-                    let net = 0;
-                    if (inv === '2') net = parseInt(row.frgn_ntby_qty || 0) || 0;
-                    else if (inv === '1') net = parseInt(row.orgn_ntby_qty || 0) || 0;
-                    if (net > 0) { b++; if (s > 0) break; }
-                    else if (net < 0) { s++; if (b > 0) break; }
-                    else break;
-                }
-                return b > 0 ? b : (s > 0 ? -s : 0);
-            };
-            allFSt = calcStreak('2');
-            allISt = calcStreak('1');
+            const allFSt = calcIndependentStreak(val.daily.slice(0, 31), '2');
+            const allISt = calcIndependentStreak(val.daily.slice(0, 31), '1');
 
             newAllAnalysis[code] = {
                 name: val.name,
@@ -1367,5 +1324,5 @@ app.listen(PORT, () => {
     }, 14 * 60 * 1000);
 
     // 구동 시 1회 즉시 스캔
-    setTimeout(() => runDeepMarketScan(false), 5000);
+    setTimeout(() => runDeepMarketScan(true), 5000);
 });
