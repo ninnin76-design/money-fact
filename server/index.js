@@ -343,7 +343,11 @@ async function runDeepMarketScan(force = false) {
 
     const currentType = 'LIVE';
     console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
-    marketAnalysisReport.status = 'SCANNING';
+    // [코다리 부장 터치] 데이터가 아예 없을 때(최초 실행)만 SCANNING 상태를 보여줍니다.
+    // 기존 데이터가 있다면 화면을 멈추지 않고 백그라운드에서 조용히 업데이트합니다.
+    if (hasNoData) {
+        marketAnalysisReport.status = 'SCANNING';
+    }
     try {
         const token = await getAccessToken();
 
@@ -628,7 +632,18 @@ async function runDeepMarketScan(force = false) {
                 }
             }
 
-            if (i % 50 === 0 && i > 0) console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
+            if (i % 50 === 0 && i > 0) {
+                console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
+                // [코다리 부장 터치] 최초 실행 시 사용자에게 실시간 진행률을 보여줍니다.
+                if (hasNoData) {
+                    marketAnalysisReport.scanStats = {
+                        totalScanned: candidateMap.size,
+                        deepScanned: i,
+                        successHits: hits,
+                        wideNetAdded: wideNetHits
+                    };
+                }
+            }
         }
 
         console.log(`[Radar 2단계] Deep Scan 완료! 성공: ${hits}개 / 대상: ${fullList.length}개`);
