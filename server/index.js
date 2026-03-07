@@ -345,8 +345,10 @@ async function runDeepMarketScan(force = false) {
     console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
     marketAnalysisReport.status = 'SCANNING';
     try {
-
         const token = await getAccessToken();
+
+        // [v3.6.1] 70개 주요 섹터 종목 코드 미리 생성 (하단 루프 및 재시도 로직에서 사용)
+        const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
 
         // ========================================================
         // [코다리 부장] 1단계: 광범위 필터 (The Wide Net)
@@ -653,7 +655,6 @@ async function runDeepMarketScan(force = false) {
 
         // [v3.6.1] 70개 주요 섹터 종목 데이터 강제 포함 (프론트엔드 분석 대기 해결)
         newBuyData['sectors'] = [];
-        const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
 
         const sectorMap = {};
         // 2,800개 전 종목 수급 데이터를 기본값으로 사용
