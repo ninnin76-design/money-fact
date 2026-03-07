@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Flame, Thermometer as ThermoIcon, Trash2, Sta
 import { ActivityIndicator } from 'react-native';
 
 const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFavorite = false, onFavoriteToggle = null }) => {
-    const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation, isWaiting, noData } = stock;
+    const { name, price = 0, fStreak, iStreak, sentiment, isHiddenAccumulation, isWaiting, noData, error } = stock;
 
     if (isWaiting) {
         return (
@@ -25,6 +25,33 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                     <Text style={{ color: '#666', fontSize: 12 }}>데이터를 가져오는 중입니다...</Text>
                 </View>
             </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <TouchableOpacity style={[styles.card, { borderColor: 'rgba(255, 77, 77, 0.3)' }]} onPress={onPress}>
+                {onFavoriteToggle && (
+                    <TouchableOpacity onPress={onFavoriteToggle} style={styles.starBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Star size={22} color={isFavorite ? "#FFD700" : "#666"} fill={isFavorite ? "#FFD700" : "transparent"} />
+                    </TouchableOpacity>
+                )}
+                {onDelete && (
+                    <TouchableOpacity style={{ position: 'absolute', right: 12, top: 12 }} onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Trash2 size={18} color="#666" />
+                    </TouchableOpacity>
+                )}
+                <View style={styles.cardContent}>
+                    <View style={styles.row1}>
+                        <Text style={styles.name}>{name}</Text>
+                        <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(255, 77, 77, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ color: '#ff4d4d', fontSize: 10, fontWeight: 'bold' }}>응답 지연</Text>
+                        </View>
+                    </View>
+                    <Text style={{ color: '#ff4d4d', fontSize: 12, fontWeight: '600' }}>⚠️ 서버 응답이 없습니다 (타임아웃)</Text>
+                    <Text style={{ color: '#888', fontSize: 11, marginTop: 2 }}>상단 새로고침을 눌러 다시 시도해 주세요.</Text>
+                </View>
+            </TouchableOpacity>
         );
     }
 

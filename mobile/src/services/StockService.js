@@ -17,7 +17,7 @@ export const StockService = {
 
     async searchStock(keyword) {
         try {
-            const res = await axios.get(`${SERVER_URL}/api/search?keyword=${encodeURIComponent(keyword)}`);
+            const res = await axios.get(`${SERVER_URL}/api/search?keyword=${encodeURIComponent(keyword)}`, { timeout: 10000 });
             return res.data.result || [];
         } catch (e) {
             return [];
@@ -53,7 +53,8 @@ export const StockService = {
                         FID_INPUT_ISCD: code,
                         FID_PERIOD_DIV_CODE: 'D',
                         FID_ORG_ADJ_PRC: '0'
-                    }
+                    },
+                    timeout: 10000
                 });
                 return res.data.output || [];
             } catch (e) {
@@ -151,7 +152,8 @@ export const StockService = {
                     params: {
                         FID_COND_MRKT_DIV_CODE: marketCode,
                         FID_INPUT_ISCD: code
-                    }
+                    },
+                    timeout: 10000
                 });
                 return res.data.output || null;
             } catch (e) {

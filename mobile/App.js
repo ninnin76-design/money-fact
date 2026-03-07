@@ -439,7 +439,7 @@ function MainApp() {
   const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
   const [syncTime, setSyncTime] = useState(null); // [v3.9.4] 모바일 데이터 동기화 시점 (서버에서 데이터를 성공적으로 가져온 시각)
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState(0); // [v4.0.0] 마지막 시도 타임스탬프 (로직용)
-  const [requestTime, setRequestTime] = useState(null); // [v4.0.4] 앱이 서버에 데이터를 요청한 시간 (날짜+시간)
+  const [requestTime, setRequestTime] = useState(null); // [v4.0.5] 앱이 서버에 데이터를 요청한 시간 (날짜+시간)
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -632,7 +632,7 @@ function MainApp() {
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
 
     isRefreshing.current = true;
-    // [v4.0.4] 최초 실행(isInitial)일 때만 "서버확인중..." 표시
+    // [v4.0.5] 최초 실행(isInitial)일 때만 "서버확인중..." 표시
     // 그 외(10분 주기, 수동 새로고침)에서는 조용히 데이터만 갱신
     if (isInitial) {
       setIsServerUpdating(true);
@@ -681,9 +681,15 @@ function MainApp() {
             const allSell = snap.sellData || {};
 
             if (snap.status === 'SCANNING' || snap._scanTriggered === 'FORCE') {
-              setIsServerUpdating(true);
+              // [v4.0.5] 서버가 스캔 중이더라도 최초 로딩(isInitial)이 끝났다면 '서버확인중...'을 해제합니다.
+              // 사용자가 앱을 계속 사용할 수 있도록 동기화 시간 모드로 전환합니다.
+              if (!isInitial) {
+                setIsServerUpdating(false);
+              } else {
+                setIsServerUpdating(true);
+              }
+
               // [v4.0.0] 스캔 중이면 30초마다 반복 폴링 (최대 10회 = 5분)
-              // silent 여부와 관계없이 폴링하여 스캔 완료 시 자동 갱신
               const currentRetry = retryCount || 0;
               if (currentRetry < 10) {
                 console.log(`[폴링] 서버 스캔 대기 중... (${currentRetry + 1}/10)`);
@@ -694,9 +700,6 @@ function MainApp() {
               }
             } else {
               // 스캔 완료! 서버확인중... 해제
-              if (isServerUpdating) {
-                console.log(`[폴링] ✅ 서버 스캔 완료! 최신 데이터 반영됨.`);
-              }
               setIsServerUpdating(false);
             }
 
@@ -704,7 +707,7 @@ function MainApp() {
               (Object.values(allBuy).some(l => l && l.length > 0)) ||
               (Object.values(allSell).some(l => l && l.length > 0));
 
-            // [v4.0.4] () 안의 동기화 시간 = 서버에서 데이터를 성공적으로 가져온 시점 (날짜+시간)
+            // [v4.0.5] () 안의 동기화 시간 = 서버에서 데이터를 성공적으로 가져온 시점 (날짜+시간)
             const syncNow = new Date();
             const sMonth = (syncNow.getMonth() + 1).toString().padStart(2, '0');
             const sDay = syncNow.getDate().toString().padStart(2, '0');
@@ -821,8 +824,12 @@ function MainApp() {
         }
       }
 
-      const results = [...snapshotStocks];
-      const snapshotExistingCodes = new Set(snapshotStocks.map(s => s.code));
+      let results = [...snapshotStocks];
+      // [v4.0.5] 서버 스냅샷이 실패하여 배열이 비었을 때 화면 붕괴(리셋)를 방지하기 위해 이전 상태 보존
+      if (results.length === 0 && analyzedStocks.length > 0) {
+        results = [...analyzedStocks];
+      }
+      const snapshotExistingCodes = new Set(results.map(s => s.code));
 
       // [v3.9.0] 추천 개선책 반영: 관심종목(My Stocks)을 분석 루프 시작 전 미리 결과 리스트에 등록
       // 이렇게 하면 '수급 분석 중...' 뱅글뱅글 상태를 즉시 해소하고 기존 데이터라도 먼저 보여줍니다.
@@ -1021,8 +1028,13 @@ function MainApp() {
       const hasServerMarketData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
       const totalFlow = updatedSectors.reduce((acc, s) => acc + Math.abs(s.flow), 0);
 
-      if (!hasServerMarketData && updatedSectors.length > 0 && totalFlow > 0) {
-        setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+      if (!hasServerMarketData) {
+        // [v4.0.5] 서버 스냅샷 응답이 없어 로컬 데이터를 재활용하는 경우, 섹터 변형 방지
+        if (snapshotStocks.length === 0 && sectors.length > 0) {
+          // Do nothing (keep existing)
+        } else if (updatedSectors.length > 0 && totalFlow > 0) {
+          setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+        }
       }
       // Round inst sub-types to billion KRW
       const roundedInstTotals = {
@@ -1033,7 +1045,12 @@ function MainApp() {
         institution: Math.round(instTotals.institution / 100000000),
       };
       if (!hasServerMarketData) {
-        setDetailedInstFlow(roundedInstTotals);
+        // [v4.0.5] 서버 통신 실패 시에도 기관 상세 수급 캐시 유지
+        if (snapshotStocks.length === 0 && detailedInstFlow && Object.keys(detailedInstFlow).length > 0) {
+          // Do nothing (keep existing)
+        } else {
+          setDetailedInstFlow(roundedInstTotals);
+        }
       }
 
       if (tickerTexts.length > 0) setTickerItems(tickerTexts);
@@ -1158,7 +1175,7 @@ function MainApp() {
       const updated = [...myStocks, newStock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
-      refreshData(updated);
+      refreshData(updated, true); // [v4.0.5] 관심종목 추가 시 전체 화면이 가려지는 문제 방지 (백그라운드에서 조용히 갱신)
     }
 
     setSearchModal(false);
@@ -1417,7 +1434,7 @@ function MainApp() {
                 {(() => {
                   if (!lastUpdate || lastUpdate === '데이터 로딩 중...') return "[확인] 데이터 로딩 중...";
                   try {
-                    // [v4.0.4] [확정] 서버 데이터 시간 (동기화 시간 or 서버확인중...)
+                    // [v4.0.5] [확정] 서버 데이터 시간 (동기화 시간 or 서버확인중...)
                     const updateDate = new Date(lastUpdate);
                     let formattedLast = lastUpdate;
 
@@ -1889,8 +1906,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.4 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.4 Build 20260307 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.5 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.5 Build 20260307 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1903,7 +1920,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.4</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.5</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
