@@ -1409,26 +1409,33 @@ function MainApp() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Server size={10} color={isServerUpdating ? "#fcc419" : "rgba(255,255,255,0.5)"} />
               <Text style={[styles.updateText, isServerUpdating && { color: '#fcc419' }]}>
-                {isServerUpdating ? "[업데이트] 서버 확인 중..." : (() => {
-                  if (!lastUpdate) return "[확정] 데이터 없음 (확인 중...)";
+                {(() => {
+                  if (!lastUpdate || lastUpdate === '데이터 로딩 중...') return "[확인] 데이터 로딩 중...";
                   try {
-                    // [v4.0.1 긴급 수정] 글자를 쪼개는 대신 Date 객체를 사용하여 안전하게 파싱합니다.
+                    // [v4.0.1+ UI 개선] 장후 최종 데이터 시점은 항상 보여주고, 뒤에 상태만 바꿉니다.
                     const updateDate = new Date(lastUpdate);
+                    let formattedLast = lastUpdate;
 
-                    // 만약 이상한 글자가 들어와서 날짜로 변환이 안 된다면 fallback 실행
-                    if (isNaN(updateDate.getTime())) return `[확정] ${lastUpdate} (${syncTime || '확인 중...'} 확인 완료)`;
+                    if (!isNaN(updateDate.getTime())) {
+                      const month = (updateDate.getMonth() + 1).toString().padStart(2, '0');
+                      const day = updateDate.getDate().toString().padStart(2, '0');
+                      let hour = updateDate.getHours();
+                      const min = updateDate.getMinutes().toString().padStart(2, '0');
+                      const ampm = hour >= 12 ? "오후" : "오전";
+                      hour = hour % 12 || 12;
+                      formattedLast = `${month}.${day} ${ampm} ${hour}:${min}`;
+                    } else {
+                      // 날짜 파싱 실패 시 원본에서 초 단위 등 제거 시도 (예: "03.07 오후 1:00:00" -> "03.07 오후 1:00")
+                      formattedLast = lastUpdate.split(':').slice(0, 2).join(':');
+                    }
 
-                    const month = updateDate.getMonth() + 1;
-                    const day = updateDate.getDate();
-                    let hour = updateDate.getHours();
-                    const min = updateDate.getMinutes().toString().padStart(2, '0');
-                    const ampm = hour >= 12 ? "오후" : "오전";
-                    hour = hour % 12 || 12;
+                    const statusSuffix = isServerUpdating
+                      ? "서버 확인 중..."
+                      : `${syncTime || '확인 완료'} 확인 완료`;
 
-                    const formattedLast = `${month}.${day} ${ampm} ${hour}:${min}`;
-                    return `[확정] ${formattedLast} (${syncTime || '확인 중...'} 확인 완료)`;
+                    return `[확정] ${formattedLast} (${statusSuffix})`;
                   } catch (e) {
-                    return `[확정] ${lastUpdate} (${syncTime || '확인 중...'} 확인 완료)`;
+                    return `[확정] ${lastUpdate} (${isServerUpdating ? "서버 확인 중..." : "확인 완료"})`;
                   }
                 })()}
               </Text>
@@ -1891,7 +1898,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.2</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.3</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
