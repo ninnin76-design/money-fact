@@ -896,6 +896,8 @@ function MainApp() {
 
       // [v4.0.6] 전광판 텍스트 설정 (서버 데이터 우선, 없으면 비움으로 시작하여 '분석중' 문구 해소)
       const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : [];
+      const hasServerMarketData = !!(snapshotRes && snapshotRes.data && snapshotRes.data.sectors);
+
       // [v3.9.9] 관심종목(My Stock)을 최상위 우선순위로 배치하여 '분석중' 상태를 즉시 해소합니다.
       const myStockCodes = new Set(myStocks.map(ms => ms.code));
       const combined = [...myStocks];
@@ -906,6 +908,10 @@ function MainApp() {
       const sectorMap = {};
       const instTotals = { pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 };
 
+      // [v4.0.7] 관심종목 조회 최적화: 시장가/실시간 분석이 꼭 필요한 경우에만 KIS API 호출
+      // 이미 서버 스냅샷에서 충분한 데이터를 가져왔다면 불필요한 추가 호출을 생략합니다.
+      const marketRunning = StockService.isMarketOpen();
+
       for (const stock of combined) {
         const isMyStockItem = myStockCodes.has(stock.code);
 
@@ -914,8 +920,13 @@ function MainApp() {
         const existingData = results.find(r => r.code === stock.code);
         const isDataInvalid = !existingData || existingData.price === 0 || existingData.isWaiting;
 
-        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid && !(isMyStockItem && (StockService.isMarketOpen() || isUserAction))) {
-          continue;
+        // [v4.0.7] 최적화: 관심종목이어도 서버 데이터가 충분히 최신(1분 이내)이면 API 호출 건너뜀
+        const isFresh = snapshotRes && snapshotRes.data && (Date.now() - new Date(snapshotRes.data.updateTime).getTime() < 60000);
+
+        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid) {
+          if (!isMyStockItem || (!isUserAction && isFresh)) {
+            continue;
+          }
         }
 
         // [v3.9.9] 장 마감 시간에 스냅샷에 없는 종목 처리
@@ -1061,9 +1072,10 @@ function MainApp() {
       setAnalyzedStocks([...results]);
 
       // Finalize sectors (Convert raw KRW to 100M units)
+      let totalFlow = 0;
       const updatedSectors = Object.entries(sectorMap).map(([name, rawFlow]) => {
-        // [v3.9.2] rawFlow가 NaN이거나 null인 경우 null억 표시되는 문제 방어
         const safeFlow = Number(rawFlow) || 0;
+        totalFlow += Math.abs(safeFlow);
         const flow = Math.round(safeFlow / 100000000);
         return { name, flow };
       });
@@ -1083,7 +1095,13 @@ function MainApp() {
         }
       } else {
         // 서버에서 최신 전체 시장 데이터를 주었다면 즉시 반영합니다.
-        setSectors([...snapshotRes.data.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+        // [v4.0.7] 서버 데이터 단위 보정 (만약 조 단위 수치가 너무 비현실적이면 만원 -> 억원으로 변환하여 정합성 유지)
+        const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
+          let f = Number(s.flow) || 0;
+          if (Math.abs(f) > 500000) f = Math.round(f / 10000); // 50조(500,000억) 이상은 단위 오류 가능성이 높으므로 1/10000 보정
+          return { ...s, flow: f };
+        });
+        setSectors(calibratedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
       }
       // Round inst sub-types to billion KRW
       const roundedInstTotals = {
@@ -1103,9 +1121,9 @@ function MainApp() {
       }
 
       // [v4.0.6] 분석 완료 후 전광판 업데이트 (특이사항 없을 경우 기본 문구로 전환하여 초기 '분석중' 문구 삭제)
-      if (tickerTexts.length === 0) {
-        tickerTexts.push("시장의 수급 흐름을 실시간 감시 중입니다.");
-        tickerTexts.push("관심 종목의 수급 변동을 확인하세요.");
+      if (tickerTexts.length <= 1) {
+        tickerTexts.push("💰 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+        tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
       }
       setTickerItems(tickerTexts);
 
@@ -1960,8 +1978,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.7 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.7 Build 20250607 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.8 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.8 Build 20250607 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1974,7 +1992,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.7</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.8</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

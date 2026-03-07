@@ -1,4 +1,4 @@
-# 💰 머니 팩트(Money Fact) v4.0.7 사용자 매뉴얼 📚
+# 💰 머니 팩트(Money Fact) v4.0.8 사용자 매뉴얼 📚
 
 **"데이터는 결코 거짓말을 하지 않습니다. 세력의 흔적을 수익으로 바꾸세요."**
 
@@ -75,7 +75,7 @@
 > **"성공 투자는 운이 아닌 '데이터'의 힘입니다."**  
 > 지금 바로 머니 팩트와 함께 주식 시장의 상위 1%로 거듭나세요! 감사합니다.
 
-### 📥 [최신 버전(v4.0.7) APK 다운로드](https://ninnin76-design.github.io/money-fact/MoneyFact_v4.0.7.apk) 🚀
+### 📥 [최신 버전(v4.0.8) APK 다운로드](https://ninnin76-design.github.io/money-fact/MoneyFact_v4.0.8.apk) 🚀
 
 ---
 
