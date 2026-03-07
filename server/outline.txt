@@ -1,0 +1,39 @@
+﻿172: async function getAccessToken() {
+228: app.get('/api/token', async (req, res) => {
+248: app.post('/api/push/register', (req, res) => {
+273: async function sendPushNotifications(messages) {
+288: app.get('/api/alerts/opportunities', async (req, res) => {
+322: async function runDeepMarketScan(force = false) {
+372: const rankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/forei
+383: const volResKospi = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/v
+398: const volResKosdaq = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/
+413: const sellRankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/f
+435: const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/
+465: async function fetchOverallSectors(token) {
+483: const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/i
+510: async function fetchMarketTotalFlow(token) {
+522: const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/i
+571: const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/in
+587: const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/
+616: const invRes2 = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quot
+995: runDeepMarketScan(true);
+1000: app.get('/api/analysis/supply/:period/:investor', (req, res) => {
+1008: app.get('/api/snapshot', (req, res) => {
+1018: function analyzeStreak(daily, inv) {
+1049: function loadUserStore() {
+1088: async function recoverFromFirebase() {
+1145: app.post('/api/sync/save', async (req, res) => {
+1167: app.get('/api/sync/check', (req, res) => {
+1174: app.get('/api/sync/load', async (req, res) => {
+1203: app.get('/api/admin/force-scan', async (req, res) => {
+1205: runDeepMarketScan(true); // Fire and forget
+1209: app.get('/api/search', (req, res) => {
+1223: app.post('/api/my-portfolio/analyze', async (req, res) => {
+1234: const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquir
+1274: app.post('/api/portfolio/recommend', async (req, res) => {
+1290: const fRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-
+1320: app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
+1321: app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));
+1324: app.listen(PORT, () => {
+1329: runDeepMarketScan(false);
+1338: setTimeout(() => runDeepMarketScan(false), 5000);

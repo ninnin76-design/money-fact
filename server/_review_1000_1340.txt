@@ -1,0 +1,340 @@
+1001:     const key = `${req.params.period}_${req.params.investor}`;
+1002:     const mode = req.query.mode || 'buy';
+1003:     const data = (mode === 'buy') ? marketAnalysisReport.buyData[key] : marketAnalysisReport.sellData[key];
+1004:     res.json({ output: data || [], updateTime: marketAnalysisReport.updateTime, dataType: marketAnalysisReport.dataType });
+1005: });
+1006: 
+1007: // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
+1008: app.get('/api/snapshot', (req, res) => {
+1009:     res.json(marketAnalysisReport);
+1010: });
+1011: 
+1012: const ALL_STOCKS = require('./popular_stocks');
+1013: // Deduplicate stocks by code
+1014: const POPULAR_STOCKS = Array.from(new Map(ALL_STOCKS.map(s => [s.code, s])).values());
+1015: console.log(`[Server] Loaded ${POPULAR_STOCKS.length} unique stocks (Deduplicated from ${ALL_STOCKS.length})`);
+1016: 
+1017: // Helper: Calculate Streak
+1018: function analyzeStreak(daily, inv) {
+1019:     let buyStreak = 0, sellStreak = 0;
+1020:     for (let j = 0; j < daily.length; j++) {
+1021:         const d = daily[j];
+1022:         let net = 0;
+1023:         const fQty = parseInt(d.frgn_ntby_qty || 0) || 0;
+1024:         const oQty = parseInt(d.orgn_ntby_qty || 0) || 0;
+1025: 
+1026:         if (inv === '0') net = fQty + oQty;
+1027:         else if (inv === '2') net = fQty;
+1028:         else if (inv === '1') net = oQty;
+1029: 
+1030:         if (net > 0) {
+1031:             buyStreak++;
+1032:             if (sellStreak > 0) break;
+1033:         } else if (net < 0) {
+1034:             sellStreak++;
+1035:             if (buyStreak > 0) break;
+1036:         } else {
+1037:             break;
+1038:         }
+1039:     }
+1040:     return { buyStreak, sellStreak };
+1041: }
+1042: 
+1043: // --- Cloud Sync for Mobile Data Persistence (File + Firebase) ---
+1044: const SYNC_FILE = path.join(__dirname, 'sync_data.json');
+1045: const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '';
+1046: let userStore = {};
+1047: let isSyncWriting = false;
+1048: 
+1049: function loadUserStore() {
+1050:     // 1. Load from sync_data.json
+1051:     if (fs.existsSync(SYNC_FILE)) {
+1052:         try {
+1053: 
+1054:             const raw = fs.readFileSync(SYNC_FILE, 'utf8');
+1055:             userStore = JSON.parse(raw);
+1056:             console.log(`[Sync] Loaded ${Object.keys(userStore).length} user profiles from disk.`);
+1057:         } catch (e) {
+1058:             console.error('[Sync] Load error, starting fresh:', e.message);
+1059:             userStore = {};
+1060:         }
+1061:     }
+1062:     // 2. Migrate legacy db.json data (one-time)
+1063:     if (fs.existsSync(DB_FILE)) {
+1064:         try {
+1065: 
+1066:             const legacy = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+1067:             let migrated = 0;
+1068:             Object.keys(legacy).forEach(key => {
+1069:                 if (!userStore[key] && Array.isArray(legacy[key]) && legacy[key].length > 0) {
+1070:                     userStore[key] = { stocks: legacy[key], updatedAt: new Date().toISOString(), version: 1 };
+1071:                     migrated++;
+1072:                 }
+1073:             });
+1074:             if (migrated > 0) {
+1075:                 console.log(`[Sync] Migrated ${migrated} profiles from legacy db.json`);
+1076:                 fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+1077:             }
+1078:         
+1079: } catch (e) { }
+1080: 
+1081:     }
+1082: }
+1083: loadUserStore();
+1084: 
+1085: // --- Firebase Cloud Recovery (runs async after startup) ---
+1086: const firebaseKey = (key) => encodeURIComponent(key).replace(/\./g, '%2E');
+1087: 
+1088: async function recoverFromFirebase() {
+1089:     if (!FIREBASE_DB_URL) {
+1090:         console.log('[Firebase] FIREBASE_DB_URL not set. Cloud backup disabled.');
+1091:         return;
+1092:     }
+1093:     if (Object.keys(userStore).length > 0) {
+1094:         // Local data exists → sync TO Firebase as safety backup
+1095:         console.log('[Firebase] Local data found. Syncing to cloud...');
+1096:         try {
+1097: 
+1098:             await axios.put(`${FIREBASE_DB_URL}/sync.json`, userStore);
+1099:             console.log('[Firebase] ✅ All local data backed up to cloud!');
+1100:         } catch (e) {
+1101:             console.error('[Firebase] Cloud backup failed:', e.message);
+1102:         }
+1103:         return;
+1104:     }
+1105:     // Local is empty → recover FROM Firebase
+1106:     try {
+1107: 
+1108:         console.log('[Firebase] ⚠️ Local data empty! Attempting cloud recovery...');
+1109:         const res = await axios.get(`${FIREBASE_DB_URL}/sync.json`);
+1110:         const cloudData = res.data;
+1111:         if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
+1112:             userStore = cloudData;
+1113:             fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+1114:             console.log(`[Firebase] ✅ Recovered ${Object.keys(userStore).length} user profiles from cloud!`);
+1115:         } else {
+1116:             console.log('[Firebase] No cloud data available.');
+1117:         }
+1118:     } catch (e) {
+1119:         console.error('[Firebase] Recovery failed:', e.message);
+1120:     }
+1121: }
+1122: recoverFromFirebase();
+1123: 
+1124: const saveSyncFile = async (changedKey) => {
+1125:     if (isSyncWriting) {
+1126:         await new Promise(r => setTimeout(r, 100));
+1127:     }
+1128:     isSyncWriting = true;
+1129:     try {
+1130: 
+1131:         // 1. Always save to local file
+1132:         fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
+1133:         // 2. Also save to Firebase (non-blocking, per-key)
+1134:         if (FIREBASE_DB_URL && changedKey) {
+1135:             const safeKey = firebaseKey(changedKey);
+1136:             axios.put(`${FIREBASE_DB_URL}/sync/${safeKey}.json`, userStore[changedKey])
+1137:                 .then(() => console.log(`[Firebase] ☁️ Backed up: ${changedKey}`))
+1138:                 .catch(e => console.error(`[Firebase] Backup failed for ${changedKey}:`, e.message));
+1139:         }
+1140:     } finally {
+1141:         isSyncWriting = false;
+1142:     }
+1143: };
+1144: 
+1145: app.post('/api/sync/save', async (req, res) => {
+1146:     const { syncKey, stocks, settings, watchlist } = req.body;
+1147:     if (!syncKey || !stocks) return res.status(400).json({ error: 'Invalid data' });
+1148: 
+1149:     // Add timestamp for backup tracking
+1150:     userStore[syncKey] = {
+1151:         stocks,
+1152:         settings: settings || {},
+1153:         watchlist: watchlist || null,
+1154:         updatedAt: new Date().toISOString(),
+1155:         version: (userStore[syncKey]?.version || 0) + 1
+1156:     };
+1157:     try {
+1158: 
+1159:         await saveSyncFile(syncKey);
+1160:         console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})${watchlist ? ' +watchlist' : ''}`);
+1161:         res.json({ status: 'success', version: userStore[syncKey].version });
+1162:     } catch (e) {
+1163:         res.status(500).json({ error: 'File save error' });
+1164:     }
+1165: });
+1166: 
+1167: app.get('/api/sync/check', (req, res) => {
+1168:     const { syncKey } = req.query;
+1169:     if (!syncKey) return res.status(400).json({ error: 'Missing syncKey' });
+1170:     const exists = !!userStore[syncKey];
+1171:     res.json({ exists, version: userStore[syncKey]?.version || 0 });
+1172: });
+1173: 
+1174: app.get('/api/sync/load', async (req, res) => {
+1175:     const { syncKey } = req.query;
+1176:     let data = userStore[syncKey];
+1177: 
+1178:     // Fallback: Try Firebase if not found locally
+1179:     if (!data && FIREBASE_DB_URL) {
+1180:         try {
+1181: 
+1182:             const safeKey = firebaseKey(syncKey);
+1183:             const fbRes = await axios.get(`${FIREBASE_DB_URL}/sync/${safeKey}.json`);
+1184:             if (fbRes.data) {
+1185:                 data = fbRes.data;
+1186:                 userStore[syncKey] = data;
+1187:                 console.log(`[Firebase] ☁️ Recovered data for: ${syncKey}`);
+1188:             }
+1189:         
+1190: } catch (e) { }
+1191: 
+1192:     }
+1193: 
+1194:     if (!data) return res.status(404).json({ error: 'No data found' });
+1195:     console.log(`[Sync] Loaded data for key: ${syncKey}`);
+1196:     const stocks = Array.isArray(data) ? data : (data.stocks || []);
+1197:     const settings = data.settings || {};
+1198:     const watchlist = data.watchlist || null;
+1199:     res.json({ stocks, settings, watchlist, version: data.version || 1, updatedAt: data.updatedAt });
+1200: });
+1201: 
+1202: // Secret Admin Endpoint to Force Scan
+1203: app.get('/api/admin/force-scan', async (req, res) => {
+1204:     console.log("[Admin] Force Scan Triggered!");
+1205:     runDeepMarketScan(true); // Fire and forget
+1206:     res.json({ status: 'Scan Started', time: new Date() });
+1207: });
+1208: 
+1209: app.get('/api/search', (req, res) => {
+1210:     const keyword = req.query.keyword || '';
+1211:     console.log(`[Server] Search Request: "${keyword}"`);
+1212:     if (!keyword || keyword.length < 1) return res.json({ result: [] });
+1213: 
+1214:     // Case-insensitive search
+1215:     const k = keyword.toLowerCase();
+1216:     const results = POPULAR_STOCKS.filter(s =>
+1217:         s.name.toLowerCase().includes(k) || s.code.includes(k)
+1218:     );
+1219:     console.log(`[Server] Search Found: ${results.length} items`);
+1220:     res.json({ result: results.slice(0, 20) }); // Limit 20
+1221: });
+1222: 
+1223: app.post('/api/my-portfolio/analyze', async (req, res) => {
+1224:     const { codes } = req.body; // Array of codes
+1225:     if (!codes || !Array.isArray(codes) || codes.length === 0) return res.json({ result: [] });
+1226: 
+1227:     const token = await getAccessToken();
+1228:     const analyzed = await Promise.all(codes.map(async (code) => {
+1229:         try {
+1230: 
+1231:             // Find name from popular list or use code
+1232:             const meta = POPULAR_STOCKS.find(s => s.code === code) || { name: code, code };
+1233: 
+1234:             const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+1235:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+1236:                 params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: code }
+1237:             });
+1238:             const daily = invRes.data.output || [];
+1239: 
+1240:             if (daily.length === 0) return null;
+1241: 
+1242:             const currentPrice = daily[0].stck_clpr;
+1243:             const currentRate = daily[0].prdy_ctrt;
+1244: 
+1245:             // Analyse Streaks for Foreigner(2) and Inst(1)
+1246:             const foreign = analyzeStreak(daily, '2');
+1247:             const inst = analyzeStreak(daily, '1');
+1248:             const total = analyzeStreak(daily, '0'); // Sum
+1249: 
+1250:             // Check Warning Condition: 3+ days SELL by Foreign or Inst or Total
+1251:             const isDanger = (foreign.sellStreak >= 3 || inst.sellStreak >= 3 || total.sellStreak >= 3);
+1252:             const isOpportunity = (foreign.buyStreak >= 3 || inst.buyStreak >= 3 || total.buyStreak >= 3);
+1253: 
+1254:             return {
+1255:                 code,
+1256:                 name: meta.name,
+1257:                 price: currentPrice,
+1258:                 rate: currentRate,
+1259:                 analysis: {
+1260:                     foreigner: { buy: foreign.buyStreak, sell: foreign.sellStreak },
+1261:                     institution: { buy: inst.buyStreak, sell: inst.sellStreak },
+1262:                     total: { buy: total.buyStreak, sell: total.sellStreak }
+1263:                 },
+1264:                 isDanger,
+1265:                 isOpportunity
+1266:             };
+1267:         } catch (e) { return null; }
+1268:     }));
+1269: 
+1270:     res.json({ result: analyzed.filter(x => x !== null) });
+1271: });
+1272: 
+1273: // Reuse existing Portfolio Recommend Endpoint
+1274: app.post('/api/portfolio/recommend', async (req, res) => {
+1275:     // ... existing content ...
+1276:     const { stocks, amount, mode, ignoreBudget } = req.body;
+1277:     const token = await getAccessToken();
+1278:     const isBuy = mode === 'buy';
+1279:     const budgetTotal = parseInt(amount) || 0;
+1280:     const budgetPerStock = budgetTotal / Math.max(1, stocks.length);
+1281: 
+1282:     const detailedPortfolio = await Promise.all(stocks.map(async (s) => {
+1283:         let finance = { per: '-', pbr: '-', cap: '-' };
+1284:         let perText = "-", pbrText = "-";
+1285:         const price = parseInt(s.price);
+1286:         const buyableShares = budgetPerStock > 0 ? Math.floor(budgetPerStock / price) : 0;
+1287: 
+1288:         try {
+1289: 
+1290:             const fRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
+1291:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
+1292:                 params: { fid_cond_mrkt_div_code: 'J', fid_input_iscd: s.code }
+1293:             });
+1294:             const d = fRes.data.output;
+1295:             const perVal = parseFloat(d.per);
+1296:             const pbrVal = parseFloat(d.pbr);
+1297:             finance = { per: d.per || '-', pbr: d.pbr || '-', cap: d.hts_avls ? Math.round(parseInt(d.hts_avls) / 1000) + "조" : '-' };
+1298:             if (perVal > 0 && perVal < 8) perText = "초저평가(수익탄탄)";
+1299:             else if (perVal >= 8 && perVal < 15) perText = "적정수준(안정적)";
+1300:             else if (perVal >= 15) perText = "기대치높음(성장형)";
+1301:             if (pbrVal > 0 && pbrVal < 0.6) pbrText = "자산 대비 헐값(안전)";
+1302:             else if (pbrVal >= 0.6 && pbrVal < 1.0) pbrText = "자산 가치 저평가";
+1303:             else if (pbrVal >= 1.0) pbrText = "프리미엄(브랜드가치)";
+1304:         
+1305: } catch (e) { }
+1306: 
+1307: 
+1308:         return {
+1309:             ...s, finance, perText, pbrText,
+1310:             shares: buyableShares,
+1311:             insight: isBuy ? "수급 주체들의 강력한 매수세가 확인되며, 재무 건전성이 우수합니다." : "수급 이탈 징후가 포착되어 주의가 필요합니다.",
+1312:             isBuyable: ignoreBudget ? true : (buyableShares > 0)
+1313:         };
+1314:     }));
+1315:     res.json({ portfolio: detailedPortfolio });
+1316: });
+1317: 
+1318: // (Legacy duplicate routes removed - now handled by Cloud Sync system above)
+1319: 
+1320: app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
+1321: app.get('/manual', (req, res) => res.sendFile(path.join(__dirname, './money_fact_manual.html')));
+1322: 
+1323: const PORT = process.env.PORT || 3000;
+1324: app.listen(PORT, () => {
+1325:     console.log(`Deep Scan Server Online on port ${PORT}`);
+1326: 
+1327:     // [코다리 부장 터치] 어플을 켜지 않아도 서버가 알아서 푸시를 날리도록 15분 주기로 스캔 가동!
+1328:     setInterval(() => {
+1329:         runDeepMarketScan(false);
+1330:     }, 15 * 60 * 1000);
+1331: 
+1332:     // Render 서버 절전 모드 방지용 자체 핑 (14분 주기)
+1333:     setInterval(() => {
+1334:         axios.get('https://money-fact-server.onrender.com/').catch(() => { });
+1335:     }, 14 * 60 * 1000);
+1336: 
+1337:     // 구동 시 1회 즉시 스캔
+1338:     setTimeout(() => runDeepMarketScan(false), 5000);
+1339: });
+1340: 

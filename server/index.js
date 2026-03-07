@@ -18,27 +18,27 @@ let pushHistory = {};
 
 if (fs.existsSync(PUSH_TOKENS_FILE)) {
     try {
- pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); 
-} catch (e) { }
+        pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8'));
+    } catch (e) { }
 
 }
 if (fs.existsSync(PUSH_HISTORY_FILE)) {
     try {
- pushHistory = JSON.parse(fs.readFileSync(PUSH_HISTORY_FILE, 'utf8')); 
-} catch (e) { }
+        pushHistory = JSON.parse(fs.readFileSync(PUSH_HISTORY_FILE, 'utf8'));
+    } catch (e) { }
 
 }
 
 const savePushTokens = () => {
     try {
- fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2)); 
-} catch (e) { }
+        fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2));
+    } catch (e) { }
 
 };
 const savePushHistory = () => {
     try {
- fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2)); 
-} catch (e) { }
+        fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2));
+    } catch (e) { }
 
 };
 
@@ -144,15 +144,15 @@ const DB_FILE = path.join(__dirname, 'db.json');
 let userDb = {};
 if (fs.existsSync(DB_FILE)) {
     try {
- userDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); 
-} catch (e) { }
+        userDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    } catch (e) { }
 
 }
 
 const saveDb = () => {
     try {
- fs.writeFileSync(DB_FILE, JSON.stringify(userDb, null, 2)); 
-} catch (e) { }
+        fs.writeFileSync(DB_FILE, JSON.stringify(userDb, null, 2));
+    } catch (e) { }
 
 };
 
@@ -160,8 +160,8 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
     try {
 
         marketAnalysisReport = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-    
-} catch (e) { }
+
+    } catch (e) { }
 
 }
 
@@ -180,8 +180,8 @@ async function getAccessToken() {
             if (new Date(new Date().getTime() + 10 * 60 * 1000) < expiry) {
                 return saved.token;
             }
-        
-} catch (e) { }
+
+        } catch (e) { }
 
     }
 
@@ -1075,8 +1075,8 @@ function loadUserStore() {
                 console.log(`[Sync] Migrated ${migrated} profiles from legacy db.json`);
                 fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
             }
-        
-} catch (e) { }
+
+        } catch (e) { }
 
     }
 }
@@ -1186,8 +1186,8 @@ app.get('/api/sync/load', async (req, res) => {
                 userStore[syncKey] = data;
                 console.log(`[Firebase] ☁️ Recovered data for: ${syncKey}`);
             }
-        
-} catch (e) { }
+
+        } catch (e) { }
 
     }
 
@@ -1218,6 +1218,38 @@ app.get('/api/search', (req, res) => {
     );
     console.log(`[Server] Search Found: ${results.length} items`);
     res.json({ result: results.slice(0, 20) }); // Limit 20
+});
+
+// [코다리 부장] 모바일 앱 추가 종목 및 상세 보기용 개별 API
+app.get('/api/stock-daily/:code', async (req, res) => {
+    const code = req.params.code;
+    if (!code) return res.status(400).json({ error: 'Missing stock code' });
+
+    try {
+        const token = await getAccessToken();
+        const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+            headers: {
+                authorization: `Bearer ${token}`,
+                appkey: APP_KEY,
+                appsecret: APP_SECRET,
+                tr_id: 'FHKST01010900',
+                custtype: 'P'
+            },
+            params: {
+                FID_COND_MRKT_DIV_CODE: 'J',
+                FID_INPUT_ISCD: code
+            }
+        });
+
+        if (invRes.data && invRes.data.output) {
+            res.json({ daily: invRes.data.output });
+        } else {
+            res.json({ daily: [] });
+        }
+    } catch (error) {
+        console.error(`[Server] Daily fetch error for ${code}:`, error.message);
+        res.status(500).json({ error: 'Failed to fetch daily data', daily: [] });
+    }
 });
 
 app.post('/api/my-portfolio/analyze', async (req, res) => {
@@ -1301,8 +1333,8 @@ app.post('/api/portfolio/recommend', async (req, res) => {
             if (pbrVal > 0 && pbrVal < 0.6) pbrText = "자산 대비 헐값(안전)";
             else if (pbrVal >= 0.6 && pbrVal < 1.0) pbrText = "자산 가치 저평가";
             else if (pbrVal >= 1.0) pbrText = "프리미엄(브랜드가치)";
-        
-} catch (e) { }
+
+        } catch (e) { }
 
 
         return {

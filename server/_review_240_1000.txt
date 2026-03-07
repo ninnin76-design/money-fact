@@ -1,0 +1,760 @@
+241:         res.json({ token, expiry, source: 'server_shared' });
+242:     } catch (e) {
+243:         res.status(500).json({ error: 'Token fetch failed' });
+244:     }
+245: });
+246: 
+247: // --- Push Token Registration ---
+248: app.post('/api/push/register', (req, res) => {
+249:     const { pushToken, syncKey, stocks, settings } = req.body;
+250:     if (!pushToken || !Expo.isExpoPushToken(pushToken)) {
+251:         return res.status(400).json({ error: 'Invalid Expo Push Token' });
+252:     }
+253:     // Update or add
+254:     const idx = pushTokens.findIndex(t => t.token === pushToken);
+255:     const entry = {
+256:         token: pushToken,
+257:         syncKey: syncKey || 'anonymous',
+258:         stocks: stocks || [],
+259:         settings: settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 },
+260:         updatedAt: new Date().toISOString()
+261:     };
+262:     if (idx >= 0) {
+263:         pushTokens[idx] = entry;
+264:     } else {
+265:         pushTokens.push(entry);
+266:     }
+267:     savePushTokens();
+268:     console.log(`[Push] Registered token for ${syncKey || 'anonymous'} (Total: ${pushTokens.length})`);
+269:     res.json({ status: 'registered', total: pushTokens.length });
+270: });
+271: 
+272: // --- Server Push Notification Sender ---
+273: async function sendPushNotifications(messages) {
+274:     if (messages.length === 0) return;
+275:     const chunks = expo.chunkPushNotifications(messages);
+276:     for (const chunk of chunks) {
+277:         try {
+278: 
+279:             await expo.sendPushNotificationsAsync(chunk);
+280:         } catch (e) {
+281:             console.error('[Push] Send error:', e.message);
+282:         }
+283:     }
+284:     console.log(`[Push] Sent ${messages.length} notifications`);
+285: }
+286: 
+287: // --- Buy Opportunity Detection ---
+288: app.get('/api/alerts/opportunities', async (req, res) => {
+289:     try {
+290: 
+291:         const buyData = marketAnalysisReport.buyData || {};
+292:         const opportunities = [];
+293:         Object.keys(buyData).forEach(key => {
+294:             const items = buyData[key] || [];
+295:             items.forEach(item => {
+296:                 if (item.streak >= 2) {
+297:                     opportunities.push({
+298:                         ...item,
+299:                         investor: key.split('_')[1],
+300:                         type: 'buy',
+301:                         signal: `${item.streak}일 연속 매수세`
+302:                     });
+303:                 }
+304:             });
+305:         });
+306:         // Deduplicate by code, keep the one with highest streak
+307:         const deduped = new Map();
+308:         opportunities.forEach(op => {
+309:             if (!deduped.has(op.code) || deduped.get(op.code).streak < op.streak) {
+310:                 deduped.set(op.code, op);
+311:             }
+312:         });
+313:         res.json({
+314:             opportunities: Array.from(deduped.values()).sort((a, b) => b.streak - a.streak).slice(0, 20),
+315:             updateTime: marketAnalysisReport.updateTime
+316:         });
+317:     } catch (e) {
+318:         res.status(500).json({ error: 'Failed to get opportunities' });
+319:     }
+320: });
+321: 
+322: async function runDeepMarketScan(force = false) {
+323:     const now = new Date();
+324:     // KST calculation (UTC + 9 hours)
+325:     const kstOffset = 9 * 60 * 60 * 1000;
+326:     const kstDate = new Date(now.getTime() + kstOffset);
+327:     const hour = kstDate.getUTCHours();
+328:     const day = kstDate.getUTCDay(); // 0=Sun, 6=Sat
+329: 
+330:     console.log(`[Worker] Server(UTC): ${now.toISOString()}, Target(KST): ${kstDate.toISOString()}, Hour: ${hour}, Day: ${day}`);
+331: 
+332:     // [v3.6 최적화] 시장 감시 시간: 오전 8시 ~ 오후 8시 (20:00) KST
+333:     // 오후 3:30 이후 시간외 및 야간 거래 수급까지 15분마다 추적하여 8시에 최종 확정합니다.
+334:     const isWeekend = (day === 0 || day === 6);
+335:     const isMarketOpen = (hour >= 8 && hour <= 20) && !isWeekend;
+336:     const hasNoData = !marketAnalysisReport.updateTime;
+337: 
+338:     if (!isMarketOpen && !force && !hasNoData) {
+339:         console.log(`[Worker] Market Closed (KST ${hour}:xx). Serving cached data.`);
+340:         marketAnalysisReport.dataType = 'MARKET_CLOSE';
+341:         return;
+342:     }
+343: 
+344:     const currentType = 'LIVE';
+345:     console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
+346:     marketAnalysisReport.status = 'SCANNING';
+347:     try {
+348: 
+349:         const token = await getAccessToken();
+350: 
+351:         // ========================================================
+352:         // [코다리 부장] 1단계: 광범위 필터 (The Wide Net)
+353:         // 전 시장에서 '수상한 놈들'을 빠르게 후보 리스트에 올립니다.
+354:         // ========================================================
+355:         console.log(`[Radar 1단계] 광범위 필터 가동 - 전 시장 스캔 중...`);
+356: 
+357:         const candidateMap = new Map();
+358:         const addCandidate = (code, name) => {
+359:             if (code && !candidateMap.has(code)) {
+360:                 candidateMap.set(code, { code, name: name || code });
+361:             }
+362:         };
+363: 
+364:         // [v3.6.2 우선순위 보정] 핵심 감시 종목 및 섹터 70개 종목은 
+365:         // 800개 상한선에 걸려 누락되지 않도록 가장 먼저 후보에 추가합니다.
+366:         MARKET_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+367:         SECTOR_WATCH_STOCKS.forEach(s => addCandidate(s.code, s.name));
+368: 
+369:         // Source 1: 외인/기관 순매수 랭킹 (시장 주도주)
+370:         try {
+371: 
+372:             const rankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
+373:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
+374:                 params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' }
+375:             });
+376:             (rankRes.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
+377:         } catch (e) { console.warn('[Radar] Source 1 (Foreign/Inst Rank) failed:', e.message); }
+378:         await new Promise(r => setTimeout(r, 120));
+379: 
+380:         // Source 2: 코스피 거래량 순위
+381:         try {
+382: 
+383:             const volResKospi = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank`, {
+384:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPST01710000', custtype: 'P' },
+385:                 params: {
+386:                     FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20171', FID_INPUT_ISCD: '0001',
+387:                     FID_DIV_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000',
+388:                     FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: ''
+389:                 }
+390:             });
+391:             (volResKospi.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
+392:         } catch (e) { console.warn('[Radar] Source 2 (KOSPI Volume) failed:', e.message); }
+393:         await new Promise(r => setTimeout(r, 120));
+394: 
+395:         // Source 3: 코스닥 거래량 순위
+396:         try {
+397: 
+398:             const volResKosdaq = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank`, {
+399:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPST01710000', custtype: 'P' },
+400:                 params: {
+401:                     FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '20171', FID_INPUT_ISCD: '1001',
+402:                     FID_DIV_CLS_CODE: '0', FID_BLNG_CLS_CODE: '0', FID_TRGT_CLS_CODE: '111111111', FID_TRGT_EXLS_CLS_CODE: '000000',
+403:                     FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '', FID_INPUT_DATE_1: ''
+404:                 }
+405:             });
+406:             (volResKosdaq.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
+407:         } catch (e) { console.warn('[Radar] Source 3 (KOSDAQ Volume) failed:', e.message); }
+408:         await new Promise(r => setTimeout(r, 120));
+409: 
+410:         // Source 4: 외인 순매도 랭킹 (이탈 감지용)
+411:         try {
+412: 
+413:             const sellRankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
+414:                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
+415:                 params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
+416:             });
+417:             (sellRankRes.data.output || []).forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
+418:         } catch (e) { console.warn('[Radar] Source 4 (Sell Rank) failed:', e.message); }
+419:         await new Promise(r => setTimeout(r, 120));
+420: 
+421:         // Source 5: [코다리 부장] 전종목 배치 스캔 (popular_stocks에서 시세 변동/거래량 이상 감지)
+422:         // 2,882개 전종목을 배치로 시세 확인 → 수상한 종목만 후보에 추가
+423:         console.log(`[Radar 1단계] Source 5: 전종목 ${POPULAR_STOCKS.length}개 시세 배치 스캔 시작...`);
+424:         let wideNetHits = 0;
+425:         const batchSize = 8;  // 동시 요청 수 (API 제한 준수)
+426:         const maxWideScan = Math.min(POPULAR_STOCKS.length, 1200); // 1200개로 축소하여 업데이트 속도 개선
+427:         const alreadyInMap = new Set(candidateMap.keys());
+428: 
+429:         for (let i = 0; i < maxWideScan; i++) {
+430:             const stk = POPULAR_STOCKS[i];
+431:             if (!stk || alreadyInMap.has(stk.code)) continue;
+432:             await new Promise(r => setTimeout(r, 120));
+433:             try {
+434: 
+435:                 const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
+436:                     headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
+437:                     params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+438:                 });
+439:                 const d = priceRes.data.output;
+440:                 if (!d) continue;
+441: 
+442:                 const price = parseInt(d.stck_prpr || 0);
+443:                 const changeRate = parseFloat(d.prdy_ctrt || 0);
+444:                 const volume = parseInt(d.acml_vol || 0);
+445:                 const avgVolume = parseInt(d.avrg_vol || 0);
+446:                 if (Math.abs(changeRate) >= 2.5 || volume > 500000) {
+447:                     addCandidate(stk.code, stk.name);
+448:                     wideNetHits++;
+449:                 }
+450:             } catch (e) { console.error(`[Source 5 Error] ${e.message}`); }
+451:         }
+452:         console.log(`[Radar 1단계] Wide Net 완료! 전종목에서 ${wideNetHits}개 추가 후보 발견`);
+453: 
+454:         // [v3.6.2 fix] 핵심 종목들은 이미 앞에서 추가되었으므로 중복 추가 제거
+455: 
+456:         // 사용자 관심 종목도 무조건 포함! (푸시 알림 정확도를 위해)
+457:         pushTokens.forEach(entry => {
+458:             (entry.stocks || []).forEach(s => addCandidate(s.code, s.name));
+459:         });
+460: 
+461:         const totalCandidates = candidateMap.size;
+462:         console.log(`[Radar] ===== 1단계 완료: 총 ${totalCandidates}개 후보 확보! =====`);
+463: 
+464:         // [v3.6.2] 시장 전체 섹터별 자금 흐름 (2,800개 종목 대변)을 먼저 가져옵니다.
+465:         async function fetchOverallSectors(token) {
+466:             const sectorsToTrack = [
+467:                 { name: '반도체(전기전자)', code: '0013', div: 'U' },
+468:                 { name: '자동차(운수장비)', code: '0015', div: 'U' },
+469:                 { name: '바이오(의약품)', code: '0006', div: 'U' },
+470:                 { name: '이차전지(화학)', code: '0005', div: 'U' },
+471:                 { name: '엔터/SW(서비스)', code: '0021', div: 'U' },
+472:                 { name: '금융/지주', code: '0018', div: 'U' },
+473:                 { name: 'IT 하드웨어', code: '1012', div: 'U' },
+474:                 { name: '코스닥 제약', code: '1029', div: 'U' },
+475:                 { name: '기계/장비', code: '0009', div: 'U' }
+476:             ];
+477: 
+478:             const results = [];
+479:             for (const s of sectorsToTrack) {
+480:                 try {
+481: 
+482:                     await new Promise(r => setTimeout(r, 80));
+483:                     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
+484:                         headers: {
+485:                             authorization: `Bearer ${token}`,
+486:                             appkey: APP_KEY,
+487:                             appsecret: APP_SECRET,
+488:                             tr_id: 'FHKUP03500100',
+489:                             custtype: 'P'
+490:                         },
+491:                         params: {
+492:                             FID_COND_MRKT_DIV_CODE: s.div,
+493:                             FID_INPUT_ISCD: s.code
+494:                         }
+495:                     });
+496:                     const d = res.data.output;
+497:                     if (d) {
+498:                         const foreign = parseInt(d.prdy_frgn_ntby_qty || 0);
+499:                         const institution = parseInt(d.prdy_orgn_ntby_qty || 0);
+500:                         results.push({ name: s.name, flow: foreign + institution });
+501:                     }
+502:                 } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
+503:             }
+504:             return results.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6);
+505:         }
+506: 
+507:         const marketSectorsResult = await fetchOverallSectors(token);
+508: 
+509:         // [v3.6.3] 대한민국 시장 전체(2,800개 종목) 자금 흐름 가져오기
+510:         async function fetchMarketTotalFlow(token) {
+511:             const markets = [
+512:                 { name: 'KOSPI', code: '0001' },
+513:                 { name: 'KOSDAQ', code: '1001' }
+514:             ];
+515:             let totalF = 0, totalI = 0;
+516:             let pnsn = 0, ivtg = 0, ins = 0;
+517: 
+518:             for (const m of markets) {
+519:                 try {
+520: 
+521:                     await new Promise(r => setTimeout(r, 100));
+522:                     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
+523:                         headers: {
+524:                             authorization: `Bearer ${token}`,
+525:                             appkey: APP_KEY,
+526:                             appsecret: APP_SECRET,
+527:                             tr_id: 'FHKUP03500100',
+528:                             custtype: 'P'
+529:                         },
+530:                         params: {
+531:                             FID_COND_MRKT_DIV_CODE: 'U',
+532:                             FID_INPUT_ISCD: m.code
+533:                         }
+534:                     });
+535:                     const d = res.data.output;
+536:                     if (d) {
+537:                         totalF += parseInt(d.prdy_frgn_ntby_qty || 0);
+538:                         totalI += parseInt(d.prdy_orgn_ntby_qty || 0);
+539:                         pnsn += parseInt(d.pnsn_ntby_qty || 0);
+540:                         ivtg += parseInt(d.ivtg_ntby_qty || 0);
+541:                         ins += parseInt(d.ins_ntby_qty || 0);
+542:                     }
+543:                 } catch (e) { console.error(`Market Total API Error [${m.name}]: ${e.message}`); }
+544:             }
+545:             return { foreign: totalF, institution: totalI, pnsn, ivtg, ins };
+546:         }
+547: 
+548:         const marketTotalFlow = await fetchMarketTotalFlow(token);
+549: 
+550:         // ========================================================
+551:         // [코다리 부장] 2단계: 정밀 수급 분석 (The Deep Scan)
+552:         // ========================================================
+553:         console.log(`[Radar 2단계] 정밀 수급 분석 시작...`);
+554: 
+555:         const candidates = Array.from(candidateMap.values());
+556:         const historyData = new Map();
+557:         let hits = 0;
+558: 
+559:         // 모든 후보를 정밀 Deep Scan (종목당 150ms 간격으로 순차 진행)
+560:         const fullList = candidates.slice(0, 1000); // 안전 상한: 최대 1000개로 상향
+561:         console.log(`[Radar 2단계] 실제 Deep Scan 대상: ${fullList.length}개 순차 분석 시작...`);
+562: 
+563:         for (let i = 0; i < fullList.length; i++) {
+564:             const stk = fullList[i];
+565: 
+566:             // 150ms 간격으로 순차적 요청 (유량 제한 방어)
+567:             await new Promise(r => setTimeout(r, 150));
+568: 
+569:             try {
+570: 
+571:                 const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+572:                     headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+573:                     params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
+574:                 });
+575:                 const daily = invRes.data.output || [];
+576: 
+577:                 // [코다리 부장 터치] 장중이라면 잠정치를 가져와서 오늘 데이터를 보정합니다!
+578:                 if (isMarketOpen && daily.length > 0) {
+579:                     const d0 = daily[0];
+580:                     const fVal = parseInt(d0.frgn_ntby_qty || 0);
+581:                     const oVal = parseInt(d0.orgn_ntby_qty || 0);
+582: 
+583:                     // 값이 비어있거나 0인 경우(장중 미지급) 잠정치 조회
+584:                     if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
+585:                         try {
+586: 
+587:                             const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+588:                                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
+589:                                 params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+590:                             });
+591:                             const prov = provRes.data.output;
+592:                             if (prov) {
+593:                                 d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
+594:                                 d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0'; // 기관 합계로 보정
+595:                             }
+596:                         } catch (provErr) { /* ignore */ }
+597:                     }
+598:                 }
+599: 
+600:                 if (daily.length > 0) {
+601:                     hits++;
+602:                     const currentPrice = daily[0].stck_clpr;
+603:                     const currentRate = daily[0].prdy_ctrt;
+604:                     historyData.set(stk.code, {
+605:                         name: stk.name, price: currentPrice, rate: currentRate, daily
+606:                     });
+607:                 }
+608:             } catch (e) {
+609:                 console.error(`[Deep Scan Error] ${stk.name} (${stk.code}): ${e.message}`);
+610:                 // [v3.6.2] 핵심 섹터 종목은 실패 시 1회 재시도 (유량 제한 등 일시적 오류 대비)
+611:                 if (sectorStockCodes.has(stk.code)) {
+612:                     console.log(`[Radar] 핵심 종목 ${stk.name} 재시도 중...`);
+613:                     await new Promise(r => setTimeout(r, 500));
+614:                     try {
+615: 
+616:                         const invRes2 = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+617:                             headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+618:                             params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
+619:                         });
+620:                         const daily2 = invRes2.data.output || [];
+621:                         if (daily2.length > 0) {
+622:                             hits++;
+623:                             historyData.set(stk.code, { name: stk.name, price: daily2[0].stck_clpr, rate: daily2[0].prdy_ctrt, daily: daily2 });
+624:                         }
+625:                     } catch (e2) { console.error(`[Deep Scan Retry Failed] ${stk.name}: ${e2.message}`); }
+626:                 }
+627:             }
+628: 
+629:             if (i % 50 === 0 && i > 0) console.log(`[Radar 2단계] Deep Scan 진행: ${i}/${fullList.length}`);
+630:         }
+631: 
+632:         console.log(`[Radar 2단계] Deep Scan 완료! 성공: ${hits}개 / 대상: ${fullList.length}개`);
+633: 
+634:         if (hits === 0) {
+635:             console.log("[Radar] 데이터를 가져오지 못했습니다. 이전 캐시를 유지합니다.");
+636:             return;
+637:         }
+638: 
+639:         // ========================================================
+640:         // [코다리 부장] 3단계: 결과 리스팅 및 알림 (The Target Alert)
+641:         // 분석 결과를 스냅샷으로 굽고, 사용자별 알림을 발송합니다.
+642:         // ========================================================
+643:         console.log(`[Radar 3단계] 분석 결과 정리 및 알림 발송 중...`);
+644: 
+645:         const newBuyData = {}, newSellData = {};
+646:         const newAllAnalysis = {}; // [v3.6.2] 분석된 모든 종목 보관용
+647:         const investors = ['0', '2', '1'];
+648: 
+649:         investors.forEach(inv => {
+650:             newBuyData[`5_${inv}`] = [];
+651:             newSellData[`5_${inv}`] = [];
+652:         });
+653: 
+654:         // [v3.6.1] 70개 주요 섹터 종목 데이터 강제 포함 (프론트엔드 분석 대기 해결)
+655:         newBuyData['sectors'] = [];
+656:         const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
+657: 
+658:         const sectorMap = {};
+659:         // 2,800개 전 종목 수급 데이터를 기본값으로 사용
+660:         const instTotals = {
+661:             pnsn: marketTotalFlow.pnsn || 0,
+662:             ivtg: marketTotalFlow.ivtg || 0,
+663:             ins: marketTotalFlow.ins || 0,
+664:             foreign: marketTotalFlow.foreign || 0,
+665:             institution: marketTotalFlow.institution || 0
+666:         };
+667: 
+668:         historyData.forEach((val, code) => {
+669:             const d = val.daily[0];
+670:             const netBuy = parseInt(d.frgn_ntby_qty) + parseInt(d.orgn_ntby_qty);
+671:             const pnsnBuy = parseInt(d.pnsn_ntby_qty || 0);
+672:             const ivtgBuy = parseInt(d.ivtg_ntby_qty || 0);
+673:             const insBuy = parseInt(d.ins_ntby_qty || 0);
+674: 
+675:             const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
+676:             if (mwc && mwc.sector) {
+677:                 sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuy;
+678:             }
+679:             // [v3.6.3] instTotals는 위에서 이미 시장 전체 합계로 초기화되었으므로 개별 합산을 수행하지 않습니다.
+680: 
+681:             // [v3.6.2 핵심 수정] 외인/기관 streak를 독립적으로 계산!
+682:             // 기존에는 투자자별 루프에서 fStreak=iStreak=같은 값이 들어가는 버그가 있었습니다.
+683:             const calcIndependentStreak = (daily, investorType) => {
+684:                 let b = 0, s = 0;
+685:                 for (let j = 0; j < daily.length; j++) {
+686:                     const row = daily[j];
+687:                     let net = 0;
+688:                     const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
+689:                     const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
+690:                     if (investorType === '2') net = fQ;       // 외인
+691:                     else if (investorType === '1') net = oQ;   // 기관
+692:                     else net = fQ + oQ;                        // 합산
+693:                     if (net > 0) { b++; if (s > 0) break; }
+694:                     else if (net < 0) { s++; if (b > 0) break; }
+695:                     else break;
+696:                 }
+697:                 return b > 0 ? b : (s > 0 ? -s : 0);
+698:             };
+699: 
+700:             // 각 종목의 외인/기관 streak를 한 번에 독립 계산
+701:             const indFStreak = calcIndependentStreak(val.daily, '2');
+702:             const indIStreak = calcIndependentStreak(val.daily, '1');
+703: 
+704:             investors.forEach(inv => {
+705:                 let buyStreak = 0, sellStreak = 0;
+706: 
+707:                 for (let j = 0; j < val.daily.length; j++) {
+708:                     const row = val.daily[j];
+709:                     let net = 0;
+710:                     const fQty = parseInt(row.frgn_ntby_qty || 0) || 0;
+711:                     const oQty = parseInt(row.orgn_ntby_qty || 0) || 0;
+712: 
+713:                     if (inv === '0') net = fQty + oQty;
+714:                     else if (inv === '2') net = fQty;
+715:                     else if (inv === '1') net = oQty;
+716: 
+717:                     if (net > 0) {
+718:                         buyStreak++;
+719:                         if (sellStreak > 0) break;
+720:                     } else if (net < 0) {
+721:                         sellStreak++;
+722:                         if (buyStreak > 0) break;
+723:                     } else break;
+724:                 }
+725: 
+726:                 if (buyStreak >= 2) {
+727:                     newBuyData[`5_${inv}`].push({
+728:                         name: val.name, code, price: val.price, rate: val.rate,
+729:                         streak: buyStreak, fStreak: indFStreak, iStreak: indIStreak
+730:                     });
+731:                 }
+732:                 if (sellStreak >= 2) {
+733:                     newSellData[`5_${inv}`].push({
+734:                         name: val.name, code, price: val.price, rate: val.rate,
+735:                         streak: sellStreak, fStreak: indFStreak, iStreak: indIStreak
+736:                     });
+737:                 }
+738:             });
+739: 
+740:             // 70개 기본 섹터 종목은 무조건 snapshot에 포함하여 프론트에서 KIS API를 우회하도록 함
+741:             if (sectorStockCodes.has(code)) {
+742:                 let fSt = 0, iSt = 0;
+743:                 const calcSt = (inv) => {
+744:                     let b = 0, s = 0;
+745:                     for (let j = 0; j < val.daily.length; j++) {
+746:                         const row = val.daily[j];
+747:                         let net = 0;
+748:                         const fQ = parseInt(row.frgn_ntby_qty || 0) || 0;
+749:                         const oQ = parseInt(row.orgn_ntby_qty || 0) || 0;
+750:                         if (inv === '2') net = fQ;
+751:                         else if (inv === '1') net = oQ;
+752:                         if (net > 0) { b++; if (s > 0) break; }
+753:                         else if (net < 0) { s++; if (b > 0) break; }
+754:                         else break;
+755:                     }
+756:                     return b > 0 ? b : (s > 0 ? -s : 0);
+757:                 };
+758:                 fSt = calcSt('2');
+759:                 iSt = calcSt('1');
+760: 
+761:                 newBuyData['sectors'].push({
+762:                     name: val.name, code, price: val.price, rate: val.rate,
+763:                     streak: fSt, // 프론트에서 sentiment(50 + streak*10) 계산 시 기반이 됨
+764:                     fStreak: fSt, iStreak: iSt
+765:                 });
+766:             }
+767: 
+768:             // [v3.6.2] 모든 분석 종목 요약 정보를 맵에 저장 (관심종목용)
+769:             let allFSt = 0, allISt = 0;
+770:             const calcStreak = (inv) => {
+771:                 let b = 0, s = 0;
+772:                 for (let j = 0; j < Math.min(val.daily.length, 31); j++) {
+773:                     const row = val.daily[j];
+774:                     let net = 0;
+775:                     if (inv === '2') net = parseInt(row.frgn_ntby_qty || 0) || 0;
+776:                     else if (inv === '1') net = parseInt(row.orgn_ntby_qty || 0) || 0;
+777:                     if (net > 0) { b++; if (s > 0) break; }
+778:                     else if (net < 0) { s++; if (b > 0) break; }
+779:                     else break;
+780:                 }
+781:                 return b > 0 ? b : (s > 0 ? -s : 0);
+782:             };
+783:             allFSt = calcStreak('2');
+784:             allISt = calcStreak('1');
+785: 
+786:             newAllAnalysis[code] = {
+787:                 name: val.name,
+788:                 price: val.price,
+789:                 rate: val.rate,
+790:                 fStreak: allFSt,
+791:                 iStreak: allISt,
+792:                 sentiment: 50 + (allFSt + allISt) * 5
+793:             };
+794:         });
+795: 
+796:         const SECTOR_ORDER = [
+797:             '반도체', '이차전지', '바이오 및 헬스케어', '자동차 및 전자부품', '로봇 및 에너지', '엔터 및 플랫폼'
+798:         ];
+799:         const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
+800:         // [v3.8.0] 섹터별 자금 흐름을 금액(절대값)이 큰 순서대로 정렬하여 시장 활성도를 우선적으로 보여줌
+801:         sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+802: 
+803:         if (marketSectorsResult && marketSectorsResult.length > 0) {
+804:             // 외부 API에서 가져온 섹터 데이터도 금액 순으로 정렬
+805:             marketSectorsResult.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+806:             marketAnalysisReport.sectors = marketSectorsResult;
+807:         } else {
+808:             // 자체 집계된 섹터 데이터 사용 시 상위 6개 노출
+809:             marketAnalysisReport.sectors = sectorList.slice(0, 6);
+810:         }
+811: 
+812:         investors.forEach(inv => {
+813:             newBuyData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
+814:             newSellData[`5_${inv}`].sort((a, b) => b.streak - a.streak);
+815:         });
+816: 
+817:         // [코다리 부장 터치] 밤 늦게 데이터가 0으로 들어와도, 낮의 뜨거웠던 자금 흐름 데이터를 삭제하지 않고 보존합니다!
+818:         const buyCount = Object.values(newBuyData).reduce((acc, l) => acc + l.length, 0);
+819:         const sellCount = Object.values(newSellData).reduce((acc, l) => acc + l.length, 0);
+820:         console.log(`[Radar 3단계] 분석 완료! 매수:${buyCount}건, 매도:${sellCount}건, 전체:${Object.keys(newAllAnalysis).length}건`);
+821: 
+822:         marketAnalysisReport.buyData = newBuyData;
+823:         marketAnalysisReport.sellData = newSellData;
+824:         marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
+825: 
+826:         if (marketSectorsResult && marketSectorsResult.length > 0) {
+827:             marketAnalysisReport.sectors = marketSectorsResult;
+828:             marketAnalysisReport.instFlow = instTotals;
+829:         }
+830:         marketAnalysisReport.updateTime = new Date().toISOString();
+831:         marketAnalysisReport.dataType = currentType;
+832:         marketAnalysisReport.status = 'READY';
+833:         marketAnalysisReport.scanStats = {
+834:             totalScanned: totalCandidates,
+835:             deepScanned: fullList.length,
+836:             successHits: hits,
+837:             wideNetAdded: wideNetHits
+838:         };
+839:         fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(marketAnalysisReport));
+840: 
+841:         console.log(`[Radar] ===== 스냅샷 저장 완료! 매수 감지: ${Object.values(newBuyData).reduce((a, b) => a + b.length, 0)}건, 매도 감지: ${Object.values(newSellData).reduce((a, b) => a + b.length, 0)}건 =====`);
+842: 
+843:         // --- SERVER PUSH: 사용자별 맞춤 알림 발송 (핵심 변곡 시간대 3번) ---
+844:         // 발송 타겟 시간 (근사치, 15분 주기이므로 넓게 잡음)
+845:         // 1. 아침 (9:00 ~ 9:25) - 시가 추이
+846:         // 2. 점심 (13:00 ~ 13:25) - 오후장 방향성
+847:         // 3. 종가 (15:00 ~ 15:25) - 종가 배팅
+848:         let isPushTime = false;
+849:         if (isMarketOpen) {
+850:             const mList = [
+851:                 { h: 9, m1: 0, m2: 25 },
+852:                 { h: 13, m1: 0, m2: 25 },
+853:                 { h: 15, m1: 0, m2: 25 }
+854:             ];
+855:             const currentMins = kstDate.getUTCMinutes();
+856:             isPushTime = mList.some(t => hour === t.h && currentMins >= t.m1 && currentMins <= t.m2);
+857:         }
+858: 
+859:         if (pushTokens.length > 0 && isPushTime) {
+860:             console.log(`[Push] 타겟 시간 도달! ${pushTokens.length}명의 등록 사용자에게 4대 핵심 패턴 알림 확인 중...`);
+861:             const pushMessages = [];
+862:             const todayStr = kstDate.toISOString().split('T')[0];
+863: 
+864:             for (const tokenEntry of pushTokens) {
+865:                 if (!Expo.isExpoPushToken(tokenEntry.token)) continue;
+866:                 // Initialize today's history for this token
+867:                 if (!pushHistory[tokenEntry.token]) pushHistory[tokenEntry.token] = {};
+868:                 if (!pushHistory[tokenEntry.token][todayStr]) pushHistory[tokenEntry.token][todayStr] = {};
+869: 
+870:                 const userStocks = tokenEntry.stocks || [];
+871:                 if (userStocks.length === 0) continue;
+872: 
+873:                 const userSettings = tokenEntry.settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 };
+874:                 const tokenDailyHistory = pushHistory[tokenEntry.token][todayStr];
+875: 
+876:                 const userAlerts = [];
+877:                 let highestPriority = 4; // 1: 이탈, 2: 쌍끌이, 3: 변곡, 4: 매집
+878:                 let pushTitle = '📊 Money Fact 알림';
+879: 
+880:                 for (const us of userStocks) {
+881:                     const stockData = historyData.get(us.code);
+882:                     if (!stockData) continue;
+883: 
+884:                     const foreign = analyzeStreak(stockData.daily, '2');
+885:                     const inst = analyzeStreak(stockData.daily, '1');
+886: 
+887:                     const fBuy = foreign.buyStreak;
+888:                     const fSell = foreign.sellStreak;
+889:                     const iBuy = inst.buyStreak;
+890:                     const iSell = inst.sellStreak;
+891: 
+892:                     // 종가 등락 정보 추출
+893:                     const isPriceStable = Math.abs(parseFloat(stockData.rate)) <= 2;
+894: 
+895:                     let msg = null;
+896:                     let patternKey = 'none'; // 기본 상태 (특이사항 없음)
+897:                     let priority = 99;
+898: 
+899:                     // 1. 동반 이탈 🚨
+900:                     const isEscapeSignal = fSell >= userSettings.sellStreak && iSell >= userSettings.sellStreak;
+901:                     // 2. 동반 쌍끌이 🔥
+902:                     const isBullSignal = fBuy >= 1 && iBuy >= 1 && (fBuy + iBuy) >= userSettings.buyStreak;
+903:                     // 3. 변곡점 발생 ✨
+904:                     const isTurnSignal = (fBuy === 1 && iSell >= userSettings.sellStreak) || (iBuy === 1 && fSell >= userSettings.sellStreak);
+905:                     // 4. 히든 매집 🤫
+906:                     const isHiddenAcc = isPriceStable && (fBuy >= userSettings.accumStreak || iBuy >= userSettings.accumStreak);
+907: 
+908:                     if (isEscapeSignal) {
+909:                         patternKey = 'escape';
+910:                         if (tokenDailyHistory[us.code] !== patternKey) {
+911:                             msg = `❄️ [동반 이탈 경고] ${us.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
+912:                             priority = 1;
+913:                         }
+914:                     } else if (isBullSignal) {
+915:                         patternKey = 'bull';
+916:                         if (tokenDailyHistory[us.code] !== patternKey) {
+917:                             msg = `🔥 [동반 쌍끌이 포착] ${us.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
+918:                             priority = 2;
+919:                         }
+920:                     } else if (isTurnSignal) {
+921:                         patternKey = 'turn';
+922:                         if (tokenDailyHistory[us.code] !== patternKey) {
+923:                             msg = `✨ [변곡점 발생] ${us.name}: 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
+924:                             priority = 3;
+925:                         }
+926:                     } else if (isHiddenAcc) {
+927:                         patternKey = 'hidden';
+928:                         if (tokenDailyHistory[us.code] !== patternKey) {
+929:                             msg = `🤫 [히든 매집] ${us.name}: 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다. 소문나기 전에 확인하세요.`;
+930:                             priority = 4;
+931:                         }
+932:                     }
+933: 
+934:                     // [코다리 부장] 상태 갱신 점검: 이전 기록(어느 시간대든)과 현재 상태가 다르면 덮어쓰고 알림! 
+935:                     if (tokenDailyHistory[us.code] !== patternKey) {
+936:                         tokenDailyHistory[us.code] = patternKey; // 최신 상태 낙인 쾅!
+937: 
+938:                         // 'none' 상태로 변한 것은 알림 주지 않고, 유의미한 패턴으로 변했을 때만 알림
+939:                         if (msg && patternKey !== 'none') {
+940:                             userAlerts.push(msg);
+941:                             if (priority < highestPriority) {
+942:                                 highestPriority = priority;
+943:                             }
+944:                         }
+945:                     }
+946:                 } // End user stocks loop
+947: 
+948:                 if (userAlerts.length > 0) {
+949:                     if (highestPriority === 1) pushTitle = '🚨 수급 이탈 알림!';
+950:                     else if (highestPriority === 2) pushTitle = '🔥 특급 쌍끌이 시그널!';
+951:                     else if (highestPriority === 3) pushTitle = '✨ 변곡점 포착!';
+952:                     else if (highestPriority === 4) pushTitle = '🤫 히든 매집 포착!';
+953: 
+954:                     // 시간대별 맞춤 타이틀 적용
+955:                     if (hour === 15) pushTitle = `[종가 배팅] ${pushTitle}`;
+956: 
+957:                     // Limit to 3 messages per push so it doesn't get cut off entirely
+958:                     const limitedAlerts = userAlerts.slice(0, 3);
+959:                     if (userAlerts.length > 3) limitedAlerts.push(`...외 ${userAlerts.length - 3}건`);
+960: 
+961:                     pushMessages.push({
+962:                         to: tokenEntry.token,
+963:                         title: pushTitle,
+964:                         body: limitedAlerts.join('\n'),
+965:                         sound: 'default',
+966:                         priority: 'high',
+967:                         data: { type: 'pattern_alert' }
+968:                     });
+969:                 }
+970:             } // End user tokens loop
+971: 
+972:             if (pushMessages.length > 0) {
+973:                 await sendPushNotifications(pushMessages);
+974:                 savePushHistory();
+975:             } else {
+976:                 console.log(`[Push] 패턴 조건 충족 종목이 없거나 이미 발송 완료.`);
+977:             }
+978:         } else if (pushTokens.length > 0) {
+979:             // Not push time
+980:             console.log(`[Push] 사용자 스캔 생략 (지정된 알림 시간이 아님)`);
+981:         }
+982: 
+983:         console.log(`[Radar] ====== 2단계 하이브리드 레이더 임무 완료! ======`);
+984: 
+985:     } catch (e) {
+986:         console.error("[Radar] Worker Error:", e.message);
+987:         marketAnalysisReport.status = marketAnalysisReport.updateTime ? 'READY' : 'ERROR';
+988:     }
+989: }
+990: 
+991: // [코다리 부장 터치] 서버가 켜질 때 데이터가 너무 오래됐거나 없으면 즉시 한 번 구워줍니다!
+992: const shouldScanNow = !marketAnalysisReport.updateTime || (new Date() - new Date(marketAnalysisReport.updateTime) > 60 * 60 * 1000);
+993: if (shouldScanNow) {
+994:     console.log("[Server] Data stale or missing. Starting immediate market scan...");
+995:     runDeepMarketScan(true);
+996: }
+997: 
+998: // [코다리 부장] setInterval은 app.listen 콜백에서 1회만 실행 (중복 방지)
+999: 
+1000: app.get('/api/analysis/supply/:period/:investor', (req, res) => {
