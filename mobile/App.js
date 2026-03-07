@@ -439,6 +439,7 @@ function MainApp() {
   const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
   const [syncTime, setSyncTime] = useState(null); // [v3.9.4] 모바일 데이터 동기화 시점 (서버에서 데이터를 성공적으로 가져온 시각)
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState(0); // [v4.0.0] 마지막 시도 타임스탬프 (로직용)
+  const [requestTime, setRequestTime] = useState(null); // [v4.0.4] 앱이 서버에 데이터를 요청한 시간 (날짜+시간)
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
@@ -631,9 +632,13 @@ function MainApp() {
     const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
 
     isRefreshing.current = true;
+    // [v4.0.4] 최초 실행(isInitial)일 때만 "서버확인중..." 표시
+    // 그 외(10분 주기, 수동 새로고침)에서는 조용히 데이터만 갱신
+    if (isInitial) {
+      setIsServerUpdating(true);
+    }
     if (!silent) {
       setLoading(true);
-      setIsServerUpdating(true); // 업데이트 시작 표시
     }
 
     let snapshotRes = null;
@@ -665,6 +670,7 @@ function MainApp() {
       const shouldFetchSnapshot = true;
 
       if (shouldFetchSnapshot) {
+        // isServerUpdating은 이미 refreshData 시작 시 true로 설정됨
         try {
           // [v4.0.0] 수동 새로고침(!silent) 시에는 서버에 강제 스캔(force=true)을 요청합니다.
           const url = `${SERVER_URL}/api/snapshot?t=${Date.now()}${!silent ? '&force=true' : ''}`;
@@ -698,18 +704,17 @@ function MainApp() {
               (Object.values(allBuy).some(l => l && l.length > 0)) ||
               (Object.values(allSell).some(l => l && l.length > 0));
 
-            // [v4.0.0] 서버가 실제 스캔을 시도한 시간(lastScanAttemptTime)을 확인 시각으로 사용합니다.
-            if (snap.lastScanAttemptTime) {
-              const attemptDate = new Date(snap.lastScanAttemptTime);
-              const syncTimeStr = attemptDate.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
-              setSyncTime(syncTimeStr);
-              setLastSyncTimestamp(attemptDate.getTime());
-            } else {
-              const syncNow = new Date();
-              const syncTimeStr = syncNow.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
-              setSyncTime(syncTimeStr);
-              setLastSyncTimestamp(syncNow.getTime());
-            }
+            // [v4.0.4] () 안의 동기화 시간 = 서버에서 데이터를 성공적으로 가져온 시점 (날짜+시간)
+            const syncNow = new Date();
+            const sMonth = (syncNow.getMonth() + 1).toString().padStart(2, '0');
+            const sDay = syncNow.getDate().toString().padStart(2, '0');
+            let sHour = syncNow.getHours();
+            const sMin = syncNow.getMinutes().toString().padStart(2, '0');
+            const sAmpm = sHour >= 12 ? '오후' : '오전';
+            sHour = sHour % 12 || 12;
+            const syncTimeStr = `${sMonth}.${sDay} ${sAmpm} ${sHour}:${sMin}`;
+            setSyncTime(syncTimeStr);
+            setLastSyncTimestamp(syncNow.getTime());
 
             if (hasServerData) {
               const seenCodes = new Set();
@@ -1412,7 +1417,7 @@ function MainApp() {
                 {(() => {
                   if (!lastUpdate || lastUpdate === '데이터 로딩 중...') return "[확인] 데이터 로딩 중...";
                   try {
-                    // [v4.0.1+ UI 개선] 장후 최종 데이터 시점은 항상 보여주고, 뒤에 상태만 바꿉니다.
+                    // [v4.0.4] [확정] 서버 데이터 시간 (동기화 시간 or 서버확인중...)
                     const updateDate = new Date(lastUpdate);
                     let formattedLast = lastUpdate;
 
@@ -1425,17 +1430,17 @@ function MainApp() {
                       hour = hour % 12 || 12;
                       formattedLast = `${month}.${day} ${ampm} ${hour}:${min}`;
                     } else {
-                      // 날짜 파싱 실패 시 원본에서 초 단위 등 제거 시도 (예: "03.07 오후 1:00:00" -> "03.07 오후 1:00")
                       formattedLast = lastUpdate.split(':').slice(0, 2).join(':');
                     }
 
-                    const statusSuffix = isServerUpdating
-                      ? "서버 확인 중..."
-                      : `${syncTime || '확인 완료'} 확인 완료`;
+                    // () 안: 최초 로딩(isServerUpdating)이면 "서버확인중...", 이후에는 동기화 시간
+                    const statusInParen = isServerUpdating
+                      ? "서버확인중..."
+                      : (syncTime ? `${syncTime} 동기화` : '동기화 대기');
 
-                    return `[확정] ${formattedLast} (${statusSuffix})`;
+                    return `[확정] ${formattedLast} (${statusInParen})`;
                   } catch (e) {
-                    return `[확정] ${lastUpdate} (${isServerUpdating ? "서버 확인 중..." : "확인 완료"})`;
+                    return `[확정] ${lastUpdate} (${isServerUpdating ? "서버확인중..." : (syncTime || '동기화 대기')})`;
                   }
                 })()}
               </Text>
@@ -1884,8 +1889,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.3 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.3 Build 20260307 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.4 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.4 Build 20260307 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -1898,7 +1903,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.3</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.4</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
