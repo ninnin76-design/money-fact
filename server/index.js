@@ -17,17 +17,29 @@ let pushTokens = [];
 let pushHistory = {};
 
 if (fs.existsSync(PUSH_TOKENS_FILE)) {
-    try { pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); } catch (e) { }
+    try {
+ pushTokens = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8')); 
+} catch (e) { }
+
 }
 if (fs.existsSync(PUSH_HISTORY_FILE)) {
-    try { pushHistory = JSON.parse(fs.readFileSync(PUSH_HISTORY_FILE, 'utf8')); } catch (e) { }
+    try {
+ pushHistory = JSON.parse(fs.readFileSync(PUSH_HISTORY_FILE, 'utf8')); 
+} catch (e) { }
+
 }
 
 const savePushTokens = () => {
-    try { fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2)); } catch (e) { }
+    try {
+ fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2)); 
+} catch (e) { }
+
 };
 const savePushHistory = () => {
-    try { fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2)); } catch (e) { }
+    try {
+ fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2)); 
+} catch (e) { }
+
 };
 
 dotenv.config();
@@ -102,8 +114,23 @@ const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
 let cachedToken = '';
 let tokenExpiry = null;
 
+// [v4.0.2] 서버 재시작 시에도 마지막 성공 시간을 유지하기 위해 스냅샷 파일에서 로드합니다.
+let initialUpdateTime = null;
+
+try {
+
+    if (fs.existsSync(SNAPSHOT_FILE)) {
+        const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
+        initialUpdateTime = snap.updateTime;
+
+    }
+
+} catch (e) { }
+
+
+
 let marketAnalysisReport = {
-    updateTime: null,
+    updateTime: initialUpdateTime,
     dataType: 'LIVE',
     status: 'INITIALIZING',
     buyData: {},
@@ -116,17 +143,26 @@ let marketAnalysisReport = {
 const DB_FILE = path.join(__dirname, 'db.json');
 let userDb = {};
 if (fs.existsSync(DB_FILE)) {
-    try { userDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) { }
+    try {
+ userDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); 
+} catch (e) { }
+
 }
 
 const saveDb = () => {
-    try { fs.writeFileSync(DB_FILE, JSON.stringify(userDb, null, 2)); } catch (e) { }
+    try {
+ fs.writeFileSync(DB_FILE, JSON.stringify(userDb, null, 2)); 
+} catch (e) { }
+
 };
 
 if (fs.existsSync(SNAPSHOT_FILE)) {
     try {
+
         marketAnalysisReport = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-    } catch (e) { }
+    
+} catch (e) { }
+
 }
 
 const TOKEN_FILE = path.join(__dirname, 'real_token_cache.json');
@@ -137,13 +173,16 @@ async function getAccessToken() {
     // 1. Try to read from file first
     if (fs.existsSync(TOKEN_FILE)) {
         try {
+
             const saved = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
             const expiry = new Date(saved.expiry);
             // proactive refresh if < 10 mins remaining
             if (new Date(new Date().getTime() + 10 * 60 * 1000) < expiry) {
                 return saved.token;
             }
-        } catch (e) { }
+        
+} catch (e) { }
+
     }
 
     // 2. Return existing promise if request pending
@@ -155,6 +194,7 @@ async function getAccessToken() {
     // 3. Request New Token with Retry Logic
     tokenRequestPromise = (async () => {
         try {
+
             console.log("[Token] Requesting NEW token from KIS...");
             const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
                 grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
@@ -187,6 +227,7 @@ async function getAccessToken() {
 // --- Shared Token Endpoint (For 5 Users Sharing 1 Token) ---
 app.get('/api/token', async (req, res) => {
     try {
+
         const token = await getAccessToken();
         if (!token) {
             return res.status(500).json({ error: 'Token unavailable' });
@@ -234,6 +275,7 @@ async function sendPushNotifications(messages) {
     const chunks = expo.chunkPushNotifications(messages);
     for (const chunk of chunks) {
         try {
+
             await expo.sendPushNotificationsAsync(chunk);
         } catch (e) {
             console.error('[Push] Send error:', e.message);
@@ -245,6 +287,7 @@ async function sendPushNotifications(messages) {
 // --- Buy Opportunity Detection ---
 app.get('/api/alerts/opportunities', async (req, res) => {
     try {
+
         const buyData = marketAnalysisReport.buyData || {};
         const opportunities = [];
         Object.keys(buyData).forEach(key => {
@@ -302,6 +345,7 @@ async function runDeepMarketScan(force = false) {
     console.log(`[Radar] ====== 2단계 하이브리드 레이더 가동! ======`);
     marketAnalysisReport.status = 'SCANNING';
     try {
+
         const token = await getAccessToken();
 
         // ========================================================
@@ -324,6 +368,7 @@ async function runDeepMarketScan(force = false) {
 
         // Source 1: 외인/기관 순매수 랭킹 (시장 주도주)
         try {
+
             const rankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
                 params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '0', FID_ETC_CLS_CODE: '0' }
@@ -334,6 +379,7 @@ async function runDeepMarketScan(force = false) {
 
         // Source 2: 코스피 거래량 순위
         try {
+
             const volResKospi = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPST01710000', custtype: 'P' },
                 params: {
@@ -348,6 +394,7 @@ async function runDeepMarketScan(force = false) {
 
         // Source 3: 코스닥 거래량 순위
         try {
+
             const volResKosdaq = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPST01710000', custtype: 'P' },
                 params: {
@@ -362,6 +409,7 @@ async function runDeepMarketScan(force = false) {
 
         // Source 4: 외인 순매도 랭킹 (이탈 감지용)
         try {
+
             const sellRankRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHPTJ04400000', custtype: 'P' },
                 params: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
@@ -383,6 +431,7 @@ async function runDeepMarketScan(force = false) {
             if (!stk || alreadyInMap.has(stk.code)) continue;
             await new Promise(r => setTimeout(r, 120));
             try {
+
                 const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
                     headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
                     params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
@@ -429,6 +478,7 @@ async function runDeepMarketScan(force = false) {
             const results = [];
             for (const s of sectorsToTrack) {
                 try {
+
                     await new Promise(r => setTimeout(r, 80));
                     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
                         headers: {
@@ -467,6 +517,7 @@ async function runDeepMarketScan(force = false) {
 
             for (const m of markets) {
                 try {
+
                     await new Promise(r => setTimeout(r, 100));
                     const res = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-by-sector`, {
                         headers: {
@@ -516,6 +567,7 @@ async function runDeepMarketScan(force = false) {
             await new Promise(r => setTimeout(r, 150));
 
             try {
+
                 const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
                     headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
                     params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
@@ -531,6 +583,7 @@ async function runDeepMarketScan(force = false) {
                     // 값이 비어있거나 0인 경우(장중 미지급) 잠정치 조회
                     if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
                         try {
+
                             const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
                                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
                                 params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
@@ -559,6 +612,7 @@ async function runDeepMarketScan(force = false) {
                     console.log(`[Radar] 핵심 종목 ${stk.name} 재시도 중...`);
                     await new Promise(r => setTimeout(r, 500));
                     try {
+
                         const invRes2 = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
                             headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
                             params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
@@ -996,6 +1050,7 @@ function loadUserStore() {
     // 1. Load from sync_data.json
     if (fs.existsSync(SYNC_FILE)) {
         try {
+
             const raw = fs.readFileSync(SYNC_FILE, 'utf8');
             userStore = JSON.parse(raw);
             console.log(`[Sync] Loaded ${Object.keys(userStore).length} user profiles from disk.`);
@@ -1007,6 +1062,7 @@ function loadUserStore() {
     // 2. Migrate legacy db.json data (one-time)
     if (fs.existsSync(DB_FILE)) {
         try {
+
             const legacy = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
             let migrated = 0;
             Object.keys(legacy).forEach(key => {
@@ -1019,7 +1075,9 @@ function loadUserStore() {
                 console.log(`[Sync] Migrated ${migrated} profiles from legacy db.json`);
                 fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
             }
-        } catch (e) { }
+        
+} catch (e) { }
+
     }
 }
 loadUserStore();
@@ -1036,6 +1094,7 @@ async function recoverFromFirebase() {
         // Local data exists → sync TO Firebase as safety backup
         console.log('[Firebase] Local data found. Syncing to cloud...');
         try {
+
             await axios.put(`${FIREBASE_DB_URL}/sync.json`, userStore);
             console.log('[Firebase] ✅ All local data backed up to cloud!');
         } catch (e) {
@@ -1045,6 +1104,7 @@ async function recoverFromFirebase() {
     }
     // Local is empty → recover FROM Firebase
     try {
+
         console.log('[Firebase] ⚠️ Local data empty! Attempting cloud recovery...');
         const res = await axios.get(`${FIREBASE_DB_URL}/sync.json`);
         const cloudData = res.data;
@@ -1067,6 +1127,7 @@ const saveSyncFile = async (changedKey) => {
     }
     isSyncWriting = true;
     try {
+
         // 1. Always save to local file
         fs.writeFileSync(SYNC_FILE, JSON.stringify(userStore, null, 2));
         // 2. Also save to Firebase (non-blocking, per-key)
@@ -1094,6 +1155,7 @@ app.post('/api/sync/save', async (req, res) => {
         version: (userStore[syncKey]?.version || 0) + 1
     };
     try {
+
         await saveSyncFile(syncKey);
         console.log(`[Sync] Saved data for key: ${syncKey} (v${userStore[syncKey].version})${watchlist ? ' +watchlist' : ''}`);
         res.json({ status: 'success', version: userStore[syncKey].version });
@@ -1116,6 +1178,7 @@ app.get('/api/sync/load', async (req, res) => {
     // Fallback: Try Firebase if not found locally
     if (!data && FIREBASE_DB_URL) {
         try {
+
             const safeKey = firebaseKey(syncKey);
             const fbRes = await axios.get(`${FIREBASE_DB_URL}/sync/${safeKey}.json`);
             if (fbRes.data) {
@@ -1123,7 +1186,9 @@ app.get('/api/sync/load', async (req, res) => {
                 userStore[syncKey] = data;
                 console.log(`[Firebase] ☁️ Recovered data for: ${syncKey}`);
             }
-        } catch (e) { }
+        
+} catch (e) { }
+
     }
 
     if (!data) return res.status(404).json({ error: 'No data found' });
@@ -1162,6 +1227,7 @@ app.post('/api/my-portfolio/analyze', async (req, res) => {
     const token = await getAccessToken();
     const analyzed = await Promise.all(codes.map(async (code) => {
         try {
+
             // Find name from popular list or use code
             const meta = POPULAR_STOCKS.find(s => s.code === code) || { name: code, code };
 
@@ -1220,6 +1286,7 @@ app.post('/api/portfolio/recommend', async (req, res) => {
         const buyableShares = budgetPerStock > 0 ? Math.floor(budgetPerStock / price) : 0;
 
         try {
+
             const fRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
                 headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010100', custtype: 'P' },
                 params: { fid_cond_mrkt_div_code: 'J', fid_input_iscd: s.code }
@@ -1234,7 +1301,9 @@ app.post('/api/portfolio/recommend', async (req, res) => {
             if (pbrVal > 0 && pbrVal < 0.6) pbrText = "자산 대비 헐값(안전)";
             else if (pbrVal >= 0.6 && pbrVal < 1.0) pbrText = "자산 가치 저평가";
             else if (pbrVal >= 1.0) pbrText = "프리미엄(브랜드가치)";
-        } catch (e) { }
+        
+} catch (e) { }
+
 
         return {
             ...s, finance, perText, pbrText,
