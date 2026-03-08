@@ -487,7 +487,14 @@ function MainApp() {
           setAnalyzedStocks(fullData);
         } else {
           setAnalyzedStocks(fullData.stocks || []);
-          if (fullData.sectors) setSectors(fullData.sectors);
+          if (fullData.sectors) {
+            const fixed = fullData.sectors.map(s => {
+              let f = Number(s.flow) || 0;
+              if (Math.abs(f) > 100000) f = Math.round(f / 100000);
+              return { ...s, flow: f };
+            });
+            setSectors(fixed);
+          }
           if (fullData.instFlow) setDetailedInstFlow(fullData.instFlow);
           if (fullData.scanStats) setScanStats(fullData.scanStats);
           if (fullData.updateTime) setLastUpdate(fullData.updateTime);
@@ -659,7 +666,16 @@ function MainApp() {
             const parsed = JSON.parse(cached);
             if (parsed && parsed.stocks && parsed.stocks.length > 0) {
               setAnalyzedStocks(parsed.stocks);
-              if (parsed.sectors) setSectors([...parsed.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+              if (parsed.sectors) {
+                // [v4.0.10] 캐시에 이전 버전의 단위 오류 데이터가 남아있을 수 있으므로 방어적 보정
+                const fixedSectors = parsed.sectors.map(s => {
+                  let f = Number(s.flow) || 0;
+                  // 10만억(=100조) 이상이면 명백한 단위 오류 → /100000으로 보정 (천원→억원)
+                  if (Math.abs(f) > 100000) f = Math.round(f / 100000);
+                  return { ...s, flow: f };
+                });
+                setSectors([...fixedSectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+              }
               if (parsed.instFlow) setDetailedInstFlow(parsed.instFlow);
               if (parsed.scanStats) setScanStats(parsed.scanStats);
               setLastUpdate(parsed.updateTime || '데이터 로딩 중...');
@@ -1145,11 +1161,13 @@ function MainApp() {
           setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
         }
       } else {
-        // 서버에서 최신 전체 시장 데이터를 주었다면 즉시 반영합니다.
-        // [v4.0.10] 서버에서 이제 올바른 억원 단위로 보내므로 그대로 사용 (반올림만 적용)
+        // [v4.0.10] 서버 데이터 수신 시 단위 오류 방어 보정
+        // 서버 코드도 수정했지만, 만약 구버전 서버가 아직 돌고 있더라도 앱에서 자체 보정
         const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
           let f = Number(s.flow) || 0;
-          f = Math.round(f); // 소수점 정리
+          // 10만억(=100조) 이상이면 명백한 단위 오류 → /100000으로 보정
+          if (Math.abs(f) > 100000) f = Math.round(f / 100000);
+          else f = Math.round(f);
           return { ...s, flow: f };
         });
         setSectors(calibratedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
@@ -1228,9 +1246,15 @@ function MainApp() {
       // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
       if (results.length > 0) {
         const hasServerSectorData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
+        // [v4.0.10] 캐시에는 화면에 보여주는 것과 동일한 보정된(calibrated) 섹터 데이터를 저장!
+        // 기존에는 서버 원본(단위 미보정)을 그대로 캐시해서, 앱 재시작 시 엉터리 값이 표시되었음
+        const sectorsForCache = hasServerSectorData
+          ? (snapshotRes.data.sectors || []).map(s => ({ ...s, flow: Math.round(Number(s.flow) || 0) }))
+            .sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6)
+          : updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6);
         const snapshot = {
           stocks: results,
-          sectors: hasServerSectorData ? snapshotRes.data.sectors : updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6),
+          sectors: sectorsForCache,
           instFlow: hasServerSectorData ? snapshotRes.data.instFlow : roundedInstTotals,
           updateTime: displayTime
         };
