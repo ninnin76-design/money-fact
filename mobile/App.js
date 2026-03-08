@@ -798,29 +798,42 @@ function MainApp() {
                 });
               }
 
-              if (snapshotStocks.length > 0) {
-                // 섹터와 기관 흐름 정보도 스냅샷에서 바로 업데이트!
-                if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
-                if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
+              // [v4.0.9] 섹터/기관흐름은 snapshotStocks 유무와 관계없이 서버 데이터가 있으면 즉시 반영
+              if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+              if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
+              if (snap.scanStats) setScanStats(snap.scanStats);
 
-                // [코다리 부장] 레이더 스캔 통계 업데이트!
-                if (snap.scanStats) setScanStats(snap.scanStats);
+              const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
+              const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+              const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              fullTimeStr = `${dateStr} ${timeStr}`;
+              setLastUpdate(fullTimeStr);
 
-                const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
-                const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
-                const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                fullTimeStr = `${dateStr} ${timeStr}`;
-                setLastUpdate(fullTimeStr);
-
-                // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면, 서버가 방금 깨어나 스캔을 시작했을 수 있습니다.
-                // 2분 뒤에 자동으로 한 번 더 갱신하여 최신 데이터를 가져옵니다.
-                if (snap.updateTime && StockService.isMarketOpen() && !silent) {
-                  const diff = Date.now() - updateDate.getTime();
-                  if (diff > 20 * 60 * 1000) {
-                    setTimeout(() => refreshData(null, true), 120 * 1000);
-                  }
+              // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면 2분 뒤 재갱신
+              if (snap.updateTime && StockService.isMarketOpen() && !silent) {
+                const diff = Date.now() - updateDate.getTime();
+                if (diff > 20 * 60 * 1000) {
+                  setTimeout(() => refreshData(null, true), 120 * 1000);
                 }
+              }
 
+              // [v4.0.9] 전광판 즉시 교체 - snapshotStocks 유무와 무관하게 buyData/sectors 있으면 바로 생성
+              const earlyTickerTexts = [];
+              if (snap.sectors && snap.sectors.length > 0) {
+                const topSec = [...snap.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0))[0];
+                if (topSec && Math.abs(topSec.flow) > 0) {
+                  earlyTickerTexts.push(`🔥 핫 섹터: [${topSec.name}]에 강한 ${topSec.flow > 0 ? '매수세' : '매도세'}가 집중!`);
+                }
+              }
+              const allBuyList = Object.values(allBuy).flat().sort((a, b) => (b.streak || 0) - (a.streak || 0));
+              if (allBuyList.length > 0) {
+                earlyTickerTexts.push(`📈 수급 포착: [${allBuyList[0].name}] ${allBuyList[0].streak}일 연속 매집 중!`);
+              }
+              if (earlyTickerTexts.length > 0) {
+                setTickerItems(earlyTickerTexts);
+              }
+
+              if (snapshotStocks.length > 0) {
                 // 로컬 캐시 저장 (다음 실행 시 0.1초 만에 뜨게 함)
                 const localSnapshot = {
                   stocks: snapshotStocks,
@@ -830,23 +843,6 @@ function MainApp() {
                   updateTime: fullTimeStr
                 };
                 AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
-
-                // [v4.0.9] 서버 스냅샷 데이터에서 즉시 전광판 문구 생성 (분석 루프 완료 전 빠른 피드백)
-                const earlyTickerTexts = [];
-                if (snap.sectors && snap.sectors.length > 0) {
-                  const topSec = [...snap.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0))[0];
-                  if (topSec && Math.abs(topSec.flow) > 0) {
-                    earlyTickerTexts.push(`🔥 핫 섹터: [${topSec.name}]에 강한 ${topSec.flow > 0 ? '매수세' : '매도세'}가 집중!`);
-                  }
-                }
-                // buyData에서 연속매수 1위 종목 추출
-                const allBuyList = Object.values(allBuy).flat().sort((a, b) => (b.streak || 0) - (a.streak || 0));
-                if (allBuyList.length > 0) {
-                  earlyTickerTexts.push(`📈 수급 포착: [${allBuyList[0].name}] ${allBuyList[0].streak}일 연속 매집 중!`);
-                }
-                if (earlyTickerTexts.length > 0) {
-                  setTickerItems(earlyTickerTexts);
-                }
               }
             }
           }
@@ -981,10 +977,21 @@ function MainApp() {
           } catch (e) { /* ignore and fallback to KIS if forceFetch is on */ }
 
           if (!forceFetch) {
-            const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-            console.log(`[v4.0.9] No proxy data for ${stock.name}, skipping...`);
-            if (existingIdx >= 0) results[existingIdx] = noDataStock;
-            else results.push(noDataStock);
+            // [v4.0.9] 이전 캐시 데이터가 있으면 0으로 덮어쓰지 않고 그대로 보존!
+            const prevCached = results[existingIdx] || analyzedStocks.find(s => s.code === stock.code);
+            if (prevCached && (prevCached.fStreak !== 0 || prevCached.iStreak !== 0 || prevCached.price > 0)) {
+              // 기존 데이터 보존, isWaiting만 해제
+              const preserved = { ...prevCached, isWaiting: false, noData: false };
+              if (existingIdx >= 0) results[existingIdx] = preserved;
+              else results.push(preserved);
+              console.log(`[v4.0.9] Preserved cached data for ${stock.name} (no proxy available)`);
+            } else {
+              // 진짜 데이터가 한번도 없었던 종목만 noData 처리
+              const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+              console.log(`[v4.0.9] No data at all for ${stock.name}, marking noData`);
+              if (existingIdx >= 0) results[existingIdx] = noDataStock;
+              else results.push(noDataStock);
+            }
             continue;
           }
         }
