@@ -421,8 +421,21 @@ function MainApp() {
   const [userSectors, setUserSectors] = useState([]);
   const [expandedSectors, setExpandedSectors] = useState({});
   const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
-  const [analyzedStocks, setAnalyzedStocks] = useState([]);
-  const [tickerItems, setTickerItems] = useState(["[v4.0.11] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [analyzedStocks, _setAnalyzedStocks] = useState([]);
+  const analyzedStocksRef = useRef([]);
+  const setAnalyzedStocks = (val) => {
+    if (typeof val === 'function') {
+      _setAnalyzedStocks(prev => {
+        const next = val(prev);
+        analyzedStocksRef.current = next;
+        return next;
+      });
+    } else {
+      _setAnalyzedStocks(val);
+      analyzedStocksRef.current = val;
+    }
+  };
+  const [tickerItems, setTickerItems] = useState(["[v4.0.12] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -490,7 +503,9 @@ function MainApp() {
           if (fullData.sectors) {
             const fixed = fullData.sectors.map(s => {
               let f = Number(s.flow) || 0;
-              if (Math.abs(f) > 100000) f = Math.round(f / 100000);
+              // [v4.0.12] 1만억(=1조) 이상이면 단위 오류 확률 높음 -> /100000으로 보정
+              if (Math.abs(f) > 10000) f = Math.round(f / 100000);
+              else f = Math.round(f);
               return { ...s, flow: f };
             });
             setSectors(fixed);
@@ -872,8 +887,8 @@ function MainApp() {
 
       let results = [...snapshotStocks];
       // [v4.0.5] 서버 스냅샷이 실패하여 배열이 비었을 때 화면 붕괴(리셋)를 방지하기 위해 이전 상태 보존
-      if (results.length === 0 && analyzedStocks.length > 0) {
-        results = [...analyzedStocks];
+      if (results.length === 0 && analyzedStocksRef.current.length > 0) {
+        results = [...analyzedStocksRef.current];
       }
       const snapshotExistingCodes = new Set(results.map(s => s.code));
 
@@ -881,9 +896,25 @@ function MainApp() {
       // [v4.0.7] 분석 중에도 기존 데이터를 유지하여 '분석 중' 깜빡임을 원천 차단합니다.
       myStocks.forEach(mystock => {
         if (!snapshotExistingCodes.has(mystock.code)) {
-          const prev = analyzedStocks.find(s => s.code === mystock.code);
+          // [v4.0.12] 루프 내부에서도 Ref를 참조하여 최신 상태 유지
+          let prev = analyzedStocksRef.current.find(s => s.code === mystock.code);
+
+          if (!forceFetch && !marketRunning) {
+            const noDataStock = {
+              ...mystock,
+              fStreak: 0, iStreak: 0, sentiment: 50, price: 0,
+              isHiddenAccumulation: false,
+              noData: true,
+              isWaiting: false
+            };
+            if (prev) results.push({ ...prev, isWaiting: false });
+            else results.push(noDataStock);
+            snapshotExistingCodes.add(mystock.code); // Add to seen codes to prevent re-processing
+            return; // Skip further processing for this mystock
+          }
+
           if (prev) {
-            results.push({ ...prev, isWaiting: false }); // 멈췄던 분석 중(isWaiting) 속성 강제 해제
+            results.push({ ...prev, isWaiting: false }); // 캐시 데이터가 있으면 분석중 표시 제거
           } else {
             results.push({
               ...mystock,
@@ -897,10 +928,11 @@ function MainApp() {
       });
       // 초기 고속 로딩을 위해 즉시 반영 (내 종목들의 자리를 미리 확보)
       setAnalyzedStocks([...results]);
+      analyzedStocksRef.current = [...results]; // Update ref immediately
 
       // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
       // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
-      analyzedStocks.forEach(prev => {
+      analyzedStocksRef.current.forEach(prev => {
         if (!snapshotExistingCodes.has(prev.code)) {
           // [v3.9.8] 보존 조건: 히든매집, 3일 이상 연속수급, 또는 즐겨찾기(My Stocks)
           const isFav = myStocks.some(ms => ms.code === prev.code);
@@ -965,7 +997,7 @@ function MainApp() {
 
         // [v4.0.11] 주말/장외 시간 대응: KIS API가 불안정할 수 있으므로 서버 프록시 우선 시도
         if (!marketRunning) {
-          const prev = analyzedStocks.find(s => s.code === stock.code);
+          const prev = analyzedStocksRef.current.find(s => s.code === stock.code);
           const existingIdx = results.findIndex(r => r.code === stock.code);
 
           if (prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
@@ -995,13 +1027,13 @@ function MainApp() {
 
           if (!forceFetch) {
             // [v4.0.11] 이전 캐시 데이터가 있으면 0으로 덮어쓰지 않고 그대로 보존!
-            const prevCached = results[existingIdx] || analyzedStocks.find(s => s.code === stock.code);
+            const prevCached = results[existingIdx] || analyzedStocksRef.current.find(s => s.code === stock.code);
             if (prevCached && (prevCached.fStreak !== 0 || prevCached.iStreak !== 0 || prevCached.price > 0)) {
               // 기존 데이터 보존, isWaiting만 해제
               const preserved = { ...prevCached, isWaiting: false, noData: false };
               if (existingIdx >= 0) results[existingIdx] = preserved;
               else results.push(preserved);
-              console.log(`[v4.0.11] Preserved cached data for ${stock.name} (no proxy available)`);
+              console.log(`[v4.0.12] Preserved cached data for ${stock.name} (no proxy available)`);
             } else {
               // 진짜 데이터가 한번도 없었던 종목만 noData 처리
               const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
@@ -1167,8 +1199,8 @@ function MainApp() {
         // 서버 코드도 수정했지만, 만약 구버전 서버가 아직 돌고 있더라도 앱에서 자체 보정
         const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
           let f = Number(s.flow) || 0;
-          // 10만억(=100조) 이상이면 명백한 단위 오류 → /100000으로 보정
-          if (Math.abs(f) > 100000) f = Math.round(f / 100000);
+          // [v4.0.12] 1만억(=1조) 이상이면 명백한 단위 오류 → /100000으로 보정
+          if (Math.abs(f) > 10000) f = Math.round(f / 100000);
           else f = Math.round(f);
           return { ...s, flow: f };
         });
@@ -1206,7 +1238,7 @@ function MainApp() {
         }
         if (topSector && Math.abs(topSector.flow) > 0) {
           const flowType = topSector.flow > 0 ? '매수세' : '매도세';
-          tickerTexts.push(`🔥 핫 섹터: [${topSector.name}]에 강한 ${flowType}가 집중되고 있습니다!`);
+          tickerTexts.push(`🔥 핫 섹터: [${topSector.name}]에 강한 ${flowType}(${Math.abs(topSector.flow)}억)가 집중되고 있습니다!`);
         }
 
         // 2. 외국인 연속 매수 1위
@@ -2092,8 +2124,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.11 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.11 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.0.12] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.12 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >

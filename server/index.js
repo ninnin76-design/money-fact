@@ -114,6 +114,7 @@ const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
 
 let cachedToken = '';
 let tokenExpiry = null;
+let lastRateLimitTime = 0; // [v4.0.12] 마지막 레이트 리미트 발생 시각
 
 // [v4.0.2] 서버 재시작 시에도 마지막 성공 시간을 유지하기 위해 스냅샷 파일에서 로드합니다.
 let initialUpdateTime = null;
@@ -192,29 +193,31 @@ async function getAccessToken() {
         return tokenRequestPromise;
     }
 
-    // 3. Request New Token with Retry Logic
+    // 3. Check if we are currently in Rate Limit cooldown
+    const now = Date.now();
+    if (now - lastRateLimitTime < 65000) {
+        console.log("[Token] Skipping request due to active Rate Limit cooldown...");
+        return null;
+    }
+
+    // 4. Request New Token
     tokenRequestPromise = (async () => {
         try {
-
             console.log("[Token] Requesting NEW token from KIS...");
             const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
                 grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
             });
             const newToken = res.data.access_token;
-            const newExpiry = new Date(new Date().getTime() + (res.data.expires_in - 60) * 1000);
+            const newExpiry = new Date(now + (res.data.expires_in - 60) * 1000);
 
             fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
             console.log("[Token] New token saved/refreshed.");
             return newToken;
         } catch (e) {
             console.error("[Token] Failed to get token:", e.response?.data || e.message);
-            // If 403 (Rate Limit), wait 65s and retry once
             if (e.response?.status === 403) {
-                console.log("[Token] Rate Limit Hit! Waiting 65s for retry...");
-                await new Promise(r => setTimeout(r, 65000));
-                // Clear promise before recursive call to allow new request
-                tokenRequestPromise = null;
-                return getAccessToken();
+                console.log("[Token] Rate Limit Hit! Entering 65s cooldown...");
+                lastRateLimitTime = Date.now();
             }
             return null;
         } finally {
