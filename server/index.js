@@ -501,8 +501,8 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        const foreign = parseInt(d.prdy_frgn_ntby_qty || 0);
-                        const institution = parseInt(d.prdy_orgn_ntby_qty || 0);
+                        const foreign = parseInt(d.prdy_frgn_ntby_tr_pbmn || 0) / 100;
+                        const institution = parseInt(d.prdy_orgn_ntby_tr_pbmn || 0) / 100;
                         results.push({ name: s.name, flow: foreign + institution });
                     }
                 } catch (e) { console.error(`Sector API Error [${s.name}]: ${e.message}`); }
@@ -540,11 +540,11 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        totalF += parseInt(d.prdy_frgn_ntby_qty || 0);
-                        totalI += parseInt(d.prdy_orgn_ntby_qty || 0);
-                        pnsn += parseInt(d.pnsn_ntby_qty || 0);
-                        ivtg += parseInt(d.ivtg_ntby_qty || 0);
-                        ins += parseInt(d.ins_ntby_qty || 0);
+                        totalF += parseInt(d.prdy_frgn_ntby_tr_pbmn || 0) / 100;
+                        totalI += parseInt(d.prdy_orgn_ntby_tr_pbmn || 0) / 100;
+                        pnsn += parseInt(d.pnsn_ntby_tr_pbmn || 0) / 100;
+                        ivtg += parseInt(d.ivtg_ntby_tr_pbmn || 0) / 100;
+                        ins += parseInt(d.ins_ntby_tr_pbmn || 0) / 100;
                     }
                 } catch (e) { console.error(`Market Total API Error [${m.name}]: ${e.message}`); }
             }
