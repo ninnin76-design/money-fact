@@ -624,9 +624,11 @@ function MainApp() {
     // 이미 메인 분석이 진행 중이고 우선순위가 아니라면 중단합니다.
     if (isRefreshing.current && !isPriority) return;
 
-    // 메인 잠금은 일반 실행시에만 걸어줍니다. (우선순위 실행은 메인을 방해하지 않음)
+    // [v4.0.9] 메인 잠금은 일반 실행시에만 걸어줍니다. (우선순위 실행은 메인을 방해하지 않음)
+    let lockAcquired = false;
     if (!isPriority) {
       isRefreshing.current = true;
+      lockAcquired = true;
     }
 
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
@@ -669,10 +671,8 @@ function MainApp() {
       }
 
       let snapshotStocks = [];
-      // [v3.9.9] 사용자가 직접 새로고침을 누르더라도 서버 스냅샷(전체 시장 분석 결과)을 항상 함께 가져옵니다.
-      const shouldFetchSnapshot = true;
-
-      if (shouldFetchSnapshot) {
+      // [v3.9.9] 서버 스냅샷(전체 시장 분석 결과)을 항상 함께 가져옵니다.
+      {
         // isServerUpdating은 이미 refreshData 시작 시 true로 설정됨
         try {
           // [v4.0.0] 수동 새로고침(!silent) 시에는 서버에 강제 스캔(force=true)을 요청합니다.
@@ -812,8 +812,6 @@ function MainApp() {
                 fullTimeStr = `${dateStr} ${timeStr}`;
                 setLastUpdate(fullTimeStr);
 
-                setLastUpdate(fullTimeStr);
-
                 // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면, 서버가 방금 깨어나 스캔을 시작했을 수 있습니다.
                 // 2분 뒤에 자동으로 한 번 더 갱신하여 최신 데이터를 가져옵니다.
                 if (snap.updateTime && StockService.isMarketOpen() && !silent) {
@@ -833,9 +831,21 @@ function MainApp() {
                 };
                 AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
 
-                // [v4.0.9] 서버 데이터가 있다면 즉시 전광판에 노출하여 "분석중" 메시지 해소
-                if (snap.tickerItems && snap.tickerItems.length > 0) {
-                  setTickerItems(snap.tickerItems);
+                // [v4.0.9] 서버 스냅샷 데이터에서 즉시 전광판 문구 생성 (분석 루프 완료 전 빠른 피드백)
+                const earlyTickerTexts = [];
+                if (snap.sectors && snap.sectors.length > 0) {
+                  const topSec = [...snap.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0))[0];
+                  if (topSec && Math.abs(topSec.flow) > 0) {
+                    earlyTickerTexts.push(`🔥 핫 섹터: [${topSec.name}]에 강한 ${topSec.flow > 0 ? '매수세' : '매도세'}가 집중!`);
+                  }
+                }
+                // buyData에서 연속매수 1위 종목 추출
+                const allBuyList = Object.values(allBuy).flat().sort((a, b) => (b.streak || 0) - (a.streak || 0));
+                if (allBuyList.length > 0) {
+                  earlyTickerTexts.push(`📈 수급 포착: [${allBuyList[0].name}] ${allBuyList[0].streak}일 연속 매집 중!`);
+                }
+                if (earlyTickerTexts.length > 0) {
+                  setTickerItems(earlyTickerTexts);
                 }
               }
             }
@@ -1054,13 +1064,13 @@ function MainApp() {
           } else {
             console.log(`[v4.0.9] KIS Data empty for ${stock.name}`);
             const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-            const existingIdx = results.findIndex(r => r.code === stock.code);
-            if (existingIdx >= 0) results[existingIdx] = emptyStock;
+            const emptyIdx = results.findIndex(r => r.code === stock.code);
+            if (emptyIdx >= 0) results[emptyIdx] = emptyStock;
             else results.push(emptyStock);
           }
         } catch (e) {
-          const existingIdx = results.findIndex(r => r.code === stock.code);
-          const prevData = existingIdx >= 0 ? results[existingIdx] : null;
+          const errIdx = results.findIndex(r => r.code === stock.code);
+          const prevData = errIdx >= 0 ? results[errIdx] : null;
 
           const errorStock = {
             ...stock,
@@ -1071,17 +1081,16 @@ function MainApp() {
             price: prevData ? prevData.price : 0,
             isHiddenAccumulation: prevData ? prevData.isHiddenAccumulation : false,
             error: true,
-            noData: true,
             isWaiting: false
           };
           console.warn(`[v4.0.9] Error analyzing ${stock.name}:`, e.message);
-          if (existingIdx >= 0) results[existingIdx] = errorStock;
+          if (errIdx >= 0) results[errIdx] = errorStock;
           else results.push(errorStock);
         }
 
         // [v4.0.7] 중요 종목(관심종목) 업데이트 시 즉시 반영하되, 전체 루프가 너무 길어지는 것 방지
-        const existingIdx = results.findIndex(r => r.code === stock.code);
-        if (isMyStockItem || (existingIdx % 5 === 0)) {
+        const progressIdx = results.findIndex(r => r.code === stock.code);
+        if (isMyStockItem || (progressIdx >= 0 && progressIdx % 5 === 0)) {
           setAnalyzedStocks([...results]);
         }
       }
