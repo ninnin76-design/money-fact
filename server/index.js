@@ -61,7 +61,8 @@ const MARKET_WATCH_STOCKS = [
     { name: '현대차', code: '005380', sector: '자동차 및 전자부품' }, { name: '기아', code: '000270', sector: '자동차 및 전자부품' },
     { name: 'KB금융', code: '105560', sector: '기타(금융)' }, { name: '신한지주', code: '055550', sector: '기타(금융)' },
     { name: 'NAVER', code: '035420', sector: '엔터 및 플랫폼' }, { name: '카카오', code: '035720', sector: '엔터 및 플랫폼' },
-    { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' }
+    { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' },
+    { name: 'SK바이오사이언스', code: '302440', sector: '바이오 및 헬스케어' }
 ];
 
 // 섹터별 관심종목 70개 - 서버 스캔 시 무조건 포함!
@@ -106,7 +107,7 @@ const SECTOR_WATCH_STOCKS = [
     { name: '한미약품', code: '128940' }, { name: 'HLB', code: '028300' },
     { name: '에이비엘바이오', code: '298380' }, { name: '인벤티지랩', code: '389470' },
     { name: '퓨쳐켐', code: '220100' }, { name: '리가켐바이오', code: '141080' },
-    { name: '알테오젠', code: '196170' }, { name: '오스코텍', code: '039200' },
+    { name: '알테오젠', code: '196170' }, { name: '오스코텍', code: '039200' }, { name: 'SK바이오사이언스', code: '302440' },
 ];
 
 const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');

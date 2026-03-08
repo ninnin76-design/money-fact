@@ -45,11 +45,14 @@
         }
 
         .container {
-            max-width: 480px;
+            width: 100%;
+            max-width: 500px;
             margin: 0 auto;
             min-height: 100vh;
-            padding-bottom: 180px;
+            padding-bottom: 200px;
+            /* 푸터 버튼 공간 확보 */
             position: relative;
+            background-color: var(--dark-bg);
         }
 
         /* Hero Section */
@@ -224,17 +227,14 @@
         /* Sticky Footer Button */
         .footer-cta {
             position: fixed;
-            bottom: 20px;
+            bottom: 0;
             left: 50%;
             transform: translateX(-50%);
-            width: calc(100% - 32px);
-            max-width: 440px;
+            width: 100%;
+            max-width: 500px;
             z-index: 100;
-            background: rgba(11, 18, 25, 0.8);
-            backdrop-filter: blur(10px);
-            padding: 10px;
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(to top, var(--dark-bg) 70%, transparent);
+            padding: 20px 16px 30px;
         }
 
         .btn-download {

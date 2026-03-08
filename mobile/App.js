@@ -422,7 +422,7 @@ function MainApp() {
   const [expandedSectors, setExpandedSectors] = useState({});
   const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
   const [analyzedStocks, setAnalyzedStocks] = useState([]);
-  const [tickerItems, setTickerItems] = useState(["데이터 동기화 중입니다...", "잠시만 기다려 주세요."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.0.9] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -972,6 +972,7 @@ function MainApp() {
 
           if (!forceFetch) {
             const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+            console.log(`[v4.0.9] No proxy data for ${stock.name}, skipping...`);
             if (existingIdx >= 0) results[existingIdx] = noDataStock;
             else results.push(noDataStock);
             continue;
@@ -1051,7 +1052,8 @@ function MainApp() {
               if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
-            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false };
+            console.log(`[v4.0.9] KIS Data empty for ${stock.name}`);
+            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
             const existingIdx = results.findIndex(r => r.code === stock.code);
             if (existingIdx >= 0) results[existingIdx] = emptyStock;
             else results.push(emptyStock);
@@ -1069,8 +1071,10 @@ function MainApp() {
             price: prevData ? prevData.price : 0,
             isHiddenAccumulation: prevData ? prevData.isHiddenAccumulation : false,
             error: true,
+            noData: true,
             isWaiting: false
           };
+          console.warn(`[v4.0.9] Error analyzing ${stock.name}:`, e.message);
           if (existingIdx >= 0) results[existingIdx] = errorStock;
           else results.push(errorStock);
         }
@@ -1170,7 +1174,7 @@ function MainApp() {
 
         // 조건에 맞는 데이터가 없다면 기본 문구 사용
         if (tickerTexts.length === 0) {
-          tickerTexts.push("💰 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          tickerTexts.push("💰 [v4.0.9] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
           tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
         }
       }
