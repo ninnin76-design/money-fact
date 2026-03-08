@@ -887,8 +887,8 @@ function MainApp() {
       if (results.length > 1000) {
         results.sort((a, b) => {
           // 우선순위: 1. 즐겨찾기 2. 히든매집 3. 연속 수급 강도 순
-          const scoreA = (myStocks.some(s => s.code === a.code) ? 100 : 0) + (a.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(a.fStreak), Math.abs(a.iStreak));
-          const scoreB = (myStocks.some(s => s.code === b.code) ? 100 : 0) + (b.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(b.fStreak), Math.abs(b.iStreak));
+          const scoreA = (myStocks.some(s => s.code === a.code) ? 100 : 0) + (a.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(a.fStreak || 0), Math.abs(a.iStreak || 0));
+          const scoreB = (myStocks.some(s => s.code === b.code) ? 100 : 0) + (b.isHiddenAccumulation ? 50 : 0) + Math.max(Math.abs(b.fStreak || 0), Math.abs(b.iStreak || 0));
           return scoreB - scoreA;
         });
         results.splice(1000);
