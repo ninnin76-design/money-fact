@@ -48,7 +48,7 @@
             max-width: 480px;
             margin: 0 auto;
             min-height: 100vh;
-            padding-bottom: 120px;
+            padding-bottom: 180px;
             position: relative;
         }
 
@@ -238,9 +238,9 @@
             text-align: center;
             text-decoration: none;
             display: block;
-            padding: 22px;
+            padding: 18px;
             border-radius: 100px;
-            font-size: 1.3rem;
+            font-size: 1.15rem;
             font-weight: 900;
             box-shadow: 0 15px 35px rgba(252, 196, 25, 0.4);
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -410,43 +410,47 @@
                     3. 새 기기에서 동일 Key로 즉시 복구 ✅
                 </div>
                 <div
-                    style="font-size: 0.85rem; color: var(--text-main); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div style="background: rgba(49, 130, 246, 0.1); padding: 12px; border-radius: 12px;">
+                    style="font-size: 0.82rem; color: var(--text-main); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div
+                        style="background: rgba(49, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(49, 130, 246, 0.2);">
                         <b style="color: var(--blue);">🎯 초정밀 설정</b><br>매수/매집 포착 기간을 2~30일 사이로 직접 핸들링
                     </div>
-                    <b style="color: var(--primary);">🔔 골든 타임 푸시</b><br>장 시작(9:00), 오후장(13:00), 종가(15:00) 3차례 핵심 알림
-                    (PRO)
+                    <div
+                        style="background: rgba(252, 196, 25, 0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(252, 196, 25, 0.1);">
+                        <b style="color: var(--primary);">🔔 골든 타임 푸시</b><br>장 시작, 오후장, 종가 등 3차례 핵심 알림 (PRO)
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- 5. 기타 기능 -->
-        <div class="icon-grid reveal">
-            <div class="icon-item">
-                <i data-lucide="bell"></i>
-                <span>스마트 푸시</span>
-            </div>
-            <div class="icon-item">
-                <i data-lucide="moon"></i>
-                <span>야간 시세 연동</span>
-            </div>
-            <div class="icon-item">
-                <i data-lucide="cloud"></i>
-                <span>데이터 싱크</span>
-            </div>
-            <div class="icon-item">
-                <i data-lucide="zap"></i>
-                <span>전종목 레이더</span>
-            </div>
+    <!-- 5. 기타 기능 -->
+    <div class="icon-grid reveal">
+        <div class="icon-item">
+            <i data-lucide="bell"></i>
+            <span>스마트 푸시</span>
         </div>
+        <div class="icon-item">
+            <i data-lucide="moon"></i>
+            <span>야간 시세 연동</span>
+        </div>
+        <div class="icon-item">
+            <i data-lucide="cloud"></i>
+            <span>데이터 싱크</span>
+        </div>
+        <div class="icon-item">
+            <i data-lucide="zap"></i>
+            <span>전종목 레이더</span>
+        </div>
+    </div>
 
-        <footer>
-            <div class="warning-box">
-                <b>※ 투자 유의사항</b><br>
-                본 서비스의 정보는 참고 자료일 뿐이며, 투자 책임은 본인에게 있습니다. 원금 손실 위험이 있으니 신중히 결정하세요.
-            </div>
-            <p style="margin-top: 20px;">© 2026 Money Fact. All rights reserved.</p>
-        </footer>
+    <footer style="padding-bottom: 40px;">
+        <div class="warning-box">
+            <b>※ 투자 유의사항</b><br>
+            본 서비스의 정보는 참고 자료일 뿐이며, 투자 책임은 본인에게 있습니다. 원금 손실 위험이 있으니 신중히 결정하세요.
+        </div>
+        <p style="margin-top: 20px;">© 2026 Money Fact. All rights reserved.</p>
+    </footer>
     </div>
 
     <div class="footer-cta" id="download-cta">
@@ -454,7 +458,7 @@
             Money Fact 다운로드
             <span class="version">v4.0.9 (Latest)</span>
         </a>
-        <p class="version-info" style="text-align: center; color: #888; font-size: 12px; margin-top: 10px;">최신 업데이트:
+        <p class="version-info" style="text-align: center; color: #888; font-size: 11px; margin-top: 8px;">최신 업데이트:
             2026.03.08 (v4.0.9 정식 배포)</p>
     </div>
     </div>
