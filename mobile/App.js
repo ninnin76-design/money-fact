@@ -618,7 +618,13 @@ function MainApp() {
   };
 
   const refreshData = async (targetStocks, silent = false, retryCount = 0, isInitial = false) => {
-    if (isRefreshing.current) return;
+    // [v4.0.8] 하이패스 로직: 사용자가 직접 종목을 추가(targetStocks)하는 경우, 기존 분석이 돌고 있더라도 새치기를 허용합니다.
+    const isPriority = !!targetStocks && !isInitial;
+    if (isRefreshing.current && !isPriority) return;
+
+    // 메인 잠금은 1개만 유지하되, 우선순위 작업은 잠금을 새로 잡지 않고 탑승합니다.
+    const lockAcquired = !isRefreshing.current;
+    if (lockAcquired) isRefreshing.current = true;
 
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
     // [v3.6.2 fix] init()에서 호출할 때는 targetStocks가 있더라도 user action이 아닙니다!
@@ -898,9 +904,10 @@ function MainApp() {
       const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : [];
       const hasServerMarketData = !!(snapshotRes && snapshotRes.data && snapshotRes.data.sectors);
 
-      // [v3.9.9] 관심종목(My Stock)을 최상위 우선순위로 배치하여 '분석중' 상태를 즉시 해소합니다.
-      const myStockCodes = new Set(myStocks.map(ms => ms.code));
-      const combined = [...myStocks];
+      // [v4.0.8] 사용자가 전달한 targetStocks가 있다면 그것을 우선순위로 사용합니다.
+      const priorityStocks = targetStocks || myStocks;
+      const myStockCodes = new Set(priorityStocks.map(ms => ms.code));
+      const combined = [...priorityStocks];
       results.forEach(s => {
         if (!myStockCodes.has(s.code)) combined.push(s);
       });
@@ -1188,8 +1195,8 @@ function MainApp() {
     } catch (err) {
       console.error("[Refresh Error]", err);
     } finally {
-      setLoading(false);
-      isRefreshing.current = false;
+      if (!silent) setLoading(false);
+      if (lockAcquired) isRefreshing.current = false;
     }
   };
 
@@ -1298,11 +1305,11 @@ function MainApp() {
     if (isFav) {
       handleDeleteStock(stock.code); // 즐겨찾기 해제
     } else {
-      // [v3.6.2 fix] 즐겨찾기 추가 시 refreshData 호출 없이 기존 서버 데이터 활용!
-      // 서버 스냅샷에 이미 데이터가 있으므로 KIS API를 다시 호출할 필요가 없습니다.
       const updated = [...myStocks, stock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
+      // [v4.0.8] 즐겨찾기 추가 시 즉시 분석을 수행하여 '분석 중' 상태를 빠르게 탈출합니다.
+      refreshData(updated, true);
     }
   };
 
@@ -2015,8 +2022,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.8 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.8 Build 20250607 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.9 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.9 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2029,7 +2036,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.8</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.9</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
