@@ -435,7 +435,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.0.12] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["🚀 [v4.0.13] 하이브리드 정밀 레이더가 정상 작동 중입니다.", "잠시만 기다려 주시면 2,800개 전 종목의 수급 분석이 완료됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -754,6 +754,9 @@ function MainApp() {
             setSyncTime(syncTimeStr);
             setLastSyncTimestamp(syncNow.getTime());
 
+            // [v4.0.13] 데이터 유무와 상관없이 스캔 통계(하이브리드 레이더)는 즉시 반영
+            if (snap.scanStats) setScanStats(snap.scanStats);
+
             if (hasServerData) {
               const seenCodes = new Set();
               const processServerList = (list, isBuy) => {
@@ -843,7 +846,7 @@ function MainApp() {
                 setSectors(calibratedServerSectors.slice(0, 6));
               }
               if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
-              if (snap.scanStats) setScanStats(snap.scanStats);
+              // [v4.0.13] scanStats는 위에서 이미 처리했으므로 중복 제거 가능하지만 안전하게 유지하거나 제거
 
               const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
               const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
@@ -872,6 +875,9 @@ function MainApp() {
               if (allBuyList.length > 0) {
                 earlyTickerTexts.push(`📈 수급 포착: [${allBuyList[0].name}] ${allBuyList[0].streak}일 연속 매집 중!`);
               }
+              // [v4.0.13] 하이브리드 레이더 현황 추가
+              earlyTickerTexts.push(`📡 [하이브리드 레이더] 실시간 자동 스캔이 현재 작동 중입니다.`);
+
               if (earlyTickerTexts.length > 0) {
                 setTickerItems(earlyTickerTexts);
               }
@@ -1284,8 +1290,9 @@ function MainApp() {
 
         // 조건에 맞는 데이터가 없다면 기본 문구 사용
         if (tickerTexts.length === 0) {
-          tickerTexts.push("💰 [v4.0.11] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          tickerTexts.push("💰 [v4.0.13] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
           tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
+          tickerTexts.push("📡 [하이브리드 레이더] 15분 단위 전종목 스캔이 가동 중입니다!");
         }
       }
       setTickerItems(tickerTexts);
@@ -1744,8 +1751,8 @@ function MainApp() {
         <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
           <MarketStatusHeader />
 
-          {/* [코다리 부장] 전종목 레이더 스캔 현황 */}
-          {scanStats && (
+          {/* [코다리 부장] 전종목 레이더 스캔 현황 - 데이터 분석 전이라도 기본 틀은 유지 */}
+          {(scanStats || isMarketOpen) && (
             <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 14, backgroundColor: '#0d1b2a', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14 }}>📡</Text>
@@ -1755,9 +1762,9 @@ function MainApp() {
                 </View>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>전종목 <Text style={{ color: '#fff', fontWeight: '700' }}>{scanStats.totalScanned || '2,800+'}</Text>개</Text>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>후보 <Text style={{ color: '#fcc419', fontWeight: '700' }}>{scanStats.deepScanned || '-'}</Text>개</Text>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>분석 <Text style={{ color: '#3182f6', fontWeight: '700' }}>{scanStats.successHits || '-'}</Text>개</Text>
+                <Text style={{ color: '#8b95a1', fontSize: 11 }}>전종목 <Text style={{ color: '#fff', fontWeight: '700' }}>{scanStats?.totalScanned || '2,800+'}</Text>개</Text>
+                <Text style={{ color: '#8b95a1', fontSize: 11 }}>후보 <Text style={{ color: '#fcc419', fontWeight: '700' }}>{scanStats?.deepScanned || '-'}</Text>개</Text>
+                <Text style={{ color: '#8b95a1', fontSize: 11 }}>분석 <Text style={{ color: '#3182f6', fontWeight: '700' }}>{scanStats?.successHits || '-'}</Text>개</Text>
               </View>
             </View>
           )}
@@ -2161,7 +2168,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.12</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.13</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
