@@ -117,22 +117,8 @@ let tokenExpiry = null;
 let lastRateLimitTime = 0; // [v4.0.12] 마지막 레이트 리미트 발생 시각
 
 // [v4.0.2] 서버 재시작 시에도 마지막 성공 시간을 유지하기 위해 스냅샷 파일에서 로드합니다.
-let initialUpdateTime = null;
-
-try {
-
-    if (fs.existsSync(SNAPSHOT_FILE)) {
-        const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-        initialUpdateTime = snap.updateTime;
-
-    }
-
-} catch (e) { }
-
-
-
 let marketAnalysisReport = {
-    updateTime: initialUpdateTime,
+    updateTime: null,
     dataType: 'LIVE',
     status: 'INITIALIZING',
     buyData: {},
@@ -140,6 +126,20 @@ let marketAnalysisReport = {
     sectors: [],
     instFlow: { pnsn: 0, ivtg: 0, ins: 0 }
 };
+
+// [v4.0.14] 서버 가동 시 기존 스냅샷(market_report_snapshot.json)을 통째로 메모리에 복원합니다!
+// 기존에는 분산되어 있던 로직을 통합하고, 전체 데이터를 복구하도록 개선했습니다.
+try {
+    if (fs.existsSync(SNAPSHOT_FILE)) {
+        const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
+        if (snap && snap.updateTime) {
+            marketAnalysisReport = { ...marketAnalysisReport, ...snap };
+            console.log(`[Server] Snapshot restored from ${snap.updateTime}`);
+        }
+    }
+} catch (e) {
+    console.error("[Server] Error loading snapshot:", e.message);
+}
 
 // --- User Portfolio Database ---
 const DB_FILE = path.join(__dirname, 'db.json');
@@ -545,12 +545,12 @@ async function runDeepMarketScan(force = false) {
                     });
                     const d = res.data.output;
                     if (d) {
-                        // [v4.0.10 수정] KIS API 거래대금 단위는 '천원'이므로, '억원' 단위로 변환하려면 /100000 (10만)
-                        totalF += parseInt(d.prdy_frgn_ntby_tr_pbmn || 0) / 100000;
-                        totalI += parseInt(d.prdy_orgn_ntby_tr_pbmn || 0) / 100000;
-                        pnsn += parseInt(d.pnsn_ntby_tr_pbmn || 0) / 100;
-                        ivtg += parseInt(d.ivtg_ntby_tr_pbmn || 0) / 100;
-                        ins += parseInt(d.ins_ntby_tr_pbmn || 0) / 100;
+                        // [v4.0.14] 모든 수급 데이터 단위를 '억원'으로 통일(/100000)
+                        totalF += (parseInt(d.prdy_frgn_ntby_tr_pbmn || 0) / 100000);
+                        totalI += (parseInt(d.prdy_orgn_ntby_tr_pbmn || 0) / 100000);
+                        pnsn += (parseInt(d.pnsn_ntby_tr_pbmn || 0) / 100000);
+                        ivtg += (parseInt(d.ivtg_ntby_tr_pbmn || 0) / 100000);
+                        ins += (parseInt(d.ins_ntby_tr_pbmn || 0) / 100000);
                     }
                 } catch (e) { console.error(`Market Total API Error [${m.name}]: ${e.message}`); }
             }
@@ -811,13 +811,27 @@ async function runDeepMarketScan(force = false) {
         const sellCount = Object.values(newSellData).reduce((acc, l) => acc + l.length, 0);
         console.log(`[Radar 3단계] 분석 완료! 매수:${buyCount}건, 매도:${sellCount}건, 전체:${Object.keys(newAllAnalysis).length}건`);
 
-        marketAnalysisReport.buyData = newBuyData;
-        marketAnalysisReport.sellData = newSellData;
-        marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
+        // [v4.0.14] 주말이나 장 종료 후 분석 결과가 0건일 경우, 기존의 '유의미한' 스냅샷 데이터를 보존합니다.
+        // 이를 통해 앱을 켰을 때 연속매매 종목이 사라지는 현상을 방지합니다.
+        const isCurrentlyEmpty = buyCount === 0 && sellCount === 0;
+        const hasExistingData = marketAnalysisReport.buyData && Object.values(marketAnalysisReport.buyData).some(l => l && l.length > 0);
+
+        if (!isCurrentlyEmpty || !hasExistingData) {
+            marketAnalysisReport.buyData = newBuyData;
+            marketAnalysisReport.sellData = newSellData;
+            marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
+            console.log(`[Radar] 스냅샷 데이터 업데이트 완료 (매수:${buyCount}건, 매도:${sellCount}건)`);
+        } else {
+            console.log(`[Radar] 현재 주말/휴장 등으로 분석 결과가 0건이므로 기존 유의미한 데이터를 보존합니다.`);
+        }
 
         if (marketSectorsResult && marketSectorsResult.length > 0) {
-            marketAnalysisReport.sectors = marketSectorsResult;
-            marketAnalysisReport.instFlow = instTotals;
+            // [v4.0.14] 섹터 데이터도 유의미한 수치가 있을 때만 업데이트
+            const hasSectorFlow = marketSectorsResult.some(s => Math.abs(s.flow || 0) > 0);
+            if (hasSectorFlow || !marketAnalysisReport.sectors) {
+                marketAnalysisReport.sectors = marketSectorsResult;
+                marketAnalysisReport.instFlow = instTotals;
+            }
         }
         marketAnalysisReport.updateTime = new Date().toISOString();
         marketAnalysisReport.dataType = currentType;

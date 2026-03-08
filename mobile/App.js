@@ -435,7 +435,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.0.13] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.0.14] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -754,7 +754,7 @@ function MainApp() {
             setSyncTime(syncTimeStr);
             setLastSyncTimestamp(syncNow.getTime());
 
-            // [v4.0.13] 데이터 유무와 상관없이 스캔 통계(하이브리드 레이더)는 즉시 반영
+            // [v4.0.14] 데이터 유무와 상관없이 스캔 통계(하이브리드 레이더)는 즉시 반영
             if (snap.scanStats) setScanStats(snap.scanStats);
 
             if (hasServerData) {
@@ -839,9 +839,8 @@ function MainApp() {
               if (snap.sectors) {
                 calibratedServerSectors = snap.sectors.map(s => {
                   let f = Number(s.flow) || 0;
-                  if (Math.abs(f) > 10000) f = Math.round(f / 100000);
-                  else f = Math.round(f);
-                  return { ...s, flow: f };
+                  // [v4.0.14] 서버 로직과 통일: 이미 '억' 단위이므로 단순 반올림만 수행
+                  return { ...s, flow: Math.round(f) };
                 }).sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
                 setSectors(calibratedServerSectors.slice(0, 6));
               }
@@ -1225,25 +1224,27 @@ function MainApp() {
           // 데이터가 아예 없는 초기 상태에서만 로컬 계산값을 보여줍니다.
           setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
         }
+        // [v4.0.14] 로컬 스캔 결과가 0(휴장 등)이라면 서버에서 받아온 유의미한 섹터 데이터를 유지합니다.
+        const hasLocalSectorFlow = updatedSectors.some(s => Math.abs(s.flow) > 0);
+        if (!hasServerMarketData && hasLocalSectorFlow) {
+          setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+        }
       } else {
-        // [v4.0.11] 서버 데이터 수신 시 단위 오류 방어 보정
-        // 서버 코드도 수정했지만, 만약 구버전 서버가 아직 돌고 있더라도 앱에서 자체 보정
+        // [v4.0.14] 서버 데이터 수신 시 불필요한 중복 보정 제거
+        // 서버에서 이미 '억원' 단위로 정밀 보정하여 보내주므로, 앱에서는 수치만 반올림하여 사용합니다.
         const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
           let f = Number(s.flow) || 0;
-          // [v4.0.12] 1만억(=1조) 이상이면 명백한 단위 오류 → /100000으로 보정
-          if (Math.abs(f) > 10000) f = Math.round(f / 100000);
-          else f = Math.round(f);
-          return { ...s, flow: f };
+          return { ...s, flow: Math.round(f) };
         });
         setSectors(calibratedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
       }
-      // Round inst sub-types to billion KRW
+      // [v4.0.14] 서버로부터 '억원' 단위를 직접 수신하므로 추가적인 큰 수 나누기(/100000000)는 불필요
       const roundedInstTotals = {
-        pnsn: Math.round(instTotals.pnsn / 100000000),
-        ivtg: Math.round(instTotals.ivtg / 100000000),
-        ins: Math.round(instTotals.ins / 100000000),
-        foreign: Math.round(instTotals.foreign / 100000000),
-        institution: Math.round(instTotals.institution / 100000000),
+        pnsn: Math.round(instTotals.pnsn || 0),
+        ivtg: Math.round(instTotals.ivtg || 0),
+        ins: Math.round(instTotals.ins || 0),
+        foreign: Math.round(instTotals.foreign || 0),
+        institution: Math.round(instTotals.institution || 0),
       };
       if (!hasServerMarketData) {
         // [v4.0.5] 서버 통신 실패 시에도 기관 상세 수급 캐시 유지
@@ -1292,7 +1293,7 @@ function MainApp() {
 
         // 조건에 맞는 데이터가 없다면 기본 문구 사용
         if (tickerTexts.length === 0) {
-          tickerTexts.push("💰 [v4.0.13] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          tickerTexts.push("💰 [v4.0.14] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
           tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
         }
       }
@@ -2155,8 +2156,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.0.13] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.13 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.0.14] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.14 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2169,7 +2170,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.13</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.14</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

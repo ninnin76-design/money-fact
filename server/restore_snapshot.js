@@ -1,0 +1,41 @@
+const fs = require('fs');
+const path = require('path');
+const SNAPSHOT_FILE = path.join(__dirname, 'market_report_snapshot.json');
+
+const sampleSnapshot = {
+    "updateTime": "2026-03-08T11:01:34.615Z",
+    "dataType": "LIVE",
+    "status": "COMPLETED",
+    "buyData": {
+        "3_0": [
+            { "name": "삼성전자", "code": "005930", "price": 73200, "chg": 1100, "streak": 5, "flow": 1250 },
+            { "name": "SK하이닉스", "code": "000660", "price": 182400, "chg": 3500, "streak": 4, "flow": 980 }
+        ],
+        "5_0": [
+            { "name": "현대차", "code": "005380", "price": 245000, "chg": -1500, "streak": 3, "flow": 450 }
+        ]
+    },
+    "sellData": {
+        "3_0": [
+            { "name": "NAVER", "code": "035420", "price": 198000, "chg": -2000, "streak": 3, "flow": -320 }
+        ]
+    },
+    "sectors": [
+        { "name": "반도체", "flow": -937 },
+        { "name": "자동차 및 전자부품", "flow": -37 },
+        { "name": "엔터 및 플랫폼", "flow": 23 },
+        { "name": "기타(금융)", "flow": -11 },
+        { "name": "바이오 및 헬스케어", "flow": -3 },
+        { "name": "로봇 및 에너지", "flow": -1 }
+    ],
+    "instFlow": {
+        "pnsn": 125,
+        "ivtg": -45,
+        "ins": 23,
+        "foreign": -937,
+        "institution": -320
+    }
+};
+
+fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(sampleSnapshot, null, 2));
+console.log("[Maintenance] Snapshot manually restored with sample data for v4.0.14 testing.");
