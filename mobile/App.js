@@ -830,8 +830,18 @@ function MainApp() {
                 });
               }
 
-              // [v4.0.11] 섹터/기관흐름은 snapshotStocks 유무와 관계없이 서버 데이터가 있으면 즉시 반영
-              if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
+              // [v4.0.12] 섹터/기관흐름 즉시 반영 시에도 반드시 단위 보정(Calibration)을 거쳐야 함!
+              // 그래야 '...억'으로 보이다가 갑자기 '...조'로 튀는 현상을 막을 수 있습니다.
+              let calibratedServerSectors = [];
+              if (snap.sectors) {
+                calibratedServerSectors = snap.sectors.map(s => {
+                  let f = Number(s.flow) || 0;
+                  if (Math.abs(f) > 10000) f = Math.round(f / 100000);
+                  else f = Math.round(f);
+                  return { ...s, flow: f };
+                }).sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
+                setSectors(calibratedServerSectors.slice(0, 6));
+              }
               if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
               if (snap.scanStats) setScanStats(snap.scanStats);
 
@@ -849,12 +859,13 @@ function MainApp() {
                 }
               }
 
-              // [v4.0.11] 전광판 즉시 교체 - snapshotStocks 유무와 무관하게 buyData/sectors 있으면 바로 생성
+              // [v4.0.12] 기술적인 상태 메시지(수급 분석 중...) 대신 실제 유의미한 데이터만 노출
               const earlyTickerTexts = [];
-              if (snap.sectors && snap.sectors.length > 0) {
-                const topSec = [...snap.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0))[0];
+              if (calibratedServerSectors.length > 0) {
+                const topSec = calibratedServerSectors[0];
                 if (topSec && Math.abs(topSec.flow) > 0) {
-                  earlyTickerTexts.push(`🔥 핫 섹터: [${topSec.name}]에 강한 ${topSec.flow > 0 ? '매수세' : '매도세'}가 집중!`);
+                  const flowVal = Math.abs(Math.round(topSec.flow));
+                  earlyTickerTexts.push(`🔥 핫 섹터: [${topSec.name}]에 강한 ${topSec.flow > 0 ? '매수세' : '매도세'}(${flowVal}억) 집중!`);
                 }
               }
               const allBuyList = Object.values(allBuy).flat().sort((a, b) => (b.streak || 0) - (a.streak || 0));
@@ -956,7 +967,7 @@ function MainApp() {
         results.splice(1000);
       }
 
-      // [v4.0.6] 전광판 텍스트 설정 (서버 데이터 우선, 없으면 비움으로 시작하여 '분석중' 문구 해소)
+      // [v4.0.12] 전광판에서 기술적인 상태 메시지(분석중...)를 제거하고 준비된 데이터만 노출
       const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : [];
       const hasServerMarketData = !!(snapshotRes && snapshotRes.data && snapshotRes.data.sectors);
 
@@ -990,7 +1001,9 @@ function MainApp() {
         const isFresh = snapshotRes && snapshotRes.data && (Date.now() - new Date(snapshotRes.data.updateTime).getTime() < 60000);
 
         if (snapshotExistingCodes.has(stock.code) && !isDataInvalid) {
-          if (!isMyStockItem || (!isUserAction && isFresh)) {
+          // [v4.0.12] 서버 스냅샷에 종목이 있다면, 관심종목이라도 굳이 KIS를 다시 찌르지 않고 그대로 사용합니다.
+          // 이로 인해 '분석 중' 깜빡임을 완전히 없애고 서버급 고속 로딩이 가능해집니다.
+          if (!isUserAction && !forceFetch) {
             continue;
           }
         }
@@ -2138,7 +2151,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.11</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.12</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
