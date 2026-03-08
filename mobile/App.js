@@ -435,7 +435,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["🚀 [v4.0.13] 하이브리드 정밀 레이더가 정상 작동 중입니다.", "잠시만 기다려 주시면 2,800개 전 종목의 수급 분석이 완료됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.0.13] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -875,8 +875,10 @@ function MainApp() {
               if (allBuyList.length > 0) {
                 earlyTickerTexts.push(`📈 수급 포착: [${allBuyList[0].name}] ${allBuyList[0].streak}일 연속 매집 중!`);
               }
-              // [v4.0.13] 하이브리드 레이더 현황 추가
-              earlyTickerTexts.push(`📡 [하이브리드 레이더] 실시간 자동 스캔이 현재 작동 중입니다.`);
+              // [v4.0.13] 하이브리드 레이더 현황 (전광판 보조용 대신 데이터 유입 위주)
+              if (earlyTickerTexts.length === 0) {
+                earlyTickerTexts.push(`📡 시장 전체 데이터를 분석하고 있습니다...`);
+              }
 
               if (earlyTickerTexts.length > 0) {
                 setTickerItems(earlyTickerTexts);
@@ -1292,7 +1294,6 @@ function MainApp() {
         if (tickerTexts.length === 0) {
           tickerTexts.push("💰 [v4.0.13] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
           tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
-          tickerTexts.push("📡 [하이브리드 레이더] 15분 단위 전종목 스캔이 가동 중입니다!");
         }
       }
       setTickerItems(tickerTexts);
