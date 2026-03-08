@@ -1120,10 +1120,47 @@ function MainApp() {
         }
       }
 
-      // [v4.0.6] 분석 완료 후 전광판 업데이트 (특이사항 없을 경우 기본 문구로 전환하여 초기 '분석중' 문구 삭제)
+      // [v4.0.8] 분석 완료 후 전광판 업데이트 (의미 있는 실데이터 노출)
       if (tickerTexts.length <= 1) {
-        tickerTexts.push("💰 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
-        tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
+        tickerTexts.length = 0; // 기존 기본 문구 제거
+
+        // 1. 실시간 핫 섹터 1위
+        let topSector = null;
+        if (hasServerMarketData && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0) {
+          const sorted = [...snapshotRes.data.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0));
+          topSector = sorted[0];
+        } else if (updatedSectors.length > 0) {
+          const sorted = [...updatedSectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0));
+          topSector = sorted[0];
+        }
+        if (topSector && Math.abs(topSector.flow) > 0) {
+          const flowType = topSector.flow > 0 ? '매수세' : '매도세';
+          tickerTexts.push(`🔥 핫 섹터: [${topSector.name}]에 강한 ${flowType}가 집중되고 있습니다!`);
+        }
+
+        // 2. 외국인 연속 매수 1위
+        const topForeign = results.filter(s => s.fStreak >= 3).sort((a, b) => b.fStreak - a.fStreak)[0];
+        if (topForeign) {
+          tickerTexts.push(`🌎 외인 픽 1위: [${topForeign.name}] ${topForeign.fStreak}일 연속 폭풍 매수 중!`);
+        }
+
+        // 3. 기관 연속 매수 1위
+        const topInst = results.filter(s => s.iStreak >= 3).sort((a, b) => b.iStreak - a.iStreak)[0];
+        if (topInst) {
+          tickerTexts.push(`🏢 기관 픽 1위: [${topInst.name}] ${topInst.iStreak}일 연속 강력 러브콜!`);
+        }
+
+        // 4. 히든 매집 포착
+        const hiddenAccum = results.filter(s => s.isHiddenAccumulation)[0];
+        if (hiddenAccum) {
+          tickerTexts.push(`🤫 폭풍전야: [${hiddenAccum.name}]에서 세력의 은밀한 매집 흔적 발견!`);
+        }
+
+        // 조건에 맞는 데이터가 없다면 기본 문구 사용
+        if (tickerTexts.length === 0) {
+          tickerTexts.push("💰 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
+        }
       }
       setTickerItems(tickerTexts);
 
