@@ -62,7 +62,7 @@
 
         .hero h1 {
             font-family: 'Jua', sans-serif;
-            font-size: 3.5rem;
+            font-size: clamp(2.5rem, 8vw, 3.5rem);
             margin-bottom: 10px;
             background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
             -webkit-background-clip: text;
@@ -224,12 +224,17 @@
         /* Sticky Footer Button */
         .footer-cta {
             position: fixed;
-            bottom: 30px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            width: calc(100% - 40px);
+            width: calc(100% - 32px);
             max-width: 440px;
             z-index: 100;
+            background: rgba(11, 18, 25, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .btn-download {
@@ -254,11 +259,10 @@
         }
 
         .btn-download .version {
-            position: absolute;
-            top: 5px;
-            right: 25px;
+            display: block;
             font-size: 0.7rem;
-            opacity: 0.6;
+            opacity: 0.8;
+            font-weight: 600;
         }
 
         /* Footer */
@@ -410,7 +414,7 @@
                     3. 새 기기에서 동일 Key로 즉시 복구 ✅
                 </div>
                 <div
-                    style="font-size: 0.82rem; color: var(--text-main); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    style="font-size: 0.82rem; color: var(--text-main); display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
                     <div
                         style="background: rgba(49, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(49, 130, 246, 0.2);">
                         <b style="color: var(--blue);">🎯 초정밀 설정</b><br>매수/매집 포착 기간을 2~30일 사이로 직접 핸들링

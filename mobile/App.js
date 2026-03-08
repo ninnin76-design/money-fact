@@ -422,7 +422,7 @@ function MainApp() {
   const [expandedSectors, setExpandedSectors] = useState({});
   const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
   const [analyzedStocks, setAnalyzedStocks] = useState([]);
-  const [tickerItems, setTickerItems] = useState(["시장의 수급 흐름을 분석 중입니다..", "잠시만 기다려 주세요."]);
+  const [tickerItems, setTickerItems] = useState(["데이터 동기화 중입니다...", "잠시만 기다려 주세요."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -618,26 +618,23 @@ function MainApp() {
   };
 
   const refreshData = async (targetStocks, silent = false, retryCount = 0, isInitial = false) => {
-    // [v4.0.8] 하이패스 로직: 사용자가 직접 종목을 추가(targetStocks)하는 경우, 기존 분석이 돌고 있더라도 새치기를 허용합니다.
+    // [v4.0.9] 하이패스 로직 고도화: 사용자가 종목을 추가할 경우(targetStocks), 기존 루프와 별개로 즉시 분석을 수행합니다.
     const isPriority = !!targetStocks && !isInitial;
+
+    // 이미 메인 분석이 진행 중이고 우선순위가 아니라면 중단합니다.
     if (isRefreshing.current && !isPriority) return;
 
-    // 메인 잠금은 1개만 유지하되, 우선순위 작업은 잠금을 새로 잡지 않고 탑승합니다.
-    const lockAcquired = !isRefreshing.current;
-    if (lockAcquired) isRefreshing.current = true;
+    // 메인 잠금은 일반 실행시에만 걸어줍니다. (우선순위 실행은 메인을 방해하지 않음)
+    if (!isPriority) {
+      isRefreshing.current = true;
+    }
 
     const hasAnyData = analyzedStocks.length > 0 || sectors.some(s => s.flow !== 0);
-    // [v3.6.2 fix] init()에서 호출할 때는 targetStocks가 있더라도 user action이 아닙니다!
     const isUserAction = !!targetStocks && !isInitial;
-    // [v3.6.2 fix] 정의되지 않은 변수 오류 방지
     const isMyStock = !targetStocks || isInitial;
 
-    // [v3.6.2 핵심 수정] 장 마감 시에도 서버 스냅샷은 항상 가져옵니다!
-    // 서버 스냅샷에는 장중에 수집된 캐시 데이터가 있으므로, 밤에 앱을 켜도 데이터를 볼 수 있습니다.
-    // 단, 장 마감 시 KIS API 직접 호출(관심종목 개별 조회)은 차단합니다.
-    const forceFetch = !StockService.isMarketOpen() && (!hasAnyData || isUserAction);
-
-    isRefreshing.current = true;
+    // [v4.0.9] 주말/장외 시간 대응 강화
+    const forceFetch = !StockService.isMarketOpen() && (isUserAction || !hasAnyData);
     // [v4.0.5] 최초 실행(isInitial)일 때만 "서버확인중..." 표시
     // 그 외(10분 주기, 수동 새로고침)에서는 조용히 데이터만 갱신
     if (isInitial) {
@@ -835,7 +832,11 @@ function MainApp() {
                   updateTime: fullTimeStr
                 };
                 AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(localSnapshot));
-                // setIsServerUpdating(false); // [v3.9.9] 위에서 status에 따라 처리하므로 중복 제거
+
+                // [v4.0.9] 서버 데이터가 있다면 즉시 전광판에 노출하여 "분석중" 메시지 해소
+                if (snap.tickerItems && snap.tickerItems.length > 0) {
+                  setTickerItems(snap.tickerItems);
+                }
               }
             }
           }
@@ -919,7 +920,10 @@ function MainApp() {
       // 이미 서버 스냅샷에서 충분한 데이터를 가져왔다면 불필요한 추가 호출을 생략합니다.
       const marketRunning = StockService.isMarketOpen();
 
-      for (const stock of combined) {
+      // [v4.0.9] 분석 리스트 결정: 우선순위(종목추가)인 경우 해당 종목만 빠르게 처리
+      const scanList = isPriority ? targetStocks : combined;
+
+      for (const stock of scanList) {
         const isMyStockItem = myStockCodes.has(stock.code);
 
         // [v4.0.6] 기존 스냅샷 데이터가 있더라도, 가격이 0원(오류)이거나 'isWaiting' 상태라면 
@@ -936,45 +940,46 @@ function MainApp() {
           }
         }
 
-        // [v3.9.9] 장 마감 시간에 스냅샷에 없는 종목 처리
-        if (!StockService.isMarketOpen() && !forceFetch) {
+        // [v4.0.9] 주말/장외 시간 대응: KIS API가 불안정할 수 있으므로 서버 프록시 우선 시도
+        if (!marketRunning) {
           const prev = analyzedStocks.find(s => s.code === stock.code);
           const existingIdx = results.findIndex(r => r.code === stock.code);
 
           if (prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
-            // 기존에 정확하게 분석된 데이터가 있으면 그대로 재사용
             const updated = { ...prev, isWaiting: false, noData: false };
             if (existingIdx >= 0) results[existingIdx] = updated;
             else results.push(updated);
-          } else {
-            // 신규 종목: 서버 프록시로 실제 데이터 조회 시도
-            try {
-              const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 15000 });
-              if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
-                const proxyDaily = proxyRes.data.daily;
-                const analysis = StockService.analyzeSupply(proxyDaily);
-                const vwap = StockService.calculateVWAP(proxyDaily, settingBuyStreak);
-                const hidden = StockService.checkHiddenAccumulation(proxyDaily, settingAccumStreak);
-                const currentPrice = parseInt(proxyDaily[0].stck_clpr || 0) || 0;
-                const realData = { ...stock, ...analysis, vwap, price: currentPrice, isHiddenAccumulation: hidden, isWaiting: false, noData: false };
-                if (existingIdx >= 0) results[existingIdx] = realData;
-                else results.push(realData);
-              } else {
-                const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-                if (existingIdx >= 0) results[existingIdx] = noDataStock;
-                else results.push(noDataStock);
-              }
-            } catch (proxyErr) {
-              const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-              if (existingIdx >= 0) results[existingIdx] = noDataStock;
-              else results.push(noDataStock);
-            }
+            if (isPriority) setAnalyzedStocks([...results]);
+            continue;
           }
-          continue;
+
+          // 서버 프록시 시도
+          try {
+            const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 10000 });
+            if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
+              const proxyDaily = proxyRes.data.daily;
+              const analysis = StockService.analyzeSupply(proxyDaily);
+              const vwap = StockService.calculateVWAP(proxyDaily, settingBuyStreak);
+              const hidden = StockService.checkHiddenAccumulation(proxyDaily, settingAccumStreak);
+              const currentPrice = parseInt(proxyDaily[0].stck_clpr || 0) || 0;
+              const realData = { ...stock, ...analysis, vwap, price: currentPrice, isHiddenAccumulation: hidden, isWaiting: false, noData: false };
+              if (existingIdx >= 0) results[existingIdx] = realData;
+              else results.push(realData);
+              if (isPriority) setAnalyzedStocks([...results]);
+              continue;
+            }
+          } catch (e) { /* ignore and fallback to KIS if forceFetch is on */ }
+
+          if (!forceFetch) {
+            const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+            if (existingIdx >= 0) results[existingIdx] = noDataStock;
+            else results.push(noDataStock);
+            continue;
+          }
         }
 
-        // [v3.6 최적화] 500ms delay per stock - 관심종목만 호출하므로 넉넉한 간격으로 안정적 운영
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // KIS API 직접 조회 (보통 장중이거나 주말 강제 조회 시)
+        await new Promise(resolve => setTimeout(resolve, isPriority ? 100 : 500));
         try {
           const [data, livePrice] = await Promise.all([
             StockService.getInvestorData(stock.code, forceFetch),
