@@ -422,7 +422,7 @@ function MainApp() {
   const [expandedSectors, setExpandedSectors] = useState({});
   const [targetSectorForAdd, setTargetSectorForAdd] = useState(null); // 종목 추가 시 어느 섹터에 넣을지 저장 (null이면 관심종목)
   const [analyzedStocks, setAnalyzedStocks] = useState([]);
-  const [tickerItems, setTickerItems] = useState(["[v4.0.9] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.0.10] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -618,13 +618,13 @@ function MainApp() {
   };
 
   const refreshData = async (targetStocks, silent = false, retryCount = 0, isInitial = false) => {
-    // [v4.0.9] 하이패스 로직 고도화: 사용자가 종목을 추가할 경우(targetStocks), 기존 루프와 별개로 즉시 분석을 수행합니다.
+    // [v4.0.10] 하이패스 로직 고도화: 사용자가 종목을 추가할 경우(targetStocks), 기존 루프와 별개로 즉시 분석을 수행합니다.
     const isPriority = !!targetStocks && !isInitial;
 
     // 이미 메인 분석이 진행 중이고 우선순위가 아니라면 중단합니다.
     if (isRefreshing.current && !isPriority) return;
 
-    // [v4.0.9] 메인 잠금은 일반 실행시에만 걸어줍니다. (우선순위 실행은 메인을 방해하지 않음)
+    // [v4.0.10] 메인 잠금은 일반 실행시에만 걸어줍니다. (우선순위 실행은 메인을 방해하지 않음)
     let lockAcquired = false;
     if (!isPriority) {
       isRefreshing.current = true;
@@ -635,7 +635,7 @@ function MainApp() {
     const isUserAction = !!targetStocks && !isInitial;
     const isMyStock = !targetStocks || isInitial;
 
-    // [v4.0.9] 주말/장외 시간 대응 강화
+    // [v4.0.10] 주말/장외 시간 대응 강화
     const forceFetch = !StockService.isMarketOpen() && (isUserAction || !hasAnyData);
     // [v4.0.5] 최초 실행(isInitial)일 때만 "서버확인중..." 표시
     // 그 외(10분 주기, 수동 새로고침)에서는 조용히 데이터만 갱신
@@ -798,7 +798,7 @@ function MainApp() {
                 });
               }
 
-              // [v4.0.9] 섹터/기관흐름은 snapshotStocks 유무와 관계없이 서버 데이터가 있으면 즉시 반영
+              // [v4.0.10] 섹터/기관흐름은 snapshotStocks 유무와 관계없이 서버 데이터가 있으면 즉시 반영
               if (snap.sectors) setSectors([...snap.sectors].sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)));
               if (snap.instFlow) setDetailedInstFlow(snap.instFlow);
               if (snap.scanStats) setScanStats(snap.scanStats);
@@ -817,7 +817,7 @@ function MainApp() {
                 }
               }
 
-              // [v4.0.9] 전광판 즉시 교체 - snapshotStocks 유무와 무관하게 buyData/sectors 있으면 바로 생성
+              // [v4.0.10] 전광판 즉시 교체 - snapshotStocks 유무와 무관하게 buyData/sectors 있으면 바로 생성
               const earlyTickerTexts = [];
               if (snap.sectors && snap.sectors.length > 0) {
                 const topSec = [...snap.sectors].sort((a, b) => Math.abs(b.flow || 0) - Math.abs(a.flow || 0))[0];
@@ -926,7 +926,7 @@ function MainApp() {
       // 이미 서버 스냅샷에서 충분한 데이터를 가져왔다면 불필요한 추가 호출을 생략합니다.
       const marketRunning = StockService.isMarketOpen();
 
-      // [v4.0.9] 분석 리스트 결정: 우선순위(종목추가)인 경우 해당 종목만 빠르게 처리
+      // [v4.0.10] 분석 리스트 결정: 우선순위(종목추가)인 경우 해당 종목만 빠르게 처리
       const scanList = isPriority ? targetStocks : combined;
 
       for (const stock of scanList) {
@@ -946,7 +946,7 @@ function MainApp() {
           }
         }
 
-        // [v4.0.9] 주말/장외 시간 대응: KIS API가 불안정할 수 있으므로 서버 프록시 우선 시도
+        // [v4.0.10] 주말/장외 시간 대응: KIS API가 불안정할 수 있으므로 서버 프록시 우선 시도
         if (!marketRunning) {
           const prev = analyzedStocks.find(s => s.code === stock.code);
           const existingIdx = results.findIndex(r => r.code === stock.code);
@@ -977,18 +977,18 @@ function MainApp() {
           } catch (e) { /* ignore and fallback to KIS if forceFetch is on */ }
 
           if (!forceFetch) {
-            // [v4.0.9] 이전 캐시 데이터가 있으면 0으로 덮어쓰지 않고 그대로 보존!
+            // [v4.0.10] 이전 캐시 데이터가 있으면 0으로 덮어쓰지 않고 그대로 보존!
             const prevCached = results[existingIdx] || analyzedStocks.find(s => s.code === stock.code);
             if (prevCached && (prevCached.fStreak !== 0 || prevCached.iStreak !== 0 || prevCached.price > 0)) {
               // 기존 데이터 보존, isWaiting만 해제
               const preserved = { ...prevCached, isWaiting: false, noData: false };
               if (existingIdx >= 0) results[existingIdx] = preserved;
               else results.push(preserved);
-              console.log(`[v4.0.9] Preserved cached data for ${stock.name} (no proxy available)`);
+              console.log(`[v4.0.10] Preserved cached data for ${stock.name} (no proxy available)`);
             } else {
               // 진짜 데이터가 한번도 없었던 종목만 noData 처리
               const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-              console.log(`[v4.0.9] No data at all for ${stock.name}, marking noData`);
+              console.log(`[v4.0.10] No data at all for ${stock.name}, marking noData`);
               if (existingIdx >= 0) results[existingIdx] = noDataStock;
               else results.push(noDataStock);
             }
@@ -1069,11 +1069,19 @@ function MainApp() {
               if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
-            console.log(`[v4.0.9] KIS Data empty for ${stock.name}`);
-            const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+            console.log(`[v4.0.10] KIS Data empty for ${stock.name}`);
             const emptyIdx = results.findIndex(r => r.code === stock.code);
-            if (emptyIdx >= 0) results[emptyIdx] = emptyStock;
-            else results.push(emptyStock);
+            const prevData = emptyIdx >= 0 ? results[emptyIdx] : null;
+
+            // [v4.0.10] 기존 데이터가 살아있다면, 아무것도 못 가져왔다고 해서 0으로 덮어버리지 않고 보존합니다.
+            if (prevData && (prevData.fStreak !== 0 || prevData.iStreak !== 0 || prevData.price > 0)) {
+              results[emptyIdx] = { ...prevData, isWaiting: false };
+              console.log(`[v4.0.10] Preserved existing data for ${stock.name} despite empty KIS`);
+            } else {
+              const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
+              if (emptyIdx >= 0) results[emptyIdx] = emptyStock;
+              else results.push(emptyStock);
+            }
           }
         } catch (e) {
           const errIdx = results.findIndex(r => r.code === stock.code);
@@ -1090,7 +1098,7 @@ function MainApp() {
             error: true,
             isWaiting: false
           };
-          console.warn(`[v4.0.9] Error analyzing ${stock.name}:`, e.message);
+          console.warn(`[v4.0.10] Error analyzing ${stock.name}:`, e.message);
           if (errIdx >= 0) results[errIdx] = errorStock;
           else results.push(errorStock);
         }
@@ -1101,6 +1109,17 @@ function MainApp() {
           setAnalyzedStocks([...results]);
         }
       }
+
+      // [v4.0.10] 분석 루프가 끝났는데도 isWaiting: true로 남아있는 미아 데이터 구출
+      // (부분 갱신 등으로 scanList에서 누락되었거나 예외처리에서 빠진 종목들이 영원히 분석중에 빠지는 것을 방지)
+      results.forEach(r => {
+        if (r.isWaiting) {
+          r.isWaiting = false;
+          if (!r.price && !r.fStreak && !r.iStreak) {
+            r.noData = true;
+          }
+        }
+      });
       setAnalyzedStocks([...results]);
 
       // Finalize sectors (Convert raw KRW to 100M units)
@@ -1127,10 +1146,10 @@ function MainApp() {
         }
       } else {
         // 서버에서 최신 전체 시장 데이터를 주었다면 즉시 반영합니다.
-        // [v4.0.7] 서버 데이터 단위 보정 (만약 조 단위 수치가 너무 비현실적이면 만원 -> 억원으로 변환하여 정합성 유지)
+        // [v4.0.10] 서버에서 이제 올바른 억원 단위로 보내므로 그대로 사용 (반올림만 적용)
         const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
           let f = Number(s.flow) || 0;
-          if (Math.abs(f) > 500000) f = Math.round(f / 10000); // 50조(500,000억) 이상은 단위 오류 가능성이 높으므로 1/10000 보정
+          f = Math.round(f); // 소수점 정리
           return { ...s, flow: f };
         });
         setSectors(calibratedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
@@ -1190,7 +1209,7 @@ function MainApp() {
 
         // 조건에 맞는 데이터가 없다면 기본 문구 사용
         if (tickerTexts.length === 0) {
-          tickerTexts.push("💰 [v4.0.9] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          tickerTexts.push("💰 [v4.0.10] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
           tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
         }
       }
@@ -2047,8 +2066,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.footerText}>Money Fact v4.0.9 | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.9 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerText}>Money Fact v4.0.10 | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.10 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2061,7 +2080,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.9</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.10</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
