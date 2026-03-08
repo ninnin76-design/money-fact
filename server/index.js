@@ -696,7 +696,9 @@ async function runDeepMarketScan(force = false) {
 
             const mwc = MARKET_WATCH_STOCKS.find(s => s.code === code);
             if (mwc && mwc.sector) {
-                sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuy;
+                // [v4.0.12] 주식 수(Qty) 대신 거래대금(Amount = 수량 * 가격)으로 섹터 흐름 합산
+                const netBuyAmount = netBuy * (parseInt(val.price) || 0);
+                sectorMap[mwc.sector] = (sectorMap[mwc.sector] || 0) + netBuyAmount;
             }
             // [v3.6.3] instTotals는 위에서 이미 시장 전체 합계로 초기화되었으므로 개별 합산을 수행하지 않습니다.
 
@@ -712,12 +714,19 @@ async function runDeepMarketScan(force = false) {
                     return fQ + oQ;
                 };
 
-                const firstNet = getNet(daily[0]);
-                if (firstNet === 0) return 0;
+                // [v4.0.12] KIS API는 장 시작 전 오늘 데이터를 0으로 미리 주는 경우가 많습니다.
+                // 0인 날은 무시하고, 실제 거래가 있었던 가장 최근일부터 연속성을 체크하여 장전에도 어제까지의 streak을 보여줍니다.
+                let startIdx = 0;
+                while (startIdx < daily.length && getNet(daily[startIdx]) === 0) {
+                    startIdx++;
+                }
 
+                if (startIdx >= daily.length) return 0;
+
+                const firstNet = getNet(daily[startIdx]);
                 const isBuy = firstNet > 0;
                 let count = 0;
-                for (let j = 0; j < daily.length; j++) {
+                for (let j = startIdx; j < daily.length; j++) {
                     const net = getNet(daily[j]);
                     if (isBuy && net > 0) count++;
                     else if (!isBuy && net < 0) count++;
@@ -775,7 +784,11 @@ async function runDeepMarketScan(force = false) {
         const SECTOR_ORDER = [
             '반도체', '이차전지', '바이오 및 헬스케어', '자동차 및 전자부품', '로봇 및 에너지', '엔터 및 플랫폼'
         ];
-        const sectorList = Object.entries(sectorMap).map(([name, flow]) => ({ name, flow }));
+        const sectorList = Object.entries(sectorMap).map(([name, totalAmount]) => {
+            // [v4.0.12] 합산된 추정 거래대금을 '억원' 단위로 변환 (/ 10^8)
+            const flow = Math.round(totalAmount / 100000000);
+            return { name, flow };
+        });
         // [v3.8.0] 섹터별 자금 흐름을 금액(절대값)이 큰 순서대로 정렬하여 시장 활성도를 우선적으로 보여줌
         sectorList.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow));
 

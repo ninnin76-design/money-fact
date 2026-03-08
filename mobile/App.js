@@ -457,9 +457,9 @@ function MainApp() {
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
   // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
-  const [settingBuyStreak, setSettingBuyStreak] = useState(5);
-  const [settingSellStreak, setSettingSellStreak] = useState(5);
-  const [settingAccumStreak, setSettingAccumStreak] = useState(5);
+  const [settingBuyStreak, setSettingBuyStreak] = useState(3);
+  const [settingSellStreak, setSettingSellStreak] = useState(3);
+  const [settingAccumStreak, setSettingAccumStreak] = useState(3);
 
   // Sample Sectors
   const [sectors, setSectors] = useState([
@@ -927,11 +927,12 @@ function MainApp() {
           if (prev) {
             results.push({ ...prev, isWaiting: false }); // 캐시 데이터가 있으면 분석중 표시 제거
           } else {
+            // [v4.0.12] 이전 데이터(prev)가 없어도 mystock의 기본 정보를 results에 채워 넣어 화면이 비는 것을 방지
             results.push({
               ...mystock,
               fStreak: 0, iStreak: 0, sentiment: 50, price: 0,
               isHiddenAccumulation: false,
-              isWaiting: true // 정말 처음인 경우에만 분석 중 표시
+              isWaiting: true // 정말 데이터가 아예 없는 경우에만 분석 중 표시
             });
           }
           snapshotExistingCodes.add(mystock.code);
@@ -967,9 +968,18 @@ function MainApp() {
         results.splice(1000);
       }
 
-      // [v4.0.12] 전광판에서 기술적인 상태 메시지(분석중...)를 제거하고 준비된 데이터만 노출
-      const tickerTexts = (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) ? [...snapshotRes.data.tickerItems] : [];
-      const hasServerMarketData = !!(snapshotRes && snapshotRes.data && snapshotRes.data.sectors);
+      // [v4.0.12] 1차 스냅샷 데이터 로딩 직후, Ticker를 즉시 업데이트하여 사용자가 기다리는 느낌을 없앱니다.
+      if (snapshotRes && snapshotRes.data && snapshotRes.data.tickerItems) {
+        setTickerItems([...snapshotRes.data.tickerItems]);
+      } else {
+        // 스냅샷 ticker가 없으면 섹터 TOP이라도 즉시 노출
+        const earlyTickerTexts = [];
+        if (calibratedServerSectors.length > 0) {
+          const top = calibratedServerSectors[0];
+          earlyTickerTexts.push(`🔥 현재 가장 뜨거운 섹터: ${top.name} (${top.flow > 0 ? '+' : ''}${top.flow}억 유입)`);
+        }
+        if (earlyTickerTexts.length > 0) setTickerItems(earlyTickerTexts);
+      }
 
       // [v4.0.8] 사용자가 전달한 targetStocks가 있다면 그것을 우선순위로 사용합니다.
       const priorityStocks = targetStocks || myStocks;
@@ -2137,8 +2147,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.0.12] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.12 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.0.13] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.0.13 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
