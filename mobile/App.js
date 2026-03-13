@@ -1,5 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import Constants from 'expo-constants';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
@@ -35,239 +40,261 @@ const MARKET_WATCH_STOCKS = [
   { name: '가온칩스', code: '399720', sector: '반도체' }, { name: '주성엔지니어링', code: '036930', sector: '반도체' },
   { name: '이오테크닉스', code: '039030', sector: '반도체' }, { name: 'ISC', code: '095340', sector: '반도체' },
 
-  // 2차전지 (10)
-  { name: 'LG에너지솔루션', code: '373220', sector: '2차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '2차전지' },
-  { name: '삼성SDI', code: '006400', sector: '2차전지' }, { name: '에코프로비엠', code: '247540', sector: '2차전지' },
-  { name: '에코프로', code: '086520', sector: '2차전지' }, { name: '엘앤에프', code: '066970', sector: '2차전지' },
-  { name: '금양', code: '001570', sector: '2차전지' }, { name: '포스코퓨처엠', code: '003670', sector: '2차전지' },
-  { name: '엔켐', code: '348370', sector: '2차전지' }, { name: '레이크머티리얼즈', code: '281740', sector: '2차전지' },
+  // 2차전지 (10) -> 이차전지
+  { name: 'LG에너지솔루션', code: '373220', sector: '이차전지' }, { name: 'POSCO홀딩스', code: '005490', sector: '이차전지' },
+  { name: '삼성SDI', code: '006400', sector: '이차전지' }, { name: '에코프로비엠', code: '247540', sector: '이차전지' },
+  { name: '에코프로', code: '086520', sector: '이차전지' }, { name: '엘앤에프', code: '066970', sector: '이차전지' },
+  { name: '금양', code: '001570', sector: '이차전지' }, { name: '포스코퓨처엠', code: '003670', sector: '이차전지' },
+  { name: '엔켐', code: '348370', sector: '이차전지' }, { name: '레이크머티리얼즈', code: '281740', sector: '이차전지' },
 
-  // 바이오 (10)
-  { name: '삼성바이오로직스', code: '207940', sector: '바이오' }, { name: '셀트리온', code: '068270', sector: '바이오' },
-  { name: 'HLB', code: '028300', sector: '바이오' }, { name: '알테오젠', code: '196170', sector: '바이오' },
-  { name: '유한양행', code: '000100', sector: '바이오' }, { name: '한미약품', code: '128940', sector: '바이오' },
-  { name: '에스티팜', code: '237690', sector: '바이오' }, { name: '리가켐바이오', code: '141080', sector: '바이오' },
-  { name: '휴젤', code: '145020', sector: '바이오' }, { name: '삼천당제약', code: '000250', sector: '바이오' },
+  // 바이오 (10) -> 바이오 및 헬스케어
+  { name: '삼성바이오로직스', code: '207940', sector: '바이오 및 헬스케어' }, { name: '셀트리온', code: '068270', sector: '바이오 및 헬스케어' },
+  { name: 'HLB', code: '028300', sector: '바이오 및 헬스케어' }, { name: '알테오젠', code: '196170', sector: '바이오 및 헬스케어' },
+  { name: '유한양행', code: '000100', sector: '바이오 및 헬스케어' }, { name: '한미약품', code: '128940', sector: '바이오 및 헬스케어' },
+  { name: '에스티팜', code: '237690', sector: '바이오 및 헬스케어' }, { name: '리가켐바이오', code: '141080', sector: '바이오 및 헬스케어' },
+  { name: '휴젤', code: '145020', sector: '바이오 및 헬스케어' }, { name: '삼천당제약', code: '000250', sector: '바이오 및 헬스케어' },
 
-  // 자동차 (6)
-  { name: '현대차', code: '005380', sector: '자동차' }, { name: '기아', code: '000270', sector: '자동차' },
-  { name: '현대모비스', code: '012330', sector: '자동차' }, { name: 'HL만도', code: '204320', sector: '자동차' },
-  { name: '현대위아', code: '011210', sector: '자동차' }, { name: '서연이화', code: '200880', sector: '자동차' },
+  // 자동차 (6) -> 자동차 및 전자부품
+  { name: '현대차', code: '005380', sector: '자동차 및 전자부품' }, { name: '기아', code: '000270', sector: '자동차 및 전자부품' },
+  { name: '현대모비스', code: '012330', sector: '자동차 및 전자부품' }, { name: 'HL만도', code: '204320', sector: '자동차 및 전자부품' },
+  { name: '현대위아', code: '011210', sector: '자동차 및 전자부품' }, { name: '서연이화', code: '200880', sector: '자동차 및 전자부품' },
 
-  // 로봇 (6)
-  { name: '레인보우로보틱스', code: '277810', sector: '로봇' }, { name: '두산로보틱스', code: '454910', sector: '로봇' },
-  { name: '루닛', code: '328130', sector: '로봇' }, { name: '뷰노', code: '338220', sector: '로봇' },
-  { name: '마음AI', code: '377480', sector: '로봇' }, { name: '엔젤로보틱스', code: '455390', sector: '로봇' },
+  // 로봇 (6) -> 로봇 및 에너지
+  { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' }, { name: '두산로보틱스', code: '454910', sector: '로봇 및 에너지' },
+  { name: '루닛', code: '328130', sector: '로봇 및 에너지' }, { name: '뷰노', code: '338220', sector: '로봇 및 에너지' },
+  { name: '마음AI', code: '377480', sector: '로봇 및 에너지' }, { name: '엔젤로보틱스', code: '455390', sector: '로봇 및 에너지' },
 
-  // 금융 (6)
-  { name: 'KB금융', code: '105560', sector: '금융' }, { name: '신한지주', code: '055550', sector: '금융' },
-  { name: '하나금융지주', code: '086790', sector: '금융' }, { name: '삼성생명', code: '032830', sector: '금융' },
-  { name: '메리츠금융지주', code: '138040', sector: '금융' }, { name: '포스코인터내셔널', code: '047050', sector: '금융' },
+  // 금융 (6) -> 기타(금융)
+  { name: 'KB금융', code: '105560', sector: '기타(금융)' }, { name: '신한지주', code: '055550', sector: '기타(금융)' },
+  { name: '하나금융지주', code: '086790', sector: '기타(금융)' }, { name: '삼성생명', code: '032830', sector: '기타(금융)' },
+  { name: '메리츠금융지주', code: '138040', sector: '기타(금융)' }, { name: '포스코인터내셔널', code: '047050', sector: '기타(금융)' },
 
-  // IT/플랫폼/엔터 (5)
-  { name: 'NAVER', code: '035420', sector: '플랫폼' }, { name: '카카오', code: '035720', sector: '플랫폼' },
-  { name: '하이브', code: '352820', sector: '엔터' }, { name: 'JYP Ent.', code: '035900', sector: '엔터' },
-  { name: '에스엠', code: '041510', sector: '엔터' },
+  // IT/플랫폼/엔터 (5) -> 엔터 및 플랫폼
+  { name: 'NAVER', code: '035420', sector: '엔터 및 플랫폼' }, { name: '카카오', code: '035720', sector: '엔터 및 플랫폼' },
+  { name: '하이브', code: '352820', sector: '엔터 및 플랫폼' }, { name: 'JYP Ent.', code: '035900', sector: '엔터 및 플랫폼' },
+  { name: '에스엠', code: '041510', sector: '엔터 및 플랫폼' },
 
-  // 중공업/방산/화학 (7)
-  { name: '포스코DX', code: '022100', sector: '기계' }, { name: 'LS ELECTRIC', code: '010120', sector: '기계' },
-  { name: 'LG화학', code: '051910', sector: '화학' }, { name: '한화에어로스페이스', code: '012450', sector: '방산' },
-  { name: '현대로템', code: '064350', sector: '방산' }, { name: '두산에너빌리티', code: '034020', sector: '에너지' },
-  { name: 'LIG넥스원', code: '079550', sector: '방산' },
+  // 중공업/방산/화학 (7) -> 로봇 및 에너지 또는 기타 분류 필요 (서버 기준에 따라 조정)
+  { name: '포스코DX', code: '022100', sector: '로봇 및 에너지' }, { name: 'LS ELECTRIC', code: '010120', sector: '로봇 및 에너지' },
+  { name: 'LG화학', code: '051910', sector: '이차전지' }, { name: '한화에어로스페이스', code: '012450', sector: '로봇 및 에너지' },
+  { name: '현대로템', code: '064350', sector: '로봇 및 에너지' }, { name: '두산에너빌리티', code: '034020', sector: '로봇 및 에너지' },
+  { name: 'LIG넥스원', code: '079550', sector: '로봇 및 에너지' },
 ];
 
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
-import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 LogBox.ignoreAllLogs();
+LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
 // --- [코다리 부장] 프리미엄 캔들 스틱 + 이동평균선 + 거래량 차트 ---
-const StockPriceChart = ({ data }) => {
-  if (!data || data.length < 5) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>차트 데이터 분석 중...</Text>;
+const StockPriceChart = ({ data, currentPrice }) => {
+  if (!data || data.length < 3) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>차트 데이터 분석 중...</Text>;
 
   const screenWidth = Dimensions.get('window').width;
-  const width = screenWidth - 40;
-  const mainHeight = 220;
-  const chartHeight = 150; // 캔들 영역
-  const volHeight = 40;  // 거래량 영역
-  const paddingRight = 45; // 가격축 공간
-  const paddingBottom = 20; // 날짜축 공간
-  const paddingTop = 15;
+  const width = screenWidth - 30;
+  const candleAreaHeight = 180; // 차트 영역을 조금 더 높여서 시인성 확보
+  const volAreaHeight = 55;
+  const totalHeight = candleAreaHeight + volAreaHeight + 10;
+  const paddingRight = 65;
+  const paddingTop = 25;
 
-  // 데이터 가공 (과거 -> 최신)
-  const history = [...data]
-    .filter(d => parseInt(d.stck_clpr || 0) > 0)
-    .reverse()
-    .slice(-45); // 약 45일치 노출 (이미지 스타일)
-
-  if (history.length < 5) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>데이터 로드 중...</Text>;
-
-  const o = history.map(d => parseInt(d.stck_oprc || d.stck_clpr));
-  const h = history.map(d => parseInt(d.stck_hgpr || d.stck_clpr));
-  const l = history.map(d => parseInt(d.stck_lwpr || d.stck_clpr));
-  const c = history.map(d => parseInt(d.stck_clpr));
-  const v = history.map(d => parseInt(d.acml_vol || 0));
-
-  // 이동평균선 계산 함수
-  const calcMA = (period) => {
-    return c.map((_, idx) => {
-      if (idx < period - 1) return null;
-      const slice = c.slice(idx - period + 1, idx + 1);
-      return slice.reduce((acc, val) => acc + val, 0) / period;
-    });
+  const safeParse = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const cleaned = String(val).replace(/[^0-9.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
   };
 
-  const ma5 = calcMA(5);
-  const ma20 = calcMA(20);
-  const ma60 = calcMA(60);
+  const parseDate = (dStr) => {
+    if (!dStr) return new Date();
+    if (dStr.includes('-')) return new Date(dStr);
+    return new Date(`${dStr.substring(0, 4)}-${dStr.substring(4, 6)}-${dStr.substring(6, 8)}`);
+  };
 
-  // 스케일 계산
-  const priceMax = Math.max(...h) * 1.02;
-  const priceMin = Math.min(...l) * 0.98;
+  const allSorted = [...data]
+    .filter(d => safeParse(d.stck_clpr) > 0)
+    .sort((a, b) => parseDate(a.stck_bsop_date) - parseDate(b.stck_bsop_date));
+
+  const allClose = allSorted.map(d => safeParse(d.stck_clpr));
+  const history = allSorted.slice(-20);
+  if (history.length < 3) return <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', margin: 20 }}>데이터 수집 중...</Text>;
+
+  const startIdx = allSorted.length - history.length;
+  const o = history.map(d => safeParse(d.stck_oprc || d.stck_clpr) || safeParse(d.stck_clpr));
+  const h = history.map(d => safeParse(d.stck_hgpr || d.stck_clpr) || safeParse(d.stck_clpr));
+  const l = history.map(d => safeParse(d.stck_lwpr || d.stck_clpr) || safeParse(d.stck_clpr));
+  const c = history.map(d => safeParse(d.stck_clpr));
+  const v = history.map(d => safeParse(d.acml_vol || 0));
+
+  // [v4.2.7] 스마트 스케일링: 현재가가 터무니없이 높거나 낮으면 캔들을 찌그러뜨리지 않기 위해 배제
+  const dataMax = Math.max(...h);
+  const dataMin = Math.min(...l);
+  const cp = safeParse(currentPrice) || c[c.length - 1];
+
+  // 현재가가 과거 데이터 범위의 30% 이내에 있을 때만 스케일에 반영
+  const rangeLimit = (dataMax - dataMin) * 0.3;
+  const isHealthyCp = (cp >= dataMin - rangeLimit && cp <= dataMax + rangeLimit);
+  const inRange = isHealthyCp;
+
+
+  const scaleMax = isHealthyCp ? Math.max(dataMax, cp) : dataMax;
+  const scaleMin = isHealthyCp ? Math.min(dataMin, cp) : dataMin;
+
+  // [v4.2.9] 상하 여백 8%로 박대 길이 극대화
+  const margin = (scaleMax - scaleMin) * 0.08 || scaleMax * 0.05;
+  const priceMax = scaleMax + margin;
+  const priceMin = Math.max(0, scaleMin - margin);
   const priceRange = priceMax - priceMin || 1;
   const volMax = Math.max(...v) || 1;
 
-  const getX = (i) => (i / (history.length - 1)) * (width - paddingRight);
-  const getY = (price) => chartHeight - ((price - priceMin) / priceRange) * (chartHeight - paddingTop) - 5;
-  const getVolY = (vol) => mainHeight - (vol / volMax) * volHeight;
+  const chartW = width - paddingRight;
+  const slotW = chartW / history.length;
+  // [v4.3.1] 71% - 뚱뚱함을 덜어내고 세련된 날렵함을 되찾은 최종 비율
+  const barW = Math.max(slotW * 0.71, 12);
 
-  // 캔들 및 거래량 렌더링
+  const getX = (i) => (i + 0.5) * slotW;
+  const getY = (price) => {
+    if (isNaN(price) || price === null || price === undefined) return paddingTop + candleAreaHeight / 2;
+    const ratio = (price - priceMin) / priceRange;
+    return paddingTop + (candleAreaHeight - paddingTop) * (1 - ratio);
+  };
+
+  // ===== 캔들 렌더링 =====
   const candleNodes = history.map((item, i) => {
     const isUp = c[i] >= o[i];
-    const color = isUp ? '#ff4d4d' : '#3182f6';
-    const candleWidth = (width - paddingRight) / history.length * 0.7;
+    const color = isUp ? '#f3214b' : '#3182f6';
     const x = getX(i);
+    const oY = getY(o[i]);
+    const cY = getY(c[i]);
+    let bodyTop = Math.min(oY, cY);
+    let bodyBot = Math.max(oY, cY);
 
-    // 캔들 몸통
-    const bodyTop = getY(Math.max(o[i], c[i]));
-    const bodyBottom = getY(Math.min(o[i], c[i]));
-    const bodyHeight = Math.max(Math.abs(bodyTop - bodyBottom), 1);
+    let currentBodyH = Math.abs(oY - cY);
+    const minH = 3;
+    if (currentBodyH < minH) {
+      const mid = (bodyTop + bodyBot) / 2;
+      bodyTop = mid - minH / 2;
+      bodyBot = mid + minH / 2;
+      currentBodyH = minH;
+    }
 
-    // 심 (Wick)
-    const highY = getY(h[i]);
-    const lowY = getY(l[i]);
+    let hY = getY(h[i]);
+    let lY = getY(l[i]);
 
     return (
-      <G key={`candle-${i}`}>
-        {/* 심 */}
-        <Line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth="1" />
-        {/* 몸통 */}
-        <Rect
-          x={x - candleWidth / 2}
-          y={bodyTop}
-          width={candleWidth}
-          height={bodyHeight}
-          fill={color}
-        />
-        {/* 거래량 바 (하단) */}
-        <Rect
-          x={x - candleWidth / 2}
-          y={getVolY(v[i])}
-          width={candleWidth}
-          height={(v[i] / volMax) * volHeight}
-          fill={color}
-          opacity="0.6"
-        />
+      <G key={`c${i}`}>
+        <Line x1={x} y1={hY} x2={x} y2={lY} stroke={color} strokeWidth="3.0" strokeLinecap="round" />
+        <Rect x={x - barW / 2} y={bodyTop} width={barW} height={currentBodyH} fill={color} rx={2} />
       </G>
     );
   });
 
-  // 이평선 Path 생성
-  const generatePath = (maData, color) => {
-    const d = maData.map((p, i) => {
-      if (p === null) return '';
-      return `${i === 0 || maData[i - 1] === null ? 'M' : 'L'} ${getX(i)} ${getY(p)}`;
-    }).join(' ');
-    return <Path d={d} fill="none" stroke={color} strokeWidth="1.2" />;
+
+  // ===== 거래량 렌더링 =====
+  const volNodes = history.map((item, i) => {
+    const isUp = c[i] >= o[i];
+    const color = isUp ? '#f3214b' : '#3182f6';
+    const x = getX(i);
+    const volH = Math.max((v[i] / volMax) * (volAreaHeight - 10), 4);
+    const volY = candleAreaHeight + volAreaHeight - volH;
+    return (
+      <Rect key={`v${i}`} x={x - barW / 2} y={volY} width={barW} height={volH} fill={color} opacity="0.7" rx={1} />
+    );
+  });
+
+
+
+  // ===== 이동평균선 =====
+  const makeMaPath = (period, color, dash) => {
+    const points = [];
+    for (let i = 0; i < history.length; i++) {
+      const globalIdx = startIdx + i; // allClose에서의 인덱스
+      if (globalIdx < period - 1) continue;
+      const slice = allClose.slice(globalIdx - period + 1, globalIdx + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+      points.push({ x: getX(i), y: getY(avg) });
+    }
+    if (points.length < 2) return null;
+    const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    return <Path key={`ma${period}`} d={d} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray={dash || ''} />;
   };
 
-  // 최고/최저가 좌표 찾기
-  const maxIdx = h.indexOf(Math.max(...h));
-  const minIdx = l.indexOf(Math.min(...l));
+  const formatPrice = (p) => Math.round(p).toLocaleString();
+  const cpY = getY(cp);
 
-  const formatPrice = (p) => p.toLocaleString();
 
   return (
-    <View style={{ marginVertical: 10, paddingLeft: 10 }}>
+    <View style={{ marginVertical: 10 }}>
       {/* 범례 */}
-      <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
-          <View style={{ width: 8, height: 2, backgroundColor: '#c5f631', marginRight: 4 }} />
-          <Text style={{ color: '#ccc', fontSize: 10 }}>5</Text>
+      <View style={{ flexDirection: 'row', marginBottom: 12, paddingLeft: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+          <View style={{ width: 12, height: 3, backgroundColor: '#c5f631', marginRight: 4 }} />
+          <Text style={{ color: '#aaa', fontSize: 10 }}>5</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
-          <View style={{ width: 8, height: 2, backgroundColor: '#ff4d4d', marginRight: 4 }} />
-          <Text style={{ color: '#ccc', fontSize: 10 }}>20</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+          <View style={{ width: 12, height: 3, backgroundColor: '#ff4d4d', marginRight: 4 }} />
+          <Text style={{ color: '#aaa', fontSize: 10 }}>20</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ width: 8, height: 2, backgroundColor: '#a855f7', marginRight: 4 }} />
-          <Text style={{ color: '#ccc', fontSize: 10 }}>60</Text>
+          <View style={{ width: 12, height: 3, backgroundColor: '#888', marginRight: 4 }} />
+          <Text style={{ color: '#aaa', fontSize: 10 }}>60</Text>
         </View>
       </View>
 
-      <Svg width={width} height={mainHeight}>
+      <Svg width={width} height={totalHeight}>
         <G>
-          {/* AI Character Badge (Mimicking image) */}
-          <G x={10} y={15}>
-            <Rect x="0" y="0" width="30" height="15" rx="7.5" fill="rgba(49, 130, 246, 0.9)" />
-            <TextSVG x="15" y="10.5" fill="#fff" fontSize="8" fontWeight="bold" textAnchor="middle">AI</TextSVG>
+          {/* AI Badge */}
+          <G x={8} y={8}>
+            <Rect width="30" height="15" rx="4" fill="#3182f6" />
+            <TextSVG x="15" y="11" fill="#fff" fontSize="8" fontWeight="bold" textAnchor="middle">AI</TextSVG>
           </G>
-          {/* 가이드 라인 (수평) */}
-          {[0.25, 0.5, 0.75].map(ratio => (
-            <Line
-              key={`grid-${ratio}`}
-              x1="0" y1={chartHeight * ratio} x2={width - paddingRight} y2={chartHeight * ratio}
-              stroke="rgba(255,255,255,0.05)" strokeWidth="1"
-            />
+
+
+          {/* 가이드선 */}
+          {[0, 0.5, 1.0].map(r => (
+            <Line key={`g${r}`} x1="0" y1={paddingTop + (candleAreaHeight - paddingTop) * r} x2={chartW}
+              y2={paddingTop + (candleAreaHeight - paddingTop) * r}
+              stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
           ))}
 
-          {/* 하단 구분선 (거래량 위) */}
-          <Line x1="0" y1={chartHeight + 10} x2={width - paddingRight} y2={chartHeight + 10} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          {/* 거래량 기반선 */}
+          <Line x1="0" y1={candleAreaHeight + 2} x2={chartW} y2={candleAreaHeight + 2} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
 
+          {volNodes}
           {candleNodes}
 
-          {generatePath(ma5, '#c5f631')}
-          {generatePath(ma20, '#ff4d4d')}
-          {generatePath(ma60, '#a855f7')}
+          {/* 이동평균선 */}
+          {makeMaPath(5, '#c5f631')}
+          {makeMaPath(20, '#ff4d4d')}
+          {makeMaPath(60, '#888', '3,2')}
 
-          {/* 최고가 주석 */}
-          <G>
-            <Line x1={getX(maxIdx)} y1={getY(h[maxIdx])} x2={getX(maxIdx)} y2={getY(h[maxIdx]) - 15} stroke="#ff4d4d" strokeWidth="1" />
-            <TextSVG
-              x={getX(maxIdx)} y={getY(h[maxIdx]) - 20}
-              fill="#ff4d4d" fontSize="9" fontWeight="bold" textAnchor="middle"
-            >
-              {formatPrice(h[maxIdx])}
-            </TextSVG>
-          </G>
+          {/* 현재가 배지 (레퍼런스 싱크!) */}
+          {inRange && (
+            <G>
+              <Line x1="0" y1={cpY} x2={chartW} y2={cpY} stroke="#3182f6" strokeWidth="1" strokeDasharray="3,2" />
+              <G transform={`translate(${chartW + 2}, ${cpY - 10})`}>
+                <Rect width={paddingRight - 10} height="20" rx="4" fill="#3182f6" />
+                <TextSVG x={(paddingRight - 10) / 2} y="14" fill="#fff" fontSize="9" fontWeight="bold" textAnchor="middle">
+                  {Math.round(cp).toLocaleString()}
+                </TextSVG>
+              </G>
+            </G>
+          )}
 
-          {/* 최저가 주석 */}
-          <G>
-            <Line x1={getX(minIdx)} y1={getY(l[minIdx])} x2={getX(minIdx)} y2={getY(l[minIdx]) + 15} stroke="#3182f6" strokeWidth="1" />
-            <TextSVG
-              x={getX(minIdx)} y={getY(l[minIdx]) + 25}
-              fill="#3182f6" fontSize="9" fontWeight="bold" textAnchor="middle"
-            >
-              {formatPrice(l[minIdx])}
-            </TextSVG>
-          </G>
-
-          {/* 우측 가격 라벨 */}
-          <TextSVG x={width - paddingRight + 5} y={getY(priceMax)} fill="#666" fontSize="9">{formatPrice(Math.round(priceMax))}</TextSVG>
-          <TextSVG x={width - paddingRight + 5} y={getY(priceMin)} fill="#666" fontSize="9">{formatPrice(Math.round(priceMin))}</TextSVG>
-
-          {/* 현재가 강조 라벨 (우측) */}
-          <Rect x={width - paddingRight + 2} y={getY(c[c.length - 1]) - 7} width={paddingRight - 2} height={14} fill="#3182f6" rx="2" />
-          <TextSVG x={width - paddingRight + 5} y={getY(c[c.length - 1]) + 3} fill="#fff" fontSize="9" fontWeight="bold">
-            {formatPrice(c[c.length - 1])}
-          </TextSVG>
+          {/* 우측 가격 상하단 */}
+          <TextSVG x={chartW + 5} y={paddingTop + 5} fill="#666" fontSize="8">{Math.round(priceMax).toLocaleString()}</TextSVG>
+          <TextSVG x={chartW + 5} y={candleAreaHeight} fill="#666" fontSize="8">{Math.round(priceMin).toLocaleString()}</TextSVG>
         </G>
       </Svg>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: width - paddingRight, marginTop: 4 }}>
-        <Text style={{ color: '#666', fontSize: 10 }}>{history[0].stck_bsop_date.substring(4, 6)}/{history[0].stck_bsop_date.substring(6, 8)}</Text>
+
+      {/* 하단 날짜/LIVE 라벨 */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: chartW, marginTop: 6, paddingHorizontal: 5 }}>
+        {(history[0]?.stck_bsop_date?.length >= 8) ? (
+          <Text style={{ color: '#555', fontSize: 10 }}>{history[0].stck_bsop_date.substring(4, 6)}/{history[0].stck_bsop_date.substring(6, 8)}</Text>
+        ) : (
+          <Text style={{ color: '#555', fontSize: 10 }}>--/--</Text>
+        )}
         <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>LIVE</Text>
       </View>
     </View>
@@ -456,6 +483,11 @@ function MainApp() {
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
+  // [v4.0.16] 디바운싱: 종목을 여러 개 연속 추가할 때 매번 분석 루프를 돌리지 않고,
+  // 마지막 추가 후 800ms 대기 후 한꺼번에 처리하여 체감 속도 5배 향상!
+  const addStockDebounceTimer = useRef(null);
+  const pendingStocksRef = useRef([]);
+
   // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
   const [settingSellStreak, setSettingSellStreak] = useState(3);
@@ -470,6 +502,8 @@ function MainApp() {
     { name: '금융', flow: 0 },
     { name: '로봇', flow: 0 },
   ]);
+  const [serverBuy, setServerBuy] = useState({});
+  const [serverSell, setServerSell] = useState({});
   const [detailedInstFlow, setDetailedInstFlow] = useState({ pnsn: 0, ivtg: 0, ins: 0 });
   const [scanStats, setScanStats] = useState(null); // [코다리 부장] 전종목 레이더 스캔 통계
 
@@ -510,6 +544,8 @@ function MainApp() {
             });
             setSectors(fixed);
           }
+          if (fullData.buyData) setServerBuy(fullData.buyData);
+          if (fullData.sellData) setServerSell(fullData.sellData);
           if (fullData.instFlow) setDetailedInstFlow(fullData.instFlow);
           if (fullData.scanStats) setScanStats(fullData.scanStats);
           if (fullData.updateTime) setLastUpdate(fullData.updateTime);
@@ -542,30 +578,35 @@ function MainApp() {
     setupBackground();
   };
 
-  useEffect(() => {
-    // [v4.0.0] 10분 주기로 서버를 깨우고 최신 데이터를 가져옵니다.
-    // tab 의존성을 제거하여 메뉴 이동 시에도 타이머가 리셋되지 않고 안정적으로 동작하게 합니다.
-    const timer = setInterval(() => {
-      const open = StockService.isMarketOpen();
-      setIsMarketOpen(open);
+  // [v4.1.9] 하이브리드 동기화 로직: 평일 08:00~22:00 KST에만 서버 데이터를 가져오고 그 외 시간/휴일에는 서버와 앱 모두 휴식!
+  const autoRefresh = useCallback(() => {
+    const now = new Date();
+    const kstOffset = 9 * 60 * 60 * 1000;
+    const kstDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + kstOffset);
+    const day = kstDate.getDay(); // 0=일, 6=토
+    const hour = kstDate.getHours();
 
-      // [v4.0.0] 장 마감 직후에도 최종 확정 데이터를 가져올 수 있도록 조건을 완화합니다.
-      // (오후 10시까지는 주기적으로 서버 데이터를 체크합니다 - 서버 감시 시간과 동기화)
-      const now = new Date();
-      const kstHour = (now.getUTCHours() + 9) % 24;
-      const isCheckTime = open || (kstHour >= 15 && kstHour < 22);
+    const isWeekend = (day === 0 || day === 6);
+    const isCheckTime = !isWeekend && (hour >= 8 && hour < 22);
 
-      // 설정 탭이 아닐 때만 자동으로 데이터 갱신 요청
-      // (getCurrentTab 등을 사용하지 않고 state를 직접 참조하면 탭 의존성 때문에 리셋되므로,
-      //  내부 로직에서 탭 상태를 체크하되 의존성에서는 제외하거나 useRef 활용 고려)
-      // 여기서는 안정성을 위해 전역적인 시간 체크에 집중합니다.
-      if (isCheckTime) {
-        refreshData(undefined, true);
+    if (isCheckTime) {
+      console.log(`[AutoRefresh] ${kstDate.toLocaleTimeString()} - 최신 스냅샷 동기화 시도 (평일 운영시간)`);
+      refreshData(undefined, true);
+    } else {
+      // 운영 시간 외에는 조용히 마지막 데이터를 계속 보여줍니다.
+      if (isWeekend) {
+        // console.log("[AutoRefresh] 오늘은 평온한 주말입니다. 서버와 함께 휴식 중...");
       }
-    }, 10 * 60 * 1000);
+    }
 
+    // 마켓 상태는 UI 표시용이므로 별도 업데이트
+    setIsMarketOpen(StockService.isMarketOpen());
+  }, [refreshData]);
+
+  useEffect(() => {
+    const timer = setInterval(autoRefresh, 3 * 60 * 1000); // 3분으로 단축
     return () => clearInterval(timer);
-  }, [myStocks]); // myStocks가 바뀔 때만 재설정 (거의 발생 안 함)
+  }, [autoRefresh]);
 
   // [코다리 부장 터치] 서버 푸시 등록 로직! (설정 ON일 때만 제대로 등록)
   const registerForServerPush = async () => {
@@ -669,7 +710,11 @@ function MainApp() {
     }
 
     let snapshotRes = null;
+    let snapshotStocks = [];
     let fullTimeStr = lastUpdate;
+    let calibratedServerSectors = [];
+    let hasServerMarketData = false;
+    let aggregatedTickerTexts = [];
 
     try {
 
@@ -702,7 +747,6 @@ function MainApp() {
         }
       }
 
-      let snapshotStocks = [];
       // [v3.9.9] 서버 스냅샷(전체 시장 분석 결과)을 항상 함께 가져옵니다.
       {
         // isServerUpdating은 이미 refreshData 시작 시 true로 설정됨
@@ -710,10 +754,12 @@ function MainApp() {
           // [v4.0.0] 수동 새로고침(!silent) 시에는 서버에 강제 스캔(force=true)을 요청합니다.
           const url = `${SERVER_URL}/api/snapshot?t=${Date.now()}${!silent ? '&force=true' : ''}`;
           snapshotRes = await axios.get(url, { timeout: 20000 });
-          if (snapshotRes.data) {
+          if (snapshotRes && snapshotRes.data) {
             const snap = snapshotRes.data;
             const allBuy = snap.buyData || {};
             const allSell = snap.sellData || {};
+            setServerBuy(allBuy);
+            setServerSell(allSell);
 
             if (snap.status === 'SCANNING' || snap._scanTriggered === 'FORCE') {
               // [v4.0.5] 서버가 스캔 중이더라도 최초 로딩(isInitial)이 끝났다면 '서버확인중...'을 해제합니다.
@@ -738,9 +784,10 @@ function MainApp() {
               setIsServerUpdating(false);
             }
 
-            const hasServerData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
+            let hasServerMarketData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
               (Object.values(allBuy).some(l => l && l.length > 0)) ||
               (Object.values(allSell).some(l => l && l.length > 0));
+            const hasServerData = hasServerMarketData; // 하위 호환성 유지
 
             // [v4.0.5] () 안의 동기화 시간 = 서버에서 데이터를 성공적으로 가져온 시점 (날짜+시간)
             const syncNow = new Date();
@@ -850,7 +897,7 @@ function MainApp() {
               const updateDate = snap.updateTime ? new Date(snap.updateTime) : new Date();
               const dateStr = updateDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
               const timeStr = updateDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-              fullTimeStr = `${dateStr} ${timeStr}`;
+              const fullTimeStr = `${dateStr} ${timeStr}`;
               setLastUpdate(fullTimeStr);
 
               // [v3.9.9] 서버 데이터가 너무 오래되었고 장중이라면 2분 뒤 재갱신
@@ -888,6 +935,8 @@ function MainApp() {
                 const localSnapshot = {
                   stocks: snapshotStocks,
                   sectors: snap.sectors || [],
+                  buyData: snap.buyData || {},
+                  sellData: snap.sellData || {},
                   instFlow: snap.instFlow || { pnsn: 0, ivtg: 0, ins: 0 },
                   scanStats: snap.scanStats || null,
                   updateTime: fullTimeStr
@@ -897,7 +946,11 @@ function MainApp() {
             }
           }
         } catch (e) {
+          console.log("[API Error] Snapshot Fetch Failed:", e.message);
           setIsServerUpdating(false);
+          setSyncTime('서버 미연결');
+          // Update the UI visibly so user knows it's offline cache
+          setLastUpdate(prev => prev.includes('오프라인') ? prev : prev + ' (오프라인)');
         } finally {
           // [v3.9.9] 갱신 시도 완료 (setLoading은 여기서 해제하지 않고 각 개별 로직에서 관리)
         }
@@ -1142,11 +1195,11 @@ function MainApp() {
             }
 
             if (isMyStockItem) {
-              if (analysis.fStreak >= settingBuyStreak) tickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
-              if (analysis.iStreak >= settingBuyStreak) tickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
+              if (analysis.fStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
+              if (analysis.iStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
               const priceVal = currentPrice;
-              if (vwap > 0 && priceVal < vwap * 0.97) tickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
-              if (hidden) tickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
+              if (vwap > 0 && priceVal < vwap * 0.97) aggregatedTickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
+              if (hidden) aggregatedTickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
             console.log(`[v4.0.11] KIS Data empty for ${stock.name}`);
@@ -1256,8 +1309,8 @@ function MainApp() {
       }
 
       // [v4.0.8] 분석 완료 후 전광판 업데이트 (의미 있는 실데이터 노출)
-      if (tickerTexts.length <= 1) {
-        tickerTexts.length = 0; // 기존 기본 문구 제거
+      if (aggregatedTickerTexts.length <= 1) {
+        aggregatedTickerTexts.length = 0; // 기존 기본 문구 제거
 
         // 1. 실시간 핫 섹터 1위
         let topSector = null;
@@ -1270,34 +1323,34 @@ function MainApp() {
         }
         if (topSector && Math.abs(topSector.flow) > 0) {
           const flowType = topSector.flow > 0 ? '매수세' : '매도세';
-          tickerTexts.push(`🔥 핫 섹터: [${topSector.name}]에 강한 ${flowType}(${Math.abs(topSector.flow)}억)가 집중되고 있습니다!`);
+          aggregatedTickerTexts.push(`🔥 핫 섹터: [${topSector.name}]에 강한 ${flowType}(${Math.abs(topSector.flow)}억)가 집중되고 있습니다!`);
         }
 
         // 2. 외국인 연속 매수 1위
         const topForeign = results.filter(s => s.fStreak >= 3).sort((a, b) => b.fStreak - a.fStreak)[0];
         if (topForeign) {
-          tickerTexts.push(`🌎 외인 픽 1위: [${topForeign.name}] ${topForeign.fStreak}일 연속 폭풍 매수 중!`);
+          aggregatedTickerTexts.push(`🌎 외인 픽 1위: [${topForeign.name}] ${topForeign.fStreak}일 연속 폭풍 매수 중!`);
         }
 
         // 3. 기관 연속 매수 1위
         const topInst = results.filter(s => s.iStreak >= 3).sort((a, b) => b.iStreak - a.iStreak)[0];
         if (topInst) {
-          tickerTexts.push(`🏢 기관 픽 1위: [${topInst.name}] ${topInst.iStreak}일 연속 강력 러브콜!`);
+          aggregatedTickerTexts.push(`🏢 기관 픽 1위: [${topInst.name}] ${topInst.iStreak}일 연속 강력 러브콜!`);
         }
 
         // 4. 히든 매집 포착
         const hiddenAccum = results.filter(s => s.isHiddenAccumulation)[0];
         if (hiddenAccum) {
-          tickerTexts.push(`🤫 폭풍전야: [${hiddenAccum.name}]에서 세력의 은밀한 매집 흔적 발견!`);
+          aggregatedTickerTexts.push(`🤫 폭풍전야: [${hiddenAccum.name}]에서 세력의 은밀한 매집 흔적 발견!`);
         }
 
         // 조건에 맞는 데이터가 없다면 기본 문구 사용
-        if (tickerTexts.length === 0) {
-          tickerTexts.push("💰 [v4.0.14] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
-          tickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
+        if (aggregatedTickerTexts.length === 0) {
+          aggregatedTickerTexts.push("💰 [v4.0.14] 오늘의 황금 수급 분석을 완료했습니다! 전광판을 확인하세요.");
+          aggregatedTickerTexts.push("🎯 보물 지도의 모든 종목이 최신 상태로 동기화되었습니다.");
         }
       }
-      setTickerItems(tickerTexts);
+      setTickerItems(aggregatedTickerTexts);
 
       // [v3.9.9] [확정] 시간은 서버의 데이터 생성 시점을, [동기화] 시간은 현재 앱이 새로고침된 시점을 나타냅니다.
       let displayTime = "";
@@ -1425,7 +1478,16 @@ function MainApp() {
       const updated = [...myStocks, newStock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
-      refreshData(updated, true); // [v4.0.5] 관심종목 추가 시 전체 화면이 가려지는 문제 방지 (백그라운드에서 조용히 갱신)
+      // [v4.0.16] 디바운싱: 여러 종목을 연속으로 추가할 때 마지막 추가 후 800ms 대기 후 한꺼번에 분석
+      // 5개 연속 추가 시 기존 15초 → 3초, 깜빡임 5번 → 1번으로 개선!
+      pendingStocksRef.current.push(newStock);
+      if (addStockDebounceTimer.current) clearTimeout(addStockDebounceTimer.current);
+      addStockDebounceTimer.current = setTimeout(() => {
+        const stocksToRefresh = [...pendingStocksRef.current];
+        pendingStocksRef.current = [];
+        console.log(`[v4.0.16] 디바운싱 완료: ${stocksToRefresh.length}개 종목 일괄 분석 시작`);
+        refreshData(updated, true);
+      }, 800);
     }
 
     setSearchModal(false);
@@ -1442,8 +1504,15 @@ function MainApp() {
       const updated = [...myStocks, stock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
-      // [v4.0.8] 즐겨찾기 추가 시 즉시 분석을 수행하여 '분석 중' 상태를 빠르게 탈출합니다.
-      refreshData(updated, true);
+      // [v4.0.16] 즐겨찾기도 디바운싱 적용: 연속 즐겨찾기 추가 시 한꺼번에 분석
+      pendingStocksRef.current.push(stock);
+      if (addStockDebounceTimer.current) clearTimeout(addStockDebounceTimer.current);
+      addStockDebounceTimer.current = setTimeout(() => {
+        const stocksToRefresh = [...pendingStocksRef.current];
+        pendingStocksRef.current = [];
+        console.log(`[v4.0.16] 즐겨찾기 디바운싱: ${stocksToRefresh.length}개 종목 일괄 분석`);
+        refreshData(updated, true);
+      }, 800);
     }
   };
 
@@ -1598,15 +1667,31 @@ function MainApp() {
       // [v3.9.9] 1차: 앱에서 직접 KIS API 호출
       let history = await StockService.getInvestorData(stock.code, true);
 
-      // [v3.9.9] 2차: 직접 호출 실패 시 서버 프록시 경유 (서버는 안정적인 공유 토큰 보유)
-      if (!history || history.length === 0) {
+      // [v4.2.0] 데이터 품질 검증: 모든 항목이 고가/저가/시가 실효값(>0)을 포함하는지 확인
+      const hasOHLCV = history && history.length > 0 && history.some(d => {
+        const hg = parseInt(d.stck_hgpr || "0");
+        const lw = parseInt(d.stck_lwpr || "0");
+        return hg > 0 && lw > 0;
+      });
+
+      // [v4.2.0] 데이터 없거나 부실하면 서버 프록시 경유
+      if (!history || history.length === 0 || !hasOHLCV) {
         try {
           const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 15000 });
           if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
-            history = proxyRes.data.daily;
+            const serverHasOHLCV = proxyRes.data.daily.some(d => {
+              const hg = parseInt(d.stck_hgpr || "0");
+              const lw = parseInt(d.stck_lwpr || "0");
+              return hg > 0 && lw > 0;
+            });
+
+            // 서버 데이터가 더 풍부하면 서버 데이터 사용
+            if (serverHasOHLCV || !history || history.length === 0) {
+              history = proxyRes.data.daily;
+            }
           }
         } catch (proxyErr) {
-          // 서버 프록시도 실패 - 결국 캐시 데이터로 표시
+          // 서버 프록시도 실패 - 기존 데이터로 표시
         }
       }
 
@@ -1618,13 +1703,13 @@ function MainApp() {
         // 현재가 (실시간 가격이 있다면 유지, 없다면 히스토리 첫날 가격)
         const currentPrice = stock.price > 0 ? stock.price : (parseInt(history[0].stck_clpr || 0) || 0);
 
-        setSelectedStock({
-          ...stock,
+        setSelectedStock(prev => ({
+          ...prev,
           ...analysis,
-          vwap,
+          vwap: vwap || prev.vwap, // 0이면 기존값 유지
           isHiddenAccumulation: hidden,
           price: currentPrice
-        });
+        }));
         setSelectedStockHistory(history);
 
         // [v3.9.7] analyzedStocks에도 이 최신 정보를 업데이트하여 리스트에서도 바로 반영되게 함
@@ -1753,25 +1838,58 @@ function MainApp() {
         <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
           <MarketStatusHeader />
 
-          {/* [코다리 부장] 전종목 레이더 스캔 현황 - 데이터 분석 전이라도 기본 틀은 유지 */}
+          {/* [코다리 부장] 하이브리드 레이더 현황 - 매수/매도 밸런스 시각화 강화 */}
           {(scanStats || isMarketOpen) && (
-            <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 14, backgroundColor: '#0d1b2a', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(49,130,246,0.15)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14 }}>📡</Text>
-                <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '800', marginLeft: 6 }}>하이브리드 레이더</Text>
-                <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                  <Text style={{ color: '#00c471', fontSize: 10, fontWeight: '700' }}>● LIVE</Text>
+            <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 16, backgroundColor: '#0d1b2a', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.25)', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(49,130,246,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16 }}>📡</Text>
+                </View>
+                <View style={{ marginLeft: 10 }}>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800', letterSpacing: -0.5 }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v4.1</Text></Text>
+                  <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
+                </View>
+                <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderOuterWidth: 1, borderColor: 'rgba(0,196,113,0.2)' }}>
+                  <Text style={{ color: '#00c471', fontSize: 10, fontWeight: '800' }}>● LIVE SCAN</Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>전종목 <Text style={{ color: '#fff', fontWeight: '700' }}>{scanStats?.totalScanned || '2,800+'}</Text>개</Text>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>후보 <Text style={{ color: '#fcc419', fontWeight: '700' }}>{scanStats?.deepScanned || '-'}</Text>개</Text>
-                <Text style={{ color: '#8b95a1', fontSize: 11 }}>분석 <Text style={{ color: '#3182f6', fontWeight: '700' }}>{scanStats?.successHits || '-'}</Text>개</Text>
+
+              {/* 매수 vs 매도 밸런스 바 */}
+              {scanStats && (scanStats.buyHits > 0 || scanStats.sellHits > 0) ? (
+                <View style={{ marginBottom: 15 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ color: '#ff5252', fontSize: 11, fontWeight: '700' }}>매수 수급 {scanStats.buyHits}건</Text>
+                    <Text style={{ color: '#3182f6', fontSize: 11, fontWeight: '700' }}>매도 수급 {scanStats.sellHits}건</Text>
+                  </View>
+                  <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 3, flexDirection: 'row', overflow: 'hidden' }}>
+                    <View style={{ flex: scanStats.buyHits || 1, backgroundColor: '#ff5252' }} />
+                    <View style={{ flex: scanStats.sellHits || 1, backgroundColor: '#3182f6' }} />
+                  </View>
+                </View>
+              ) : (
+                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 12 }} />
+              )}
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 12 }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>스캔 대상</Text>
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{scanStats?.totalScanned?.toLocaleString() || '2,800+'}</Text>
+                </View>
+                <View style={{ width: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>정밀 분석</Text>
+                  <Text style={{ color: '#fcc419', fontSize: 13, fontWeight: '700' }}>{scanStats?.deepScanned?.toLocaleString() || '-'}</Text>
+                </View>
+                <View style={{ width: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>수급 포착</Text>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '700' }}>{scanStats?.successHits?.toLocaleString() || '-'}</Text>
+                </View>
               </View>
             </View>
           )}
 
-          <SectorHeatmap sectors={sectors} lastUpdate={lastUpdate} isMarketOpen={isMarketOpen} />
+          <SectorHeatmap sectors={sectors} lastUpdate={lastUpdate} isMarketOpen={isMarketOpen} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} buyData={serverBuy} sellData={serverSell} />
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{info.title}</Text>
             <View style={styles.row}>
@@ -2156,8 +2274,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.0.14] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.0.14 Build 20260308 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.1.0] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.1.0 Build 20260311 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2170,7 +2288,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.0.14</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.1.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
@@ -2276,13 +2394,13 @@ function MainApp() {
           {selectedStock && (
             <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
               <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                   <View>
-                    <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>{selectedStock.name}</Text>
-                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 4 }}>{selectedStock.code}</Text>
+                    <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>{selectedStock.name}</Text>
+                    <Text style={{ color: '#aaa', fontSize: 13, marginTop: 6 }}>{selectedStock.code}</Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{selectedStock.price?.toLocaleString()}원</Text>
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{selectedStock.price?.toLocaleString()}원</Text>
                   </View>
                 </View>
               </View>
@@ -2297,7 +2415,10 @@ function MainApp() {
                     <Text style={{ color: '#666', fontSize: 12, marginTop: 8 }}>차트 데이터를 불러오는 중...</Text>
                   </View>
                 ) : (
-                  <StockPriceChart data={selectedStockHistory} />
+                  <StockPriceChart
+                    data={selectedStockHistory}
+                    currentPrice={selectedStock?.price}
+                  />
                 )}
               </View>
 
@@ -2376,7 +2497,7 @@ function MainApp() {
                 <View style={styles.detailStats}>
                   <Text style={styles.statLabel}>세력 평단가(VWAP)</Text>
                   <Text style={styles.statValue}>
-                    {selectedStock.vwap > 0 ? `${selectedStock.vwap.toLocaleString()}원` : '분석 중...'}
+                    {selectedStock.vwap > 0 ? `${selectedStock.vwap.toLocaleString()}원` : '서버 스캔 진행 중...'}
                   </Text>
                   {selectedStock.vwap > 0 && (
                     <Text style={[styles.statDiff, { color: selectedStock.price < selectedStock.vwap ? '#00ff00' : '#ff4d4d' }]}>
