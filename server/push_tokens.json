@@ -1,0 +1,62 @@
+[
+  {
+    "token": "ExponentPushToken[m5YhNNJ0zcfl9UBfvixeqK]",
+    "syncKey": "m1234",
+    "stocks": [
+      {
+        "code": "005930",
+        "name": "삼성전자"
+      },
+      {
+        "code": "066970",
+        "name": "엘앤에프"
+      },
+      {
+        "code": "077360",
+        "name": "덕산하이메탈"
+      },
+      {
+        "code": "067310",
+        "name": "하나마이크로"
+      },
+      {
+        "code": "403870",
+        "name": "HPSP"
+      },
+      {
+        "code": "302440",
+        "name": "SK바이오사이언스"
+      },
+      {
+        "code": "361610",
+        "name": "SK아이이테크놀로지"
+      },
+      {
+        "code": "047040",
+        "name": "대우건설"
+      },
+      {
+        "code": "484590",
+        "name": "삼양컴텍"
+      },
+      {
+        "code": "010140",
+        "name": "삼성중공업"
+      },
+      {
+        "code": "065350",
+        "name": "신성델타테크"
+      },
+      {
+        "code": "065770",
+        "name": "CS"
+      }
+    ],
+    "settings": {
+      "buyStreak": 5,
+      "sellStreak": 5,
+      "accumStreak": 5
+    },
+    "updatedAt": "2026-03-13T11:28:14.588Z"
+  }
+]

@@ -1,0 +1,20 @@
+캐시 토큰 사용
+
+=== TEST: inquire-daily-indexchartprice (FHKUP03500100) ===
+OK: 200
+output1 keys: bstp_nmix_prdy_vrss,prdy_vrss_sign,bstp_nmix_prdy_ctrt,prdy_nmix,acml_vol,acml_tr_pbmn,hts_kor_isnm,bstp_nmix_prpr,bstp_cls_code,prdy_vol,bstp_nmix_oprc,bstp_nmix_hgpr,bstp_nmix_lwpr,futs_prdy_oprc,futs_prdy_hgpr,futs_prdy_lwpr
+output2 keys: stck_bsop_date,bstp_nmix_prpr,bstp_nmix_oprc,bstp_nmix_hgpr,bstp_nmix_lwpr,acml_vol,acml_tr_pbmn,mod_yn
+
+=== TEST: inquire-index-price (FHPUP02100000) ===
+OK: 200
+output keys: bstp_nmix_prpr,bstp_nmix_prdy_vrss,prdy_vrss_sign,bstp_nmix_prdy_ctrt,acml_vol,prdy_vol,acml_tr_pbmn,prdy_tr_pbmn,bstp_nmix_oprc,prdy_nmix_vrss_nmix_oprc,oprc_vrss_prpr_sign,bstp_nmix_oprc_prdy_ctrt,bstp_nmix_hgpr,prdy_nmix_vrss_nmix_hgpr,hgpr_vrss_prpr_sign,bstp_nmix_hgpr_prdy_ctrt,bstp_nmix_lwpr,prdy_clpr_vrss_lwpr,lwpr_vrss_prpr_sign,prdy_clpr_vrss_lwpr_rate,ascn_issu_cnt,uplm_issu_cnt,stnr_issu_cnt,down_issu_cnt,lslm_issu_cnt,dryy_bstp_nmix_hgpr,dryy_hgpr_vrss_prpr_rate,dryy_bstp_nmix_hgpr_date,dryy_bstp_nmix_lwpr,dryy_lwpr_vrss_prpr_rate,dryy_bstp_nmix_lwpr_date,total_askp_rsqn,total_bidp_rsqn,seln_rsqn_rate,shnu_rsqn_rate,ntby_rsqn
+
+=== TEST: inquire-index-daily-price (FHPUP02120000) ===
+OK: 200
+
+=== TEST: inquire-member (FHKST01010600) ===
+OK: 200
+output keys: 0
+
+=== TEST: HHPPG046600C1 (프로그램매매 투자자매매동향) ===
+FAIL rpp: 404 Request failed with status code 404

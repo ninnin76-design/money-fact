@@ -18,6 +18,6 @@ export const STORAGE_KEYS = {
     USER_SECTORS: '@user_sectors',
 };
 
-export const SERVER_URL = 'https://money-fact-server.onrender.com';
-// export const SERVER_URL = 'http://192.168.45.7:3000'; // 로컬 서버 연동용
+// export const SERVER_URL = 'https://money-fact-server.onrender.com';
+export const SERVER_URL = 'http://192.168.45.7:3000'; // 로컬 서버 연동용 (IPv4: 192.168.45.7)
 export const BACKGROUND_TASK_NAME = 'BACKGROUND_STOCK_CHECK';

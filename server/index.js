@@ -1177,6 +1177,10 @@ app.get('/api/sync/load', async (req, res) => {
     res.json({ stocks, settings, watchlist, version: data.version || 1, updatedAt: data.updatedAt });
 });
 
+app.get('/api/snapshot', (req, res) => {
+    res.json(marketAnalysisReport);
+});
+
 // Secret Admin Endpoint to Force Scan
 app.get('/api/admin/force-scan', async (req, res) => {
     console.log("[Admin] Force Scan Triggered!");

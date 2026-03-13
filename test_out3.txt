@@ -1,0 +1,4 @@
+=== TEST: inquire-investor with Sector Code (0001 KOSPI) ===
+OK: 200
+=== TEST: inquire-investor with Sector Code (0013 반도체) ===
+OK: 200
