@@ -152,7 +152,8 @@ let cachedToken = '';
 let tokenExpiry = null;
 let lastRateLimitTime = 0; // [v4.0.12] 마지막 레이트 리미트 발생 시각
 
-// [v4.0.2] 서버 재시작 시에도 마지막 성공 시간을 유지하기 위해 스냅샷 파일에서 로드합니다.
+// [v4.1.1] 서버 가동 시 기존 스냅샷(market_report_snapshot.json)을 통째로 메모리에 복원합니다!
+// 어플을 새로 깔거나 서버가 재시작되어도, 장 마감 시점의 데이터를 항상 볼 수 있도록 보장합니다.
 let marketAnalysisReport = {
     updateTime: null,
     dataType: 'LIVE',
@@ -163,18 +164,19 @@ let marketAnalysisReport = {
     instFlow: { pnsn: 0, ivtg: 0, ins: 0 }
 };
 
-// [v4.0.14] 서버 가동 시 기존 스냅샷(market_report_snapshot.json)을 통째로 메모리에 복원합니다!
-// 기존에는 분산되어 있던 로직을 통합하고, 전체 데이터를 복구하도록 개선했습니다.
 try {
     if (fs.existsSync(SNAPSHOT_FILE)) {
         const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-        if (snap && snap.updateTime) {
-            marketAnalysisReport = { ...marketAnalysisReport, ...snap };
-            console.log(`[Server] Snapshot restored from ${snap.updateTime}`);
+        if (snap && (snap.updateTime || snap.marketReport)) {
+            // 구조 보정: snap 자체가 데이터거나 snap.marketReport 안에 데이터가 있을 수 있음
+            const restoredData = snap.marketReport || snap;
+            marketAnalysisReport = { ...marketAnalysisReport, ...restoredData };
+            marketAnalysisReport.status = 'READY'; // 복원된 데이터가 있으므로 즉시 READY 상태로 전환
+            console.log(`[Server] 🏛️ Snapshot restored successfully. Last update: ${marketAnalysisReport.updateTime}`);
         }
     }
 } catch (e) {
-    console.error("[Server] Error loading snapshot:", e.message);
+    console.error("[Server] Critical error loading snapshot:", e.message);
 }
 
 // --- User Portfolio Database ---
@@ -193,15 +195,6 @@ const saveDb = () => {
     } catch (e) { }
 
 };
-
-if (fs.existsSync(SNAPSHOT_FILE)) {
-    try {
-
-        marketAnalysisReport = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-
-    } catch (e) { }
-
-}
 
 const TOKEN_FILE = path.join(__dirname, 'real_token_cache.json');
 
