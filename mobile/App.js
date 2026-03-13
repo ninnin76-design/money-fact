@@ -462,7 +462,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.0.14] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.1.0] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
