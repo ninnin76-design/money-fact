@@ -585,7 +585,9 @@ async function runDeepMarketScan(force = false) {
 
             if (i % 20 === 0 && i > 0) {
                 console.log(`[Radar 2단계] 진행 중: ${i}/${fullList.length} (성공:${hits})`);
-                marketAnalysisReport.scanStats = {
+                // [v4.2.1] 중간 진행 상황은 _scanProgress에 저장하여, 완성된 scanStats를 덮어쓰지 않음
+                // → 앱이 스캔 도중 스냅샷을 읽어도 이전 완료된 수급 포착 수를 유지!
+                marketAnalysisReport._scanProgress = {
                     totalScanned: candidateMap.size,
                     deepScanned: i,
                     successHits: hits
@@ -805,8 +807,13 @@ async function runDeepMarketScan(force = false) {
             totalScanned: totalCandidates,
             deepScanned: fullList.length,
             successHits: hits,
-            wideNetAdded: wideNetHits
+            wideNetAdded: wideNetHits,
+            // [v4.2.1] 앱 UI에서 매수/매도 밸런스 바를 위해 추가
+            buyHits: buyCount,
+            sellHits: sellCount
         };
+        // [v4.2.1] 스캔 진행 중 임시 데이터 제거
+        delete marketAnalysisReport._scanProgress;
         fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(marketAnalysisReport));
 
         console.log(`[Radar] ===== 스냅샷 저장 완료! 매수 감지: ${Object.values(newBuyData).reduce((a, b) => a + b.length, 0)}건, 매도 감지: ${Object.values(newSellData).reduce((a, b) => a + b.length, 0)}건 =====`);

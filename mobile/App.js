@@ -1724,7 +1724,22 @@ function MainApp() {
           return [...prev, newStockData];
         });
       } else {
-        // 데이터를 전혀 가져오지 못한 경우 - 기존 스냅샷 데이터라도 유지
+        // [v4.2.1] 데이터를 전혀 가져오지 못한 경우 (주말/야간) - 기존 분석 데이터(analyzedStocks) 활용!
+        // 스냅샷에 이미 있는 수급 분석 정보를 표시하여, 차트 없이도 연속매매일, 평단가 등은 보여줌
+        const existingAnalysis = analyzedStocks.find(s => s.code === stock.code);
+        if (existingAnalysis) {
+          setSelectedStock(prev => ({
+            ...prev,
+            fStreak: existingAnalysis.fStreak || prev.fStreak || 0,
+            iStreak: existingAnalysis.iStreak || prev.iStreak || 0,
+            sentiment: existingAnalysis.sentiment || prev.sentiment || 50,
+            vwap: existingAnalysis.vwap || prev.vwap || 0,
+            isHiddenAccumulation: existingAnalysis.isHiddenAccumulation || false,
+            price: existingAnalysis.price || prev.price || 0,
+            isWaiting: false,
+            _offlineMode: true // 오프라인 모드 플래그
+          }));
+        }
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
           if (idx >= 0) {
@@ -1736,7 +1751,21 @@ function MainApp() {
         });
       }
     } catch (e) {
-      // Detail fetch failed, clear waiting state
+      // [v4.2.1] API 에러 발생 시에도 기존 분석 데이터 표시
+      const existingAnalysis = analyzedStocks.find(s => s.code === stock.code);
+      if (existingAnalysis) {
+        setSelectedStock(prev => ({
+          ...prev,
+          fStreak: existingAnalysis.fStreak || prev.fStreak || 0,
+          iStreak: existingAnalysis.iStreak || prev.iStreak || 0,
+          sentiment: existingAnalysis.sentiment || prev.sentiment || 50,
+          vwap: existingAnalysis.vwap || prev.vwap || 0,
+          isHiddenAccumulation: existingAnalysis.isHiddenAccumulation || false,
+          price: existingAnalysis.price || prev.price || 0,
+          isWaiting: false,
+          _offlineMode: true
+        }));
+      }
       setAnalyzedStocks(prev => {
         const idx = prev.findIndex(s => s.code === stock.code);
         if (idx >= 0) {
@@ -1889,7 +1918,7 @@ function MainApp() {
             </View>
           )}
 
-          <SectorHeatmap sectors={sectors} lastUpdate={lastUpdate} isMarketOpen={isMarketOpen} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} buyData={serverBuy} sellData={serverSell} />
+          <SectorHeatmap sectors={sectors} lastUpdate={lastUpdate} isMarketOpen={isMarketOpen} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} buyData={serverBuy} sellData={serverSell} onStockPress={(stockInfo) => handleOpenDetail({ ...stockInfo, price: 0 })} />
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{info.title}</Text>
             <View style={styles.row}>

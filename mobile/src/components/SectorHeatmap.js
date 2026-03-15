@@ -5,7 +5,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, index }) => {
+const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, index, onStockPress }) => {
     const [expanded, setExpanded] = useState(false);
 
     const dataObj = isHot ? (buyData || {}) : (sellData || {});
@@ -24,10 +24,11 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
     });
 
     const allMatchesMap = new Map();
-    foreignMatches.forEach(s => allMatchesMap.set(s.code, s.name));
-    instMatches.forEach(s => allMatchesMap.set(s.code, s.name));
+    foreignMatches.forEach(s => allMatchesMap.set(s.code, { name: s.name, code: s.code }));
+    instMatches.forEach(s => allMatchesMap.set(s.code, { name: s.name, code: s.code }));
 
-    const allMatchedNames = Array.from(allMatchesMap.values());
+    const allMatched = Array.from(allMatchesMap.values());
+    const allMatchedNames = allMatched.map(s => s.name);
     const top2 = allMatchedNames.slice(0, 2);
     const restCount = Math.max(0, allMatchedNames.length - 2);
 
@@ -41,6 +42,13 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
 
     // 가장 강력한 1위를 95%로 잡고 내려갑니다.
     const percent = Math.max(10, Math.min(100, 95 - (index * 15)));
+
+    // [v4.2.1] 종목 클릭 핸들러
+    const handleStockPress = (stockInfo) => {
+        if (onStockPress && stockInfo.code) {
+            onStockPress({ name: stockInfo.name, code: stockInfo.code });
+        }
+    };
 
     return (
         <View style={styles.sectorCard}>
@@ -75,17 +83,19 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
 
             {expanded && (
                 <View style={styles.expandedArea}>
-                    {allMatchedNames.map((name, idx) => (
-                        <View key={idx} style={styles.tag}><Text style={styles.tagText}>{name}</Text></View>
+                    {allMatched.map((stockInfo, idx) => (
+                        <TouchableOpacity key={idx} style={styles.tag} onPress={() => handleStockPress(stockInfo)} activeOpacity={0.6}>
+                            <Text style={[styles.tagText, onStockPress && { color: '#6DB3F2' }]}>{stockInfo.name}</Text>
+                        </TouchableOpacity>
                     ))}
-                    {allMatchedNames.length === 0 && <Text style={[styles.tagText, { color: '#666' }]}>주요 리스트 랭킹 진입 종목이 아직 없습니다.</Text>}
+                    {allMatched.length === 0 && <Text style={[styles.tagText, { color: '#666' }]}>주요 리스트 랭킹 진입 종목이 아직 없습니다.</Text>}
                 </View>
             )}
         </View>
     );
 };
 
-const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_STOCKS, buyData, sellData }) => {
+const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_STOCKS, buyData, sellData, onStockPress }) => {
     let confirmText = '당일 확정';
     if (lastUpdate && typeof lastUpdate === 'string') {
         const match = lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/);
@@ -113,7 +123,7 @@ const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_ST
                         <Text style={styles.sectionSubtitle}>외인·기관 수급 집중</Text>
                     </View>
                     {hotSectors.map((s, idx) => (
-                        <SectorRow key={'hot' + idx} sector={s} isHot={true} index={idx} buyData={buyData} sellData={sellData} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} />
+                        <SectorRow key={'hot' + idx} sector={s} isHot={true} index={idx} buyData={buyData} sellData={sellData} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} onStockPress={onStockPress} />
                     ))}
                 </View>
             )}
@@ -126,7 +136,7 @@ const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_ST
                         <Text style={styles.sectionSubtitle}>수급 이탈 주의</Text>
                     </View>
                     {coldSectors.map((s, idx) => (
-                        <SectorRow key={'cold' + idx} sector={s} isHot={false} index={idx} buyData={buyData} sellData={sellData} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} />
+                        <SectorRow key={'cold' + idx} sector={s} isHot={false} index={idx} buyData={buyData} sellData={sellData} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} onStockPress={onStockPress} />
                     ))}
                 </View>
             )}
