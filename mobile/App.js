@@ -462,7 +462,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.2.1] 시장 수급 데이터를 동기화하고 있습니다.", "잠시만 기다려 주시면 최신 분석 결과가 노출됩니다."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.2.2] 주말/야간에도 차트와 평단가를 즉시 조회할 수 있는 하이패스 시스템이 적용되었습니다!", "💡 종목 클릭 시 차트가 나오지 않는다면 잠시 후 다시 시도해 주세요."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1737,8 +1737,13 @@ function MainApp() {
             isHiddenAccumulation: existingAnalysis.isHiddenAccumulation || false,
             price: existingAnalysis.price || prev.price || 0,
             isWaiting: false,
-            _offlineMode: true // 오프라인 모드 플래그
+            _offlineMode: true
           }));
+
+          // [v4.2.2] 오프라인일 때 전날까지의 분석 히스토리가 있다면 차트도 보여줌
+          if (existingAnalysis.history && existingAnalysis.history.length > 0) {
+            setSelectedStockHistory(existingAnalysis.history);
+          }
         }
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
@@ -1765,6 +1770,11 @@ function MainApp() {
           isWaiting: false,
           _offlineMode: true
         }));
+
+        // [v4.2.2] 에러 시에도 캐시된 히스토리가 있다면 차트 표시
+        if (existingAnalysis.history && existingAnalysis.history.length > 0) {
+          setSelectedStockHistory(existingAnalysis.history);
+        }
       }
       setAnalyzedStocks(prev => {
         const idx = prev.findIndex(s => s.code === stock.code);
@@ -2303,8 +2313,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.1.0] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.1.0 Build 20260311 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.2.2] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.2.2 Build 120 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2317,7 +2327,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.1.0</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.2.2</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}

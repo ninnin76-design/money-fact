@@ -751,6 +751,24 @@ async function runDeepMarketScan(force = false) {
                 });
             }
 
+            // [v4.2.2] 세력 평단가(VWAP) 계산 (최근 5일 기준)
+            const calcVWAP = (data, days = 5) => {
+                if (!data || data.length === 0) return 0;
+                let totalValue = 0, totalVol = 0;
+                const limit = Math.min(data.length, days);
+                for (let j = 0; j < limit; j++) {
+                    const v = parseInt(String(data[j].acml_vol || 0).replace(/,/g, ''));
+                    const p = parseInt(String(data[j].stck_clpr || 0).replace(/,/g, ''));
+                    if (v > 0 && p > 0) {
+                        totalValue += (v * p);
+                        totalVol += v;
+                    }
+                }
+                return totalVol > 0 ? Math.round(totalValue / totalVol) : 0;
+            };
+
+            const vwap = calcVWAP(val.daily, 5);
+
             // [v3.6.2] 모든 분석 종목 요약 정보를 맵에 저장 (관심종목용)
             const allFSt = calcIndependentStreak(val.daily.slice(0, 31), '2');
             const allISt = calcIndependentStreak(val.daily.slice(0, 31), '1');
@@ -762,7 +780,9 @@ async function runDeepMarketScan(force = false) {
                 fStreak: allFSt,
                 iStreak: allISt,
                 sentiment: 50 + (allFSt + allISt) * 5,
-                isHiddenAccumulation: isAccum
+                isHiddenAccumulation: isAccum,
+                vwap: vwap, // [v4.2.2] 평단가 추가
+                history: val.daily.slice(0, 30) // [v4.2.2] 차트용 30일 데이터 보관
             };
         });
 
@@ -1246,6 +1266,12 @@ app.get('/api/stock-daily/:code', async (req, res) => {
         const priceData = (priceRes.data && priceRes.data.output) ? priceRes.data.output : [];
 
         if (investorData.length === 0) {
+            // [v4.2.2] KIS API 조회 결과가 없으면 서버 스냅샷 캐시 확인 (주말/야간 대비)
+            const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+            if (cached && cached.history && cached.history.length > 0) {
+                console.log(`[Server] Returning cached history for ${code}`);
+                return res.json({ daily: cached.history });
+            }
             return res.json({ daily: [] });
         }
 
@@ -1271,6 +1297,11 @@ app.get('/api/stock-daily/:code', async (req, res) => {
         res.json({ daily: merged });
     } catch (error) {
         console.error(`[Server] Daily fetch error for ${code}:`, error.message);
+        // [v4.2.2] 에러 발생 시에도 캐시 확인
+        const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+        if (cached && cached.history && cached.history.length > 0) {
+            return res.json({ daily: cached.history });
+        }
         res.status(500).json({ error: 'Failed to fetch daily data', daily: [] });
     }
 });
