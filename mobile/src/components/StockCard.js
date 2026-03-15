@@ -72,7 +72,7 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                     <View style={styles.row1}>
                         <Text style={styles.name}>{name}</Text>
                     </View>
-                    <Text style={{ color: '#ff9800', fontSize: 11, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.8}>📡 스캔 후 데이터가 업데이트됩니다. 잠시만 기다려 주세요.</Text>
+                    <Text style={{ color: '#ff9800', fontSize: 11, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.8}>📡 스캔 후 데이터가 업데이트됩니다. </Text>
                     <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>현재 수급 데이터를 조회할 수 없습니다</Text>
                 </View>
             </TouchableOpacity>
