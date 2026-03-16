@@ -1,22 +1,13 @@
-**/node_modules/
-**/.expo/
-**/android/build/
-**/android/app/build/
-**/ios/build/
-build/
-dist/
-web-build/
+node_modules/
+.expo/
 .git/
 .vscode/
 .idea/
-*.apk
-*.aab
+dist/
+web-build/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
 .DS_Store
-# Huge binary or data files
-*.zip
-*.tar.gz
 *.mp4
 *.MOV
