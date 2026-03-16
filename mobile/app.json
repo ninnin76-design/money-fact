@@ -22,7 +22,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.eunhee.moneyfact",
-      "kotlinVersion": "2.0.21",
       "googleServicesFile": "./google-services.json"
     },
     "web": {

@@ -6,12 +6,34 @@ import { AuthService } from './AuthService';
 export const StockService = {
     isMarketOpen() {
         const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const dayStr = `${year}${month}${date}`;
+
+        // [코다리 부장 터치] 2026년 한국 주식시장 휴장일 리스트 (핵심 공휴일 및 연말/대체공휴일 포함)
+        const HOLIDAYS = [
+            '20260101', // 신정
+            '20260216', '20260217', '20260218', // 설날 연휴
+            '20260302', // 삼일절 대체공휴일
+            '20260501', // 근로자의 날 (증권시장 휴장)
+            '20260505', // 어린이날
+            '20260525', // 부처님오신날 대체공휴일
+            '20261009', // 한글날
+            '20260924', '20260925', '20260926', '20260928', // 추석 연휴 및 대체공휴일
+            '20261225', // 성탄절
+            '20261231'  // 연말 휴장일
+        ];
+
         const day = now.getDay();
         const hour = now.getHours();
         const min = now.getMinutes();
-        if (day === 0 || day === 6) return false; // Weekend
+
+        if (day === 0 || day === 6) return false; // 주말 제외
+        if (HOLIDAYS.includes(dayStr)) return false; // 공휴일 제외
+
         const time = hour * 100 + min;
-        // Extended hours (Pre-market, Standard, After-hours, and Overnight sessions covers 08:00-20:00)
+        // 장전 시간외부터 밤 8시까지만 작동 (08:00~20:00)
         return time >= 800 && time <= 2000;
     },
 
