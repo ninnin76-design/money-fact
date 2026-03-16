@@ -161,7 +161,8 @@ let marketAnalysisReport = {
     buyData: {},
     sellData: {},
     sectors: [],
-    instFlow: { pnsn: 0, ivtg: 0, ins: 0 }
+    instFlow: { pnsn: 0, ivtg: 0, ins: 0 },
+    lastError: null
 };
 
 try {
@@ -243,7 +244,9 @@ async function getAccessToken() {
             console.log("[Token] New token saved/refreshed.");
             return newToken;
         } catch (e) {
-            console.error("[Token] Failed to get token:", e.response?.data || e.message);
+            const errDetail = e.response ? JSON.stringify(e.response.data) : e.message;
+            console.error("[Token] Failed to get token:", errDetail);
+            marketAnalysisReport.lastError = `[Token Error] ${errDetail}`;
             if (e.response?.status === 403) {
                 console.log("[Token] Rate Limit Hit! Entering 65s cooldown...");
                 lastRateLimitTime = Date.now();
@@ -600,7 +603,11 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 2단계] Deep Scan 완료! 성공: ${hits}개 / 대상: ${fullList.length}개`);
 
         if (hits === 0) {
-            console.log("[Radar] 데이터를 가져오지 못했습니다. 이전 캐시를 유지합니다.");
+            const errorMsg = "데이터를 가져오지 못했습니다. KIS API 응답이나 토큰을 확인하세요.";
+            console.log(`[Radar] ${errorMsg}`);
+            marketAnalysisReport.lastError = errorMsg;
+            marketAnalysisReport.status = 'READY';
+            fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(marketAnalysisReport));
             return;
         }
 
