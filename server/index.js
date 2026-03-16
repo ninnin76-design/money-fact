@@ -234,19 +234,37 @@ async function getAccessToken() {
     tokenRequestPromise = (async () => {
         try {
             console.log("[Token] Requesting NEW token from KIS...");
+
+            // [v4.2.3] 기존 캐시 파일이 문제를 일으킬 수 있으므로 갱신 시도 시 일단 제거 고려
+            // (여기서는 에러 발생 시에만 제거하는 방식으로 안전하게 처리)
+
             const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
                 grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
             });
+
+            if (!res.data.access_token) {
+                throw new Error("KIS response does not contain access_token");
+            }
+
             const newToken = res.data.access_token;
             const newExpiry = new Date(now + (res.data.expires_in - 60) * 1000);
 
             fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
             console.log("[Token] New token saved/refreshed.");
+            marketAnalysisReport.lastError = null; // 성공 시 에러 클리어
             return newToken;
         } catch (e) {
-            const errDetail = e.response ? JSON.stringify(e.response.data) : e.message;
+            const errData = e.response ? e.response.data : null;
+            const errDetail = errData ? JSON.stringify(errData) : e.message;
             console.error("[Token] Failed to get token:", errDetail);
+
+            // [v4.2.3] 토큰 관련 에러가 발생하면 캐시 파일을 삭제하여 다음 시도 시 무조건 새로 받게 함
+            if (fs.existsSync(TOKEN_FILE)) {
+                try { fs.unlinkSync(TOKEN_FILE); } catch (f) { }
+            }
+
             marketAnalysisReport.lastError = `[Token Error] ${errDetail}`;
+
             if (e.response?.status === 403) {
                 console.log("[Token] Rate Limit Hit! Entering 65s cooldown...");
                 lastRateLimitTime = Date.now();
