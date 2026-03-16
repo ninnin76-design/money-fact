@@ -280,6 +280,37 @@ app.get('/api/token', async (req, res) => {
     }
 });
 
+app.get('/api/debug', async (req, res) => {
+    const report = {
+        time: new Date().toISOString(),
+        env: {
+            KIS_BASE_URL: KIS_BASE_URL,
+            HAS_KEY: !!APP_KEY,
+            HAS_SECRET: !!APP_SECRET,
+            KEY_LEN: APP_KEY ? APP_KEY.length : 0,
+            SEC_LEN: APP_SECRET ? APP_SECRET.length : 0
+        },
+        marketAnalysisReport: {
+            updateTime: marketAnalysisReport.updateTime,
+            status: marketAnalysisReport.status,
+            lastError: marketAnalysisReport.lastError,
+            dataType: marketAnalysisReport.dataType
+        }
+    };
+
+    try {
+        const tokenRes = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
+            grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
+        });
+        report.tokenTest = "SUCCESS";
+    } catch (e) {
+        report.tokenTest = "FAILED";
+        report.tokenError = e.response ? e.response.data : e.message;
+    }
+
+    res.json(report);
+});
+
 // --- Push Token Registration ---
 app.post('/api/push/register', (req, res) => {
     const { pushToken, syncKey, stocks, settings } = req.body;
