@@ -149,8 +149,8 @@ const StockPriceChart = ({ data, currentPrice }) => {
 
   const chartW = width - paddingRight;
   const slotW = chartW / history.length;
-  // [v4.3.1] 71% - 뚱뚱함을 덜어내고 세련된 날렵함을 되찾은 최종 비율
-  const barW = Math.max(slotW * 0.71, 12);
+  // [v4.3.1] 62% - 사용자 요청(조금 더 얇게)에 따라 71%에서 62%로 더 날렵하게 조정
+  const barW = Math.max(slotW * 0.62, 9);
 
   const getX = (i) => (i + 0.5) * slotW;
   const getY = (price) => {
@@ -183,7 +183,7 @@ const StockPriceChart = ({ data, currentPrice }) => {
 
     return (
       <G key={`c${i}`}>
-        <Line x1={x} y1={hY} x2={x} y2={lY} stroke={color} strokeWidth="3.0" strokeLinecap="round" />
+        <Line x1={x} y1={hY} x2={x} y2={lY} stroke={color} strokeWidth="1.8" strokeLinecap="round" />
         <Rect x={x - barW / 2} y={bodyTop} width={barW} height={currentBodyH} fill={color} rx={2} />
       </G>
     );
@@ -288,14 +288,20 @@ const StockPriceChart = ({ data, currentPrice }) => {
       </Svg>
 
 
-      {/* 하단 날짜/LIVE 라벨 */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: chartW, marginTop: 6, paddingHorizontal: 5 }}>
-        {(history[0]?.stck_bsop_date?.length >= 8) ? (
-          <Text style={{ color: '#555', fontSize: 10 }}>{history[0].stck_bsop_date.substring(4, 6)}/{history[0].stck_bsop_date.substring(6, 8)}</Text>
-        ) : (
-          <Text style={{ color: '#555', fontSize: 10 }}>--/--</Text>
-        )}
-        <Text style={{ color: '#3182f6', fontSize: 10, fontWeight: 'bold' }}>LIVE</Text>
+      {/* [v4.3.2] 하단 날짜 라벨 세분화: 5일 간격으로 날짜 표시 강화 */}
+      <View style={{ flexDirection: 'row', width: chartW, marginTop: 8, paddingHorizontal: 5 }}>
+        {history.map((item, i) => {
+          // 0, 7, 13, 19 번째(약 6일 간격) 또는 0, 5, 10, 15... (5일 간격)
+          if (i % 6 === 0) {
+            const dateStr = item.stck_bsop_date;
+            const displayDate = dateStr && dateStr.length >= 8 ? `${dateStr.substring(4, 6)}/${dateStr.substring(6, 8)}` : '';
+            return (
+              <Text key={`d${i}`} style={{ position: 'absolute', left: getX(i) - 15, color: '#555', fontSize: 9 }}>{displayDate}</Text>
+            );
+          }
+          return null;
+        })}
+        <Text style={{ position: 'absolute', right: 0, color: '#3182f6', fontSize: 9, fontWeight: 'bold' }}>LIVE</Text>
       </View>
     </View>
   );
@@ -462,7 +468,7 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.2.2] 주말/야간에도 차트와 평단가를 즉시 조회할 수 있는 하이패스 시스템이 적용되었습니다!", "💡 종목 클릭 시 차트가 나오지 않는다면 잠시 후 다시 시도해 주세요."]);
+  const [tickerItems, setTickerItems] = useState(["[v4.2.4] 주말/야간에도 차트와 평단가를 즉시 조회할 수 있는 하이패스 시스템이 적용되었습니다!", "💡 종목 클릭 시 리스트에서 사라지는 현상이 수정되었습니다."]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1712,10 +1718,36 @@ function MainApp() {
         }));
         setSelectedStockHistory(history);
 
-        // [v3.9.7] analyzedStocks에도 이 최신 정보를 업데이트하여 리스트에서도 바로 반영되게 함
+        // [v4.2.4] analyzedStocks에도 이 최신 정보를 업데이트하여 리스트에서도 바로 반영되게 함
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
-          const newStockData = { ...stock, ...analysis, vwap, isHiddenAccumulation: hidden, price: currentPrice, isWaiting: false };
+          const existing = prev[idx] || {};
+
+          // [v4.2.4] 리스트 이탈 방지 로직 고도화
+          // 1. 매집 플래그 유지: 기존에 true였다면 로컬 분석 결과와 상관없이 true 유지
+          const finalHidden = (existing.isHiddenAccumulation === true) || hidden;
+
+          // 2. 수급 일수 보존: 매집 의심 리스트의 필터 조건(fStreak 또는 iStreak >= settingAccumStreak)을 
+          // 만족했던 종목은 로컬 분석 결과가 낮게 나오더라도 기존 값을 최소한으로 유지함
+          const finalFStreak = (existing.isHiddenAccumulation && existing.fStreak >= settingAccumStreak)
+            ? Math.max(existing.fStreak, analysis.fStreak || 0)
+            : (analysis.fStreak || 0);
+
+          const finalIStreak = (existing.isHiddenAccumulation && existing.iStreak >= settingAccumStreak)
+            ? Math.max(existing.iStreak, analysis.iStreak || 0)
+            : (analysis.iStreak || 0);
+
+          const newStockData = {
+            ...stock,
+            ...analysis,
+            fStreak: finalFStreak,
+            iStreak: finalIStreak,
+            vwap,
+            isHiddenAccumulation: finalHidden,
+            price: currentPrice,
+            isWaiting: false
+          };
+
           if (idx >= 0) {
             const next = [...prev];
             next[idx] = newStockData;
@@ -1896,10 +1928,6 @@ function MainApp() {
               {/* 매수 vs 매도 밸런스 바 */}
               {scanStats && (scanStats.buyHits > 0 || scanStats.sellHits > 0) ? (
                 <View style={{ marginBottom: 15 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ color: '#ff5252', fontSize: 11, fontWeight: '700' }}>매수 수급 {scanStats.buyHits}건</Text>
-                    <Text style={{ color: '#3182f6', fontSize: 11, fontWeight: '700' }}>매도 수급 {scanStats.sellHits}건</Text>
-                  </View>
                   <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 3, flexDirection: 'row', overflow: 'hidden' }}>
                     <View style={{ flex: scanStats.buyHits || 1, backgroundColor: '#ff5252' }} />
                     <View style={{ flex: scanStats.sellHits || 1, backgroundColor: '#3182f6' }} />
@@ -2313,8 +2341,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.2.2] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.2.2 Build 120 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v4.2.4] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v4.2.4 Build 121 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2327,7 +2355,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.2.2</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.2.4</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
