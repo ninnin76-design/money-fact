@@ -258,7 +258,7 @@ const StockPriceChart = ({ data, currentPrice }) => {
           {makeMaPath(60, '#888', '3,2')}
 
           {/* 현재가 배지 (레퍼런스 싱크!) */}
-          {inRange && (
+          {isHealthyCp && (
             <G>
               <Line x1="0" y1={cpY} x2={chartW} y2={cpY} stroke="#3182f6" strokeWidth="1" strokeDasharray="3,2" />
               <G transform={`translate(${chartW + 2}, ${cpY - 10})`}>
@@ -1376,6 +1376,7 @@ function MainApp() {
           stocks: results,
           sectors: sectorsForCache,
           instFlow: hasServerSectorData ? snapshotRes.data.instFlow : roundedInstTotals,
+          scanStats: snapshotRes?.data?.scanStats || scanStats,
           updateTime: displayTime
         };
         AsyncStorage.setItem(STORAGE_KEYS.CACHED_ANALYSIS, JSON.stringify(snapshot));
@@ -1840,11 +1841,29 @@ function MainApp() {
                   <Text style={{ fontSize: 16 }}>📡</Text>
                 </View>
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v4.1</Text></Text>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.0.1</Text></Text>
                   <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
                 </View>
                 <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
                   <Text style={{ color: '#00c471', fontSize: 10, fontWeight: '800' }}>● LIVE SCAN</Text>
+                </View>
+              </View>
+
+              {/* [v4.2.4] 통계 패널 복구 - 사용자 요청 반영 */}
+              <View style={{ flexDirection: 'row', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>스캔 대상</Text>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{scanStats?.total || '0'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 5 }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>정밀 분석</Text>
+                  <Text style={{ color: '#fcc419', fontSize: 18, fontWeight: '800' }}>{scanStats?.analyzed || '0'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 5 }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>수급 포착</Text>
+                  <Text style={{ color: '#3182f6', fontSize: 18, fontWeight: '800' }}>{scanStats?.pickCount || scanStats?.captured || '0'}</Text>
                 </View>
               </View>
             </View>
@@ -2235,8 +2254,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v4.2.4] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v4.2.4 Build 121 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [V5.0.1] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>V5.0.1 Build 125 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2249,7 +2268,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={{ marginTop: insets.top, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>v4.2.4</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.0.1</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
