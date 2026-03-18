@@ -1853,17 +1853,17 @@ function MainApp() {
               <View style={{ flexDirection: 'row', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>스캔 대상</Text>
-                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{scanStats?.total || scanStats?.allCount || '2,450'}</Text>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{scanStats?.totalScanned || '2,450'}</Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 5 }} />
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>정밀 분석</Text>
-                  <Text style={{ color: '#fcc419', fontSize: 18, fontWeight: '800' }}>{scanStats?.analyzed || scanStats?.analyzedCount || '185'}</Text>
+                  <Text style={{ color: '#fcc419', fontSize: 18, fontWeight: '800' }}>{scanStats?.deepScanned || '185'}</Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 5 }} />
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={{ color: '#8b95a1', fontSize: 11, marginBottom: 5 }}>수급 포착</Text>
-                  <Text style={{ color: '#3182f6', fontSize: 18, fontWeight: '800' }}>{scanStats?.pickCount || scanStats?.captured || scanStats?.targetCount || '12'}</Text>
+                  <Text style={{ color: '#3182f6', fontSize: 18, fontWeight: '800' }}>{scanStats?.successHits || scanStats?.buyHits || '12'}</Text>
                 </View>
               </View>
             </View>
