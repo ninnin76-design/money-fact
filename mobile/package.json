@@ -9,9 +9,13 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "axios": "^1.6.8",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~51.0.31",
+    "expo-background-fetch": "~12.0.1",
+    "expo-constants": "~16.0.2",
+    "expo-notifications": "~0.28.19",
     "expo-status-bar": "~1.12.1",
+    "expo-task-manager": "~11.8.2",
     "lucide-react-native": "^0.395.0",
     "react": "18.2.0",
     "react-native": "0.74.5",
@@ -19,5 +23,6 @@
     "react-native-screens": "3.31.1",
     "react-native-svg": "15.2.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {}
 }

@@ -1,6 +1,5 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { STORAGE_KEYS, SERVER_URL } from '../constants/Config';
 
 export const StorageService = {
@@ -33,19 +32,25 @@ export const StorageService = {
                 sectors: userSectors
             };
         }
-        await axios.post(`${SERVER_URL}/api/sync/save`, payload);
+        await fetch(`${SERVER_URL}/api/sync/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
     },
 
     async restore(syncKey) {
         if (!syncKey) throw new Error('Nickname key is required');
-        const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
+        const fetchRes = await fetch(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
+        const res = { data: await fetchRes.json() };
         return res.data; // { stocks, settings, watchlist? }
     },
 
     async checkNickname(syncKey) {
         if (!syncKey) return false;
         try {
-            const res = await axios.get(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
+            const fetchRes = await fetch(`${SERVER_URL}/api/sync/load?syncKey=${syncKey}`);
+            const res = { data: await fetchRes.json() };
             return res.data && res.data.stocks && res.data.stocks.length > 0;
         } catch (e) {
             return false;

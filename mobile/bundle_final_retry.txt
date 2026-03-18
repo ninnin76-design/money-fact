@@ -1,0 +1,2 @@
+﻿Starting Metro Bundler
+Android Bundling failed 24527ms D:\EUNHEE\mcp\mobile\index.js (2236 modules)

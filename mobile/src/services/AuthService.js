@@ -1,5 +1,3 @@
-
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KIS_CONFIG, STORAGE_KEYS, SERVER_URL } from '../constants/Config';
 
@@ -35,7 +33,8 @@ export const AuthService = {
 
                 // 2. Try Shared Token from Server (Optional fallback)
                 try {
-                    const serverRes = await axios.get(`${SERVER_URL}/api/token`, { timeout: 15000 });
+                    const fetchTokenRes = await fetch(`${SERVER_URL}/api/token`);
+                    const serverRes = { data: await fetchTokenRes.json() };
                     if (serverRes.data && serverRes.data.token) {
                         const { token, expiry } = serverRes.data;
                         const expDate = new Date(expiry);
@@ -49,11 +48,16 @@ export const AuthService = {
                 }
 
                 // 3. Direct Fetch from KIS
-                const res = await axios.post(`${KIS_CONFIG.BASE_URL}/oauth2/tokenP`, {
-                    grant_type: 'client_credentials',
-                    appkey: KIS_CONFIG.APP_KEY,
-                    appsecret: KIS_CONFIG.APP_SECRET
-                }, { timeout: 10000 });
+                const fetchRes = await fetch(`${KIS_CONFIG.BASE_URL}/oauth2/tokenP`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        grant_type: 'client_credentials',
+                        appkey: KIS_CONFIG.APP_KEY,
+                        appsecret: KIS_CONFIG.APP_SECRET
+                    })
+                });
+                const res = { data: await fetchRes.json() };
 
                 const newToken = res.data.access_token;
                 // Force a 23 hour expiry fallback regardless of expires_in

@@ -20,7 +20,6 @@ import {
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
 // Services & Components
-import axios from 'axios';
 import { AuthService } from './src/services/AuthService';
 import { StockService } from './src/services/StockService';
 import { StorageService } from './src/services/StorageService';
@@ -126,21 +125,12 @@ const StockPriceChart = ({ data, currentPrice }) => {
   const c = history.map(d => safeParse(d.stck_clpr));
   const v = history.map(d => safeParse(d.acml_vol || 0));
 
-  // [v4.2.7] 스마트 스케일링: 현재가가 터무니없이 높거나 낮으면 캔들을 찌그러뜨리지 않기 위해 배제
   const dataMax = Math.max(...h);
   const dataMin = Math.min(...l);
   const cp = safeParse(currentPrice) || c[c.length - 1];
-
-  // 현재가가 과거 데이터 범위의 30% 이내에 있을 때만 스케일에 반영
-  const rangeLimit = (dataMax - dataMin) * 0.3;
-  const isHealthyCp = (cp >= dataMin - rangeLimit && cp <= dataMax + rangeLimit);
-  const inRange = isHealthyCp;
-
-
+  const isHealthyCp = (cp >= dataMin - (dataMax - dataMin) * 0.3 && cp <= dataMax + (dataMax - dataMin) * 0.3);
   const scaleMax = isHealthyCp ? Math.max(dataMax, cp) : dataMax;
   const scaleMin = isHealthyCp ? Math.min(dataMin, cp) : dataMin;
-
-  // [v4.2.9] 상하 여백 8%로 박대 길이 극대화
   const margin = (scaleMax - scaleMin) * 0.08 || scaleMax * 0.05;
   const priceMax = scaleMax + margin;
   const priceMin = Math.max(0, scaleMin - margin);
@@ -149,8 +139,7 @@ const StockPriceChart = ({ data, currentPrice }) => {
 
   const chartW = width - paddingRight;
   const slotW = chartW / history.length;
-  // [v4.3.1] 62% - 사용자 요청(조금 더 얇게)에 따라 71%에서 62%로 더 날렵하게 조정
-  const barW = Math.max(slotW * 0.62, 9);
+  const barW = slotW * 0.5;
 
   const getX = (i) => (i + 0.5) * slotW;
   const getY = (price) => {
@@ -288,20 +277,20 @@ const StockPriceChart = ({ data, currentPrice }) => {
       </Svg>
 
 
-      {/* [v4.3.2] 하단 날짜 라벨 세분화: 5일 간격으로 날짜 표시 강화 */}
-      <View style={{ flexDirection: 'row', width: chartW, marginTop: 8, paddingHorizontal: 5 }}>
+      {/* [코다리 부장] 하단 날짜 라벨: 5일 간격으로 표시하여 가독성 업그레이드 */}
+      <View style={{ flexDirection: 'row', width: chartW, marginTop: 10, paddingHorizontal: 5 }}>
         {history.map((item, i) => {
-          // 0, 7, 13, 19 번째(약 6일 간격) 또는 0, 5, 10, 15... (5일 간격)
-          if (i % 6 === 0) {
+          if (i % 5 === 0 || i === history.length - 1) {
             const dateStr = item.stck_bsop_date;
             const displayDate = dateStr && dateStr.length >= 8 ? `${dateStr.substring(4, 6)}/${dateStr.substring(6, 8)}` : '';
             return (
-              <Text key={`d${i}`} style={{ position: 'absolute', left: getX(i) - 15, color: '#555', fontSize: 9 }}>{displayDate}</Text>
+              <Text key={`d${i}`} style={{ position: 'absolute', left: getX(i) - 15, color: '#666', fontSize: 9, fontWeight: i === history.length - 1 ? 'bold' : 'normal' }}>
+                {i === history.length - 1 ? '오늘' : displayDate}
+              </Text>
             );
           }
           return null;
         })}
-        <Text style={{ position: 'absolute', right: 0, color: '#3182f6', fontSize: 9, fontWeight: 'bold' }}>LIVE</Text>
       </View>
     </View>
   );
@@ -646,15 +635,19 @@ function MainApp() {
       // 설정이 OFF면 빈 리스트를 보내서 서버가 알림을 안 쏘게 만듭니다!
       const stocksToSend = pushEnabled ? myStocks : [];
 
-      await axios.post(`${SERVER_URL}/api/push/register`, {
-        pushToken: pushTokenString,
-        syncKey: syncKey || 'anonymous',
-        stocks: stocksToSend,
-        settings: {
-          buyStreak: settingBuyStreak,
-          sellStreak: settingSellStreak,
-          accumStreak: settingAccumStreak
-        }
+      await fetch(`${SERVER_URL}/api/push/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pushToken: pushTokenString,
+          syncKey: syncKey || 'anonymous',
+          stocks: stocksToSend,
+          settings: {
+            buyStreak: settingBuyStreak,
+            sellStreak: settingSellStreak,
+            accumStreak: settingAccumStreak
+          }
+        })
       });
       // console.log("Server Push Registered:", pushEnabled ? "ACTIVE" : "INACTIVE");
 
@@ -759,7 +752,8 @@ function MainApp() {
         try {
           // [v4.0.0] 수동 새로고침(!silent) 시에는 서버에 강제 스캔(force=true)을 요청합니다.
           const url = `${SERVER_URL}/api/snapshot?t=${Date.now()}${!silent ? '&force=true' : ''}`;
-          snapshotRes = await axios.get(url, { timeout: 20000 });
+          const fetchSnapRes = await fetch(url);
+          snapshotRes = { data: await fetchSnapRes.json() };
           if (snapshotRes && snapshotRes.data) {
             const snap = snapshotRes.data;
             const allBuy = snap.buyData || {};
@@ -1099,7 +1093,8 @@ function MainApp() {
 
           // 서버 프록시 시도
           try {
-            const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 10000 });
+            const fetchProxyRes = await fetch(`${SERVER_URL}/api/stock-daily/${stock.code}`);
+            const proxyRes = { data: await fetchProxyRes.json() };
             if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
               const proxyDaily = proxyRes.data.daily;
               const analysis = StockService.analyzeSupply(proxyDaily);
@@ -1669,154 +1664,82 @@ function MainApp() {
     setSelectedStockHistory([]);
     setDetailModal(true);
     setFetchingDetail(true);
+
+    const handleDetailFallback = (targetStock) => {
+      const existing = analyzedStocks.find(s => s.code === targetStock.code);
+      if (existing) {
+        setSelectedStock(prev => ({
+          ...prev,
+          fStreak: existing.fStreak || prev.fStreak || 0,
+          iStreak: existing.iStreak || prev.iStreak || 0,
+          sentiment: existing.sentiment || prev.sentiment || 50,
+          vwap: existing.vwap || prev.vwap || 0,
+          isHiddenAccumulation: existing.isHiddenAccumulation || false,
+          price: existing.price || prev.price || 0,
+          isWaiting: false,
+          _offlineMode: true
+        }));
+        if (existing.history && existing.history.length > 0) setSelectedStockHistory(existing.history);
+      }
+      setAnalyzedStocks(prev => prev.map(s => s.code === targetStock.code ? { ...s, isWaiting: false } : s));
+    };
+
     try {
-      // [v3.9.9] 1차: 앱에서 직접 KIS API 호출
       let history = await StockService.getInvestorData(stock.code, true);
 
-      // [v4.2.0] 데이터 품질 검증: 모든 항목이 고가/저가/시가 실효값(>0)을 포함하는지 확인
-      const hasOHLCV = history && history.length > 0 && history.some(d => {
-        const hg = parseInt(d.stck_hgpr || "0");
-        const lw = parseInt(d.stck_lwpr || "0");
-        return hg > 0 && lw > 0;
-      });
-
-      // [v4.2.0] 데이터 없거나 부실하면 서버 프록시 경유
+      // 데이터 검증 및 프록시 시도
+      const hasOHLCV = history && history.length > 0 && history.some(d => (parseInt(d.stck_hgpr || "0") > 0));
       if (!history || history.length === 0 || !hasOHLCV) {
         try {
-          const proxyRes = await axios.get(`${SERVER_URL}/api/stock-daily/${stock.code}`, { timeout: 15000 });
+          const fetchProxyRes2 = await fetch(`${SERVER_URL}/api/stock-daily/${stock.code}`);
+          const proxyRes = { data: await fetchProxyRes2.json() };
           if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
-            const serverHasOHLCV = proxyRes.data.daily.some(d => {
-              const hg = parseInt(d.stck_hgpr || "0");
-              const lw = parseInt(d.stck_lwpr || "0");
-              return hg > 0 && lw > 0;
-            });
-
-            // 서버 데이터가 더 풍부하면 서버 데이터 사용
-            if (serverHasOHLCV || !history || history.length === 0) {
-              history = proxyRes.data.daily;
-            }
+            const sOHLCV = proxyRes.data.daily.some(d => (parseInt(d.stck_hgpr || "0") > 0));
+            if (sOHLCV || !history || history.length === 0) history = proxyRes.data.daily;
           }
-        } catch (proxyErr) {
-          // 서버 프록시도 실패 - 기존 데이터로 표시
-        }
+        } catch (e) { /* ignore */ }
       }
 
       if (history && history.length > 0) {
         const analysis = StockService.analyzeSupply(history);
-        const vwap = StockService.calculateVWAP(history, settingBuyStreak);
-        const hidden = StockService.checkHiddenAccumulation(history, settingAccumStreak);
-
-        // 현재가 (실시간 가격이 있다면 유지, 없다면 히스토리 첫날 가격)
-        const currentPrice = stock.price > 0 ? stock.price : (parseInt(history[0].stck_clpr || 0) || 0);
+        const vwapVal = StockService.calculateVWAP(history, settingBuyStreak);
+        const isHidden = StockService.checkHiddenAccumulation(history, settingAccumStreak);
+        const curPrice = stock.price > 0 ? stock.price : (parseInt(history[0].stck_clpr || 0) || 0);
 
         setSelectedStock(prev => ({
           ...prev,
           ...analysis,
-          vwap: vwap || prev.vwap, // 0이면 기존값 유지
-          isHiddenAccumulation: hidden,
-          price: currentPrice
+          vwap: vwapVal || prev.vwap,
+          isHiddenAccumulation: isHidden,
+          price: curPrice,
+          isWaiting: false
         }));
         setSelectedStockHistory(history);
 
-        // [v4.2.4] analyzedStocks에도 이 최신 정보를 업데이트하여 리스트에서도 바로 반영되게 함
         setAnalyzedStocks(prev => {
           const idx = prev.findIndex(s => s.code === stock.code);
-          const existing = prev[idx] || {};
+          if (idx < 0) return prev;
+          const existing = prev[idx];
+          // [증발 방지] 기존 매집 정보 유지
+          const finalHidden = existing.isHiddenAccumulation || isHidden;
+          const finalF = Math.max(existing.fStreak || 0, analysis.fStreak || 0);
+          const finalI = Math.max(existing.iStreak || 0, analysis.iStreak || 0);
 
-          // [v4.2.4] 리스트 이탈 방지 로직 고도화
-          // 1. 매집 플래그 유지: 기존에 true였다면 로컬 분석 결과와 상관없이 true 유지
-          const finalHidden = (existing.isHiddenAccumulation === true) || hidden;
-
-          // 2. 수급 일수 보존: 매집 의심 리스트의 필터 조건(fStreak 또는 iStreak >= settingAccumStreak)을 
-          // 만족했던 종목은 로컬 분석 결과가 낮게 나오더라도 기존 값을 최소한으로 유지함
-          const finalFStreak = (existing.isHiddenAccumulation && existing.fStreak >= settingAccumStreak)
-            ? Math.max(existing.fStreak, analysis.fStreak || 0)
-            : (analysis.fStreak || 0);
-
-          const finalIStreak = (existing.isHiddenAccumulation && existing.iStreak >= settingAccumStreak)
-            ? Math.max(existing.iStreak, analysis.iStreak || 0)
-            : (analysis.iStreak || 0);
-
-          const newStockData = {
-            ...stock,
-            ...analysis,
-            fStreak: finalFStreak,
-            iStreak: finalIStreak,
-            vwap,
+          const next = [...prev];
+          next[idx] = {
+            ...existing, ...analysis,
+            fStreak: finalF, iStreak: finalI,
+            vwap: vwapVal || existing.vwap,
             isHiddenAccumulation: finalHidden,
-            price: currentPrice,
-            isWaiting: false
+            price: curPrice, isWaiting: false
           };
-
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = newStockData;
-            return next;
-          }
-          return [...prev, newStockData];
+          return next;
         });
       } else {
-        // [v4.2.1] 데이터를 전혀 가져오지 못한 경우 (주말/야간) - 기존 분석 데이터(analyzedStocks) 활용!
-        // 스냅샷에 이미 있는 수급 분석 정보를 표시하여, 차트 없이도 연속매매일, 평단가 등은 보여줌
-        const existingAnalysis = analyzedStocks.find(s => s.code === stock.code);
-        if (existingAnalysis) {
-          setSelectedStock(prev => ({
-            ...prev,
-            fStreak: existingAnalysis.fStreak || prev.fStreak || 0,
-            iStreak: existingAnalysis.iStreak || prev.iStreak || 0,
-            sentiment: existingAnalysis.sentiment || prev.sentiment || 50,
-            vwap: existingAnalysis.vwap || prev.vwap || 0,
-            isHiddenAccumulation: existingAnalysis.isHiddenAccumulation || false,
-            price: existingAnalysis.price || prev.price || 0,
-            isWaiting: false,
-            _offlineMode: true
-          }));
-
-          // [v4.2.2] 오프라인일 때 전날까지의 분석 히스토리가 있다면 차트도 보여줌
-          if (existingAnalysis.history && existingAnalysis.history.length > 0) {
-            setSelectedStockHistory(existingAnalysis.history);
-          }
-        }
-        setAnalyzedStocks(prev => {
-          const idx = prev.findIndex(s => s.code === stock.code);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = { ...next[idx], isWaiting: false };
-            return next;
-          }
-          return prev;
-        });
+        handleDetailFallback(stock);
       }
     } catch (e) {
-      // [v4.2.1] API 에러 발생 시에도 기존 분석 데이터 표시
-      const existingAnalysis = analyzedStocks.find(s => s.code === stock.code);
-      if (existingAnalysis) {
-        setSelectedStock(prev => ({
-          ...prev,
-          fStreak: existingAnalysis.fStreak || prev.fStreak || 0,
-          iStreak: existingAnalysis.iStreak || prev.iStreak || 0,
-          sentiment: existingAnalysis.sentiment || prev.sentiment || 50,
-          vwap: existingAnalysis.vwap || prev.vwap || 0,
-          isHiddenAccumulation: existingAnalysis.isHiddenAccumulation || false,
-          price: existingAnalysis.price || prev.price || 0,
-          isWaiting: false,
-          _offlineMode: true
-        }));
-
-        // [v4.2.2] 에러 시에도 캐시된 히스토리가 있다면 차트 표시
-        if (existingAnalysis.history && existingAnalysis.history.length > 0) {
-          setSelectedStockHistory(existingAnalysis.history);
-        }
-      }
-      setAnalyzedStocks(prev => {
-        const idx = prev.findIndex(s => s.code === stock.code);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], isWaiting: false };
-          return next;
-        }
-        return prev;
-      });
+      handleDetailFallback(stock);
     } finally {
       setFetchingDetail(false);
     }
@@ -1909,48 +1832,19 @@ function MainApp() {
         <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
           <MarketStatusHeader />
 
-          {/* [코다리 부장] 하이브리드 레이더 현황 - 매수/매도 밸런스 시각화 강화 */}
+          {/* [코다리 부장] 하이브리드 레이더 현황 - 사용자 요청에 따라 건수 제거 및 슬림화 */}
           {(scanStats || isMarketOpen) && (
-            <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 16, backgroundColor: '#0d1b2a', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.25)', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 16, backgroundColor: '#0d1b2a', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(49,130,246,0.25)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(49,130,246,0.1)', justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ fontSize: 16 }}>📡</Text>
                 </View>
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800', letterSpacing: -0.5 }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v4.1</Text></Text>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v4.1</Text></Text>
                   <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
                 </View>
-                <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderOuterWidth: 1, borderColor: 'rgba(0,196,113,0.2)' }}>
+                <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
                   <Text style={{ color: '#00c471', fontSize: 10, fontWeight: '800' }}>● LIVE SCAN</Text>
-                </View>
-              </View>
-
-              {/* 매수 vs 매도 밸런스 바 */}
-              {scanStats && (scanStats.buyHits > 0 || scanStats.sellHits > 0) ? (
-                <View style={{ marginBottom: 15 }}>
-                  <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 3, flexDirection: 'row', overflow: 'hidden' }}>
-                    <View style={{ flex: scanStats.buyHits || 1, backgroundColor: '#ff5252' }} />
-                    <View style={{ flex: scanStats.sellHits || 1, backgroundColor: '#3182f6' }} />
-                  </View>
-                </View>
-              ) : (
-                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 12 }} />
-              )}
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 12 }}>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>스캔 대상</Text>
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{scanStats?.totalScanned?.toLocaleString() || '2,800+'}</Text>
-                </View>
-                <View style={{ width: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>정밀 분석</Text>
-                  <Text style={{ color: '#fcc419', fontSize: 13, fontWeight: '700' }}>{scanStats?.deepScanned?.toLocaleString() || '-'}</Text>
-                </View>
-                <View style={{ width: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: '#8b95a1', fontSize: 10, marginBottom: 2 }}>수급 포착</Text>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '700' }}>{scanStats?.successHits?.toLocaleString() || '-'}</Text>
                 </View>
               </View>
             </View>
