@@ -1,8 +1,8 @@
-import { KIS_CONFIG, SERVER_URL } from '../constants/Config';
-import { AuthService } from './AuthService';
+import { SERVER_URL } from '../constants/Config';
 
-// [코다리 부장] 빌드 오류의 주범 Axios를 박멸하고, 
-// 리액트 네이티브 기본 내장 엔진(fetch)을 사용하여 빌드 안정성을 200% 확보합니다!
+// [v4.3.0] 코다리 부장의 대수술! 
+// 모든 KIS API 호출을 서버 프록시를 통해 처리하여 레이트 리미트를 원천 차단합니다.
+// 앱은 절대로 KIS API와 직접 통신하지 않고, 오직 우리 서버하고만 대화합니다.
 export const StockService = {
     isMarketOpen() {
         const now = new Date();
@@ -38,133 +38,36 @@ export const StockService = {
         }
     },
 
+    // [v4.3.0] 서버 프록시를 통해 투자자 데이터를 가져옵니다.
+    // 서버가 캐시 확인 → 미보유 시에만 KIS API 호출 → 속도 제한기 적용
+    // 이전: 앱이 KIS API 직접 호출 (레이트 리미트 위험!)
+    // 이후: 앱 → 서버 → (캐시 or KIS API) (안전!)
     async getInvestorData(code, force = false) {
-        if (!this.isMarketOpen() && !force) return null;
+        try {
+            const res = await fetch(`${SERVER_URL}/api/stock-daily/${code}`);
+            const data = await res.json();
 
-        const token = await AuthService.getKisToken();
-        if (!token) return null;
-
-        const now = new Date();
-        const hour = now.getHours();
-        const min = now.getMinutes();
-        const time = hour * 100 + min;
-        const isAtsHour = (time >= 800 && time < 850) || (time >= 1530 && time <= 2000);
-
-        const fetchDaily = async (trId, marketCode) => {
-            const path = trId === 'FHKST01010900' ? 'inquire-investor' : 'inquire-daily-price';
-            const url = `${KIS_CONFIG.BASE_URL}/uapi/domestic-stock/v1/quotations/${path}?FID_COND_MRKT_DIV_CODE=${marketCode}&FID_INPUT_ISCD=${code}&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=0`;
-            try {
-                const res = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'authorization': `Bearer ${token}`,
-                        'appkey': KIS_CONFIG.APP_KEY,
-                        'appsecret': KIS_CONFIG.APP_SECRET,
-                        'tr_id': trId,
-                        'custtype': 'P'
-                    }
-                });
-                const data = await res.json();
-                return data.output || [];
-            } catch (e) {
-                return [];
+            if (data && data.daily && data.daily.length > 0) {
+                return data.daily;
             }
-        };
-
-        let [investorData, priceData] = await Promise.all([
-            fetchDaily('FHKST01010900', 'J'),
-            fetchDaily('FHKST01010400', 'J')
-        ]);
-
-        if (!investorData || investorData.length === 0) return [];
-        if (!priceData || priceData.length === 0) priceData = await fetchDaily('FHKST01010400', 'J');
-
-        const mergedList = investorData.map((invItem, index) => {
-            let priceItem = priceData.find(p => p.stck_bsop_date === invItem.stck_bsop_date);
-            if (!priceItem && priceData.length > 0) priceItem = priceData[index] || priceData[0];
-
-            if (priceItem) {
-                return {
-                    ...invItem,
-                    stck_clpr: priceItem.stck_clpr,
-                    stck_hgpr: priceItem.stck_hgpr,
-                    stck_lwpr: priceItem.stck_lwpr,
-                    stck_oprc: priceItem.stck_oprc,
-                    acml_vol: priceItem.acml_vol
-                };
-            }
-            const clpr = parseInt(invItem.stck_clpr || 0);
-            if (clpr > 0 && !invItem.stck_hgpr) {
-                const variation = Math.max(Math.round(clpr * 0.015), 10);
-                return {
-                    ...invItem,
-                    stck_oprc: String(clpr - Math.round(variation * 0.3)),
-                    stck_hgpr: String(clpr + Math.round(variation * 0.7)),
-                    stck_lwpr: String(clpr - Math.round(variation * 0.5)),
-                    acml_vol: invItem.acml_vol || String(Math.round(Math.random() * 500000 + 100000))
-                };
-            }
-            return invItem;
-        });
-
-        if (isAtsHour) {
-            const atsInvestor = await fetchDaily('FHKST01010900', 'NX');
-            if (atsInvestor && atsInvestor.length > 0) {
-                const krxToday = mergedList[0];
-                const atsToday = atsInvestor[0];
-                const safeSum = (k, a) => ((parseInt(k) || 0) + (parseInt(a) || 0)).toString();
-                mergedList[0] = {
-                    ...krxToday,
-                    frgn_ntby_qty: safeSum(krxToday.frgn_ntby_qty, atsToday.frgn_ntby_qty),
-                    orgn_ntby_qty: safeSum(krxToday.orgn_ntby_qty, atsToday.orgn_ntby_qty),
-                    pnsn_ntby_qty: safeSum(krxToday.pnsn_ntby_qty, atsToday.pnsn_ntby_qty),
-                    ivtg_ntby_qty: safeSum(krxToday.ivtg_ntby_qty, atsToday.ivtg_ntby_qty),
-                    asst_ntby_qty: safeSum(krxToday.asst_ntby_qty, atsToday.asst_ntby_qty),
-                    acml_vol: safeSum(krxToday.acml_vol, atsToday.acml_vol),
-                    stck_clpr: atsToday.stck_clpr || krxToday.stck_clpr
-                };
-            }
+            return [];
+        } catch (e) {
+            console.log(`[StockService] Server proxy failed for ${code}:`, e.message);
+            return [];
         }
-        return mergedList;
     },
 
+    // [v4.3.0] 서버 프록시를 통해 현재가를 가져옵니다.
+    // 서버가 장중에는 실시간 조회, 장외에는 캐시 종가를 반환합니다.
     async getCurrentPrice(code, force = false) {
-        if (!this.isMarketOpen() && !force) return null;
-        const token = await AuthService.getKisToken();
-        if (!token) return null;
-
-        const now = new Date();
-        const hour = now.getHours();
-        const min = now.getMinutes();
-        const time = hour * 100 + min;
-        const isAtsHour = (time >= 800 && time < 850) || (time >= 1530 && time <= 2000);
-
-        const fetchPrice = async (trId, marketCode) => {
-            try {
-                const res = await fetch(`${KIS_CONFIG.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=${marketCode}&FID_INPUT_ISCD=${code}`, {
-                    headers: {
-                        'authorization': `Bearer ${token}`,
-                        'appkey': KIS_CONFIG.APP_KEY,
-                        'appsecret': KIS_CONFIG.APP_SECRET,
-                        'tr_id': trId
-                    }
-                });
-                const data = await res.json();
-                return data.output || null;
-            } catch (e) {
-                return null;
-            }
-        };
-
-        let krxData = await fetchPrice('FHKST01010100', 'J');
-        if (isAtsHour) {
-            let atsData = await fetchPrice('FHKST01010100', 'NX');
-            if (atsData) {
-                if (!atsData.stck_prpr && atsData.nxt_prpr) atsData.stck_prpr = atsData.nxt_prpr;
-                if (parseInt(atsData.stck_prpr || 0) > 0) return atsData;
-            }
+        try {
+            const res = await fetch(`${SERVER_URL}/api/stock-price/${code}`);
+            const data = await res.json();
+            return data || null;
+        } catch (e) {
+            console.log(`[StockService] Price proxy failed for ${code}:`, e.message);
+            return null;
         }
-        return krxData;
     },
 
     analyzeSupply(dailyData) {

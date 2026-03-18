@@ -1059,79 +1059,37 @@ function MainApp() {
       // [v4.0.11] 분석 리스트 결정: 우선순위(종목추가)인 경우 해당 종목만 빠르게 처리
       const scanList = isPriority ? targetStocks : combined;
 
+      // [v4.3.0] 통합 분석 루프: 장중/장외 구분 없이 항상 서버 프록시를 통해 데이터를 가져옵니다.
+      // 서버가 캐시 확인 → 캐시 미스일 때만 KIS API 호출 (속도 제한기 적용)
+      // 이전: 장중=앱이 KIS 직접호출 / 장외=서버 프록시 (복잡하고 위험!)
+      // 이후: 항상 서버 프록시 (간단하고 안전!)
       for (const stock of scanList) {
         const isMyStockItem = myStockCodes.has(stock.code);
 
-        // [v4.0.6] 기존 스냅샷 데이터가 있더라도, 가격이 0원(오류)이거나 'isWaiting' 상태라면 
-        // 데이터 누락으로 간주하고 재분석 또는 재조회 로직을 태웁니다.
+        // 기존 스냅샷 데이터가 있고 유효하면 굳이 API를 호출하지 않음
         const existingData = results.find(r => r.code === stock.code);
         const isDataInvalid = !existingData || existingData.price === 0 || existingData.isWaiting;
 
-        // [v4.0.7] 최적화: 관심종목이어도 서버 데이터가 충분히 최신(1분 이내)이면 API 호출 건너뜀
-        const isFresh = snapshotRes && snapshotRes.data && (Date.now() - new Date(snapshotRes.data.updateTime).getTime() < 60000);
-
         if (snapshotExistingCodes.has(stock.code) && !isDataInvalid) {
-          // [v4.0.12] 서버 스냅샷에 종목이 있다면, 관심종목이라도 굳이 KIS를 다시 찌르지 않고 그대로 사용합니다.
-          // 이로 인해 '분석 중' 깜빡임을 완전히 없애고 서버급 고속 로딩이 가능해집니다.
           if (!isUserAction && !forceFetch) {
             continue;
           }
         }
 
-        // [v4.0.11] 주말/장외 시간 대응: KIS API가 불안정할 수 있으므로 서버 프록시 우선 시도
-        if (!marketRunning) {
-          const prev = analyzedStocksRef.current.find(s => s.code === stock.code);
-          const existingIdx = results.findIndex(r => r.code === stock.code);
+        // [v4.3.0] 이전 캐시 데이터가 있고, 사용자가 명시적으로 요청하지 않았다면 보존
+        const prev = analyzedStocksRef.current.find(s => s.code === stock.code);
+        const existingIdx = results.findIndex(r => r.code === stock.code);
 
-          if (prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
-            const updated = { ...prev, isWaiting: false, noData: false };
-            if (existingIdx >= 0) results[existingIdx] = updated;
-            else results.push(updated);
-            if (isPriority) setAnalyzedStocks([...results]);
-            continue;
-          }
-
-          // 서버 프록시 시도
-          try {
-            const fetchProxyRes = await fetch(`${SERVER_URL}/api/stock-daily/${stock.code}`);
-            const proxyRes = { data: await fetchProxyRes.json() };
-            if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
-              const proxyDaily = proxyRes.data.daily;
-              const analysis = StockService.analyzeSupply(proxyDaily);
-              const vwap = StockService.calculateVWAP(proxyDaily, settingBuyStreak);
-              const hidden = StockService.checkHiddenAccumulation(proxyDaily, settingAccumStreak);
-              const currentPrice = parseInt(proxyDaily[0].stck_clpr || 0) || 0;
-              const realData = { ...stock, ...analysis, vwap, price: currentPrice, isHiddenAccumulation: hidden, isWaiting: false, noData: false };
-              if (existingIdx >= 0) results[existingIdx] = realData;
-              else results.push(realData);
-              if (isPriority) setAnalyzedStocks([...results]);
-              continue;
-            }
-          } catch (e) { /* ignore and fallback to KIS if forceFetch is on */ }
-
-          if (!forceFetch) {
-            // [v4.0.11] 이전 캐시 데이터가 있으면 0으로 덮어쓰지 않고 그대로 보존!
-            const prevCached = results[existingIdx] || analyzedStocksRef.current.find(s => s.code === stock.code);
-            if (prevCached && (prevCached.fStreak !== 0 || prevCached.iStreak !== 0 || prevCached.price > 0)) {
-              // 기존 데이터 보존, isWaiting만 해제
-              const preserved = { ...prevCached, isWaiting: false, noData: false };
-              if (existingIdx >= 0) results[existingIdx] = preserved;
-              else results.push(preserved);
-              console.log(`[v4.0.12] Preserved cached data for ${stock.name} (no proxy available)`);
-            } else {
-              // 진짜 데이터가 한번도 없었던 종목만 noData 처리
-              const noDataStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-              console.log(`[v4.0.11] No data at all for ${stock.name}, marking noData`);
-              if (existingIdx >= 0) results[existingIdx] = noDataStock;
-              else results.push(noDataStock);
-            }
-            if (isPriority || isMyStockItem) setAnalyzedStocks([...results]);
-            continue; // KIS API 호출 건너뜀
-          }
+        if (!isUserAction && !forceFetch && prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
+          const updated = { ...prev, isWaiting: false, noData: false };
+          if (existingIdx >= 0) results[existingIdx] = updated;
+          else results.push(updated);
+          if (isPriority) setAnalyzedStocks([...results]);
+          continue;
         }
 
-        // KIS API 직접 조회 (보통 장중이거나 주말 강제 조회 시)
-        await new Promise(resolve => setTimeout(resolve, isPriority ? 100 : 500));
+        // [v4.3.0] 서버 프록시를 통해 데이터 조회 (서버가 캐시/KIS 판단을 알아서 수행)
+        await new Promise(resolve => setTimeout(resolve, isPriority ? 100 : 300));
         try {
           const [data, livePrice] = await Promise.all([
             StockService.getInvestorData(stock.code, forceFetch),
@@ -1147,7 +1105,7 @@ function MainApp() {
             const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
             const insBuy = StockService.getNetBuyAmount(data, 1, 'INS');
 
-            // Prioritize live price (ATS or KRX real-time) over daily close
+            // 실시간 가격 우선, 없으면 일별 종가 사용
             let currentPrice = 0;
             if (livePrice && livePrice.stck_prpr) {
               currentPrice = parseInt(livePrice.stck_prpr) || 0;
@@ -1155,11 +1113,10 @@ function MainApp() {
               currentPrice = parseInt(data[0].stck_clpr || 0) || 0;
             }
 
-            // Auto-fix stock names that were registered by code only
+            // 종목코드로만 등록한 종목의 이름 자동 보정
             let stockName = stock.name;
             if (stock.name.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm) {
               stockName = livePrice.hts_kor_isnm.trim();
-              // Persist the corrected name
               const idx = myStocks.findIndex(s => s.code === stock.code);
               if (idx >= 0) {
                 const updatedStocks = [...myStocks];
@@ -1179,9 +1136,8 @@ function MainApp() {
               isWaiting: false
             };
 
-            const existingIdx = results.findIndex(r => r.code === stock.code);
             if (existingIdx >= 0) {
-              // [v4.0.6] 방어 로직: 새로 가져온 가격이 0원인데 기존 가격이 있다면 기존 것을 보존
+              // 방어 로직: 새로 가져온 가격이 0원인데 기존 가격이 있다면 기존 것을 보존
               if (currentPrice === 0 && results[existingIdx].price > 0) {
                 currentPrice = results[existingIdx].price;
               }
@@ -1191,29 +1147,26 @@ function MainApp() {
             }
 
             if (stock.sector) {
-              const netBuyAmount = netBuy;
-              sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuyAmount;
+              sectorMap[stock.sector] = (sectorMap[stock.sector] || 0) + netBuy;
             }
 
             if (isMyStockItem) {
               if (analysis.fStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
               if (analysis.iStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
-              const priceVal = currentPrice;
-              if (vwap > 0 && priceVal < vwap * 0.97) aggregatedTickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
+              if (vwap > 0 && currentPrice < vwap * 0.97) aggregatedTickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
               if (hidden) aggregatedTickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
-            console.log(`[v4.0.11] KIS Data empty for ${stock.name}`);
-            const emptyIdx = results.findIndex(r => r.code === stock.code);
-            const prevData = emptyIdx >= 0 ? results[emptyIdx] : null;
+            // [v4.3.0] 서버 프록시에서도 데이터를 못 가져온 경우
+            console.log(`[v4.3.0] Server proxy returned empty for ${stock.name}`);
+            const prevData = existingIdx >= 0 ? results[existingIdx] : null;
 
-            // [v4.0.11] 기존 데이터가 살아있다면, 아무것도 못 가져왔다고 해서 0으로 덮어버리지 않고 보존합니다.
             if (prevData && (prevData.fStreak !== 0 || prevData.iStreak !== 0 || prevData.price > 0)) {
-              results[emptyIdx] = { ...prevData, isWaiting: false };
-              console.log(`[v4.0.11] Preserved existing data for ${stock.name} despite empty KIS`);
+              results[existingIdx] = { ...prevData, isWaiting: false };
+              console.log(`[v4.3.0] Preserved existing data for ${stock.name}`);
             } else {
               const emptyStock = { ...stock, fStreak: 0, iStreak: 0, sentiment: 50, vwap: 0, price: 0, isHiddenAccumulation: false, isWaiting: false, noData: true };
-              if (emptyIdx >= 0) results[emptyIdx] = emptyStock;
+              if (existingIdx >= 0) results[existingIdx] = emptyStock;
               else results.push(emptyStock);
             }
           }
@@ -1232,12 +1185,12 @@ function MainApp() {
             error: true,
             isWaiting: false
           };
-          console.warn(`[v4.0.11] Error analyzing ${stock.name}:`, e.message);
+          console.warn(`[v4.3.0] Error analyzing ${stock.name}:`, e.message);
           if (errIdx >= 0) results[errIdx] = errorStock;
           else results.push(errorStock);
         }
 
-        // [v4.0.7] 중요 종목(관심종목) 업데이트 시 즉시 반영하되, 전체 루프가 너무 길어지는 것 방지
+        // 중요 종목(관심종목) 업데이트 시 즉시 반영
         const progressIdx = results.findIndex(r => r.code === stock.code);
         if (isMyStockItem || (progressIdx >= 0 && progressIdx % 5 === 0)) {
           setAnalyzedStocks([...results]);

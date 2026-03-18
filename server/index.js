@@ -152,6 +152,29 @@ let cachedToken = '';
 let tokenExpiry = null;
 let lastRateLimitTime = 0; // [v4.0.12] 마지막 레이트 리미트 발생 시각
 
+// [v4.3.0] KIS API 속도 제한기 (Token Bucket) - 초당 최대 15건으로 제어하여 레이트 리미트 방지
+const kisRateLimiter = {
+    tokens: 15,
+    maxTokens: 15,
+    lastRefill: Date.now(),
+    refillRate: 1000, // 1초마다 리필
+    async waitForToken() {
+        const now = Date.now();
+        const elapsed = now - this.lastRefill;
+        if (elapsed >= this.refillRate) {
+            this.tokens = this.maxTokens;
+            this.lastRefill = now;
+        }
+        if (this.tokens <= 0) {
+            const waitTime = this.refillRate - (now - this.lastRefill) + 50;
+            await new Promise(r => setTimeout(r, waitTime));
+            this.tokens = this.maxTokens;
+            this.lastRefill = Date.now();
+        }
+        this.tokens--;
+    }
+};
+
 // [v4.1.1] 서버 가동 시 기존 스냅샷(market_report_snapshot.json)을 통째로 메모리에 복원합니다!
 // 어플을 새로 깔거나 서버가 재시작되어도, 장 마감 시점의 데이터를 항상 볼 수 있도록 보장합니다.
 let marketAnalysisReport = {
@@ -1278,15 +1301,34 @@ app.get('/api/search', (req, res) => {
     res.json({ result: results.slice(0, 20) }); // Limit 20
 });
 
-// [코다리 부장] 모바일 앱 추가 종목 및 상세 보기용 개별 API
+// [v4.3.0] 모바일 앱의 모든 종목 데이터 요청을 서버가 중앙 관리합니다.
+// 캐시 우선 조회 → 캐시 없을 때만 KIS API 호출 (속도 제한기 적용)
 app.get('/api/stock-daily/:code', async (req, res) => {
     const code = req.params.code;
     if (!code) return res.status(400).json({ error: 'Missing stock code' });
 
     try {
+        // [v4.3.0] 1단계: 서버 캐시(allAnalysis) 우선 확인
+        const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+        if (cached && cached.history && cached.history.length > 0) {
+            const cacheAge = marketAnalysisReport.updateTime
+                ? Date.now() - new Date(marketAnalysisReport.updateTime).getTime()
+                : Infinity;
+            // 캐시가 20분 이내이거나 장이 닫혀있으면 캐시 데이터를 즉시 반환 (KIS 호출 0건!)
+            const now = new Date();
+            const hour = now.getHours();
+            const day = now.getDay();
+            const isMarketClosed = (day === 0 || day === 6 || hour < 8 || hour >= 16);
+            if (cacheAge < 20 * 60 * 1000 || isMarketClosed) {
+                console.log(`[Server] ⚡ Cache hit for ${code} (age: ${Math.round(cacheAge / 1000)}s)`);
+                return res.json({ daily: cached.history, cached: true });
+            }
+        }
+
+        // [v4.3.0] 2단계: 캐시 미스 → 속도 제한기 통과 후 KIS API 호출
+        await kisRateLimiter.waitForToken();
         const token = await getAccessToken();
 
-        // [v4.1.9] 투자자 데이터 + 가격 데이터 모두 가져와서 merge (차트에 고가/저가/시가/거래량 필요)
         const [invRes, priceRes] = await Promise.all([
             axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
                 headers: {
@@ -1322,11 +1364,10 @@ app.get('/api/stock-daily/:code', async (req, res) => {
         const priceData = (priceRes.data && priceRes.data.output) ? priceRes.data.output : [];
 
         if (investorData.length === 0) {
-            // [v4.2.2] KIS API 조회 결과가 없으면 서버 스냅샷 캐시 확인 (주말/야간 대비)
-            const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+            // KIS 응답이 비었으면(주말/야간) 캐시라도 반환
             if (cached && cached.history && cached.history.length > 0) {
-                console.log(`[Server] Returning cached history for ${code}`);
-                return res.json({ daily: cached.history });
+                console.log(`[Server] KIS empty, returning cached history for ${code}`);
+                return res.json({ daily: cached.history, cached: true });
             }
             return res.json({ daily: [] });
         }
@@ -1350,15 +1391,85 @@ app.get('/api/stock-daily/:code', async (req, res) => {
             return invItem;
         });
 
+        console.log(`[Server] 🌐 KIS API fetched for ${code} (${merged.length} days)`);
         res.json({ daily: merged });
     } catch (error) {
         console.error(`[Server] Daily fetch error for ${code}:`, error.message);
-        // [v4.2.2] 에러 발생 시에도 캐시 확인
+        // 에러 발생 시에도 캐시 확인
         const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
         if (cached && cached.history && cached.history.length > 0) {
-            return res.json({ daily: cached.history });
+            return res.json({ daily: cached.history, cached: true });
         }
         res.status(500).json({ error: 'Failed to fetch daily data', daily: [] });
+    }
+});
+
+// [v4.3.0] 실시간 현재가 프록시 API (캐시 우선 + 속도 제한)
+app.get('/api/stock-price/:code', async (req, res) => {
+    const code = req.params.code;
+    if (!code) return res.status(400).json({ error: 'Missing stock code' });
+
+    try {
+        // 1단계: allAnalysis 캐시에서 최근 종가 확인
+        const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+        const now = new Date();
+        const hour = now.getHours();
+        const day = now.getDay();
+        const isMarketClosed = (day === 0 || day === 6 || hour < 9 || hour >= 16);
+
+        // 장 마감 시에는 캐시 종가를 바로 반환
+        if (isMarketClosed && cached && cached.history && cached.history.length > 0) {
+            const latestDay = cached.history[0];
+            return res.json({
+                stck_prpr: latestDay.stck_clpr,
+                hts_kor_isnm: cached.name || code,
+                prdy_ctrt: latestDay.prdy_ctrt || '0',
+                cached: true
+            });
+        }
+
+        // 2단계: 장중에는 KIS API로 실시간 조회 (속도 제한 적용)
+        await kisRateLimiter.waitForToken();
+        const token = await getAccessToken();
+        const priceRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price`, {
+            headers: {
+                authorization: `Bearer ${token}`,
+                appkey: APP_KEY,
+                appsecret: APP_SECRET,
+                tr_id: 'FHKST01010100',
+                custtype: 'P'
+            },
+            params: {
+                FID_COND_MRKT_DIV_CODE: 'J',
+                FID_INPUT_ISCD: code
+            }
+        });
+
+        const output = priceRes.data && priceRes.data.output ? priceRes.data.output : null;
+        if (output) {
+            return res.json(output);
+        }
+
+        // KIS 응답이 없으면 캐시 반환
+        if (cached && cached.history && cached.history.length > 0) {
+            return res.json({
+                stck_prpr: cached.history[0].stck_clpr,
+                hts_kor_isnm: cached.name || code,
+                cached: true
+            });
+        }
+        res.json({ stck_prpr: '0' });
+    } catch (error) {
+        console.error(`[Server] Price fetch error for ${code}:`, error.message);
+        const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+        if (cached && cached.history && cached.history.length > 0) {
+            return res.json({
+                stck_prpr: cached.history[0].stck_clpr,
+                hts_kor_isnm: cached.name || code,
+                cached: true
+            });
+        }
+        res.json({ stck_prpr: '0' });
     }
 });
 
