@@ -21,6 +21,16 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
                             <ActivityIndicator size="small" color="#3182f6" />
                             <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: '600' }}>분석 중</Text>
                         </View>
+                        {/* [v5.0.3] 분석중 상태에서도 삭제 가능하도록 휴지통 버튼 추가 */}
+                        {onDelete && (
+                            <TouchableOpacity
+                                style={{ marginLeft: 8, padding: 5 }}
+                                onPress={onDelete}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Trash2 size={18} color="#666" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                     <Text style={{ color: '#666', fontSize: 12 }}>데이터를 가져오는 중입니다...</Text>
                 </View>
