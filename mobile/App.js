@@ -1784,7 +1784,7 @@ function MainApp() {
                   <Text style={{ fontSize: 16 }}>📡</Text>
                 </View>
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.0.3</Text></Text>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.0.4</Text></Text>
                   <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
                 </View>
                 <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
