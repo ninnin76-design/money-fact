@@ -846,7 +846,29 @@ async function runDeepMarketScan(force = false) {
                 return totalVol > 0 ? Math.round(totalValue / totalVol) : 0;
             };
 
-            const vwap = calcVWAP(val.daily, 5);
+            // [v4.3.2] 배경 스캔이 돌아도 이전 클릭으로 확보된 OHLCV(시고저+거래량)를 보존합니다.
+            // 수급 전용 API(FHKST01010900)는 시가/고가/저가/거래량을 주지 않으므로,
+            // 이전에 차트 클릭으로 받아두었던 값이 있다면 그것을 합쳐서 캐시를 갱신합니다.
+            const prevCached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+            const rawHistory = val.daily.slice(0, 30);
+            const mergedHistory = rawHistory.map((invItem) => {
+                if (prevCached && prevCached.history && prevCached.history.length > 0) {
+                    const prevItem = prevCached.history.find(p => p.stck_bsop_date === invItem.stck_bsop_date);
+                    if (prevItem && prevItem.stck_oprc && parseInt(prevItem.stck_oprc) > 0) {
+                        return {
+                            ...invItem,
+                            stck_oprc: prevItem.stck_oprc,
+                            stck_hgpr: prevItem.stck_hgpr,
+                            stck_lwpr: prevItem.stck_lwpr,
+                            acml_vol: prevItem.acml_vol || invItem.acml_vol || '0'
+                        };
+                    }
+                }
+                return invItem;
+            });
+
+            // 거래량이 보존된 데이터로 VWAP 재계산 (더 정확한 세력 평단가)
+            const mergedVwap = calcVWAP(mergedHistory, 5) || calcVWAP(rawHistory, 5);
 
             // [v3.6.2] 모든 분석 종목 요약 정보를 맵에 저장 (관심종목용)
             const allFSt = calcIndependentStreak(val.daily.slice(0, 31), '2');
@@ -860,8 +882,8 @@ async function runDeepMarketScan(force = false) {
                 iStreak: allISt,
                 sentiment: 50 + (allFSt + allISt) * 5,
                 isHiddenAccumulation: isAccum,
-                vwap: vwap, // [v4.2.2] 평단가 추가
-                history: val.daily.slice(0, 30) // [v4.2.2] 차트용 30일 데이터 보관
+                vwap: mergedVwap, // [v4.3.2] 보존된 거래량으로 재계산된 VWAP
+                history: mergedHistory // [v4.3.2] OHLCV 보존된 히스토리
             };
         });
 
@@ -1305,66 +1327,85 @@ app.get('/api/search', (req, res) => {
 // 캐시 우선 조회 → 캐시 없을 때만 KIS API 호출 (속도 제한기 적용)
 app.get('/api/stock-daily/:code', async (req, res) => {
     const code = req.params.code;
+    const needChart = req.query.chart === 'true';
     if (!code) return res.status(400).json({ error: 'Missing stock code' });
 
     try {
-        // [v4.3.0] 1단계: 서버 캐시(allAnalysis) 우선 확인
         const cached = marketAnalysisReport.allAnalysis ? marketAnalysisReport.allAnalysis[code] : null;
+        let cachedDataOk = false;
+        let cacheAge = Infinity;
+
+        // [v4.3.1] 1단계: 서버 캐시(allAnalysis) 우선 확인
         if (cached && cached.history && cached.history.length > 0) {
-            const cacheAge = marketAnalysisReport.updateTime
-                ? Date.now() - new Date(marketAnalysisReport.updateTime).getTime()
-                : Infinity;
-            // 캐시가 20분 이내이거나 장이 닫혀있으면 캐시 데이터를 즉시 반환 (KIS 호출 0건!)
+            cacheAge = marketAnalysisReport.updateTime ? Date.now() - new Date(marketAnalysisReport.updateTime).getTime() : Infinity;
             const now = new Date();
-            const hour = now.getHours();
-            const day = now.getDay();
-            const isMarketClosed = (day === 0 || day === 6 || hour < 8 || hour >= 16);
+            const isMarketClosed = (now.getDay() === 0 || now.getDay() === 6 || now.getHours() < 8 || now.getHours() >= 16);
+
+            // 캐시가 유효한지 확인
             if (cacheAge < 20 * 60 * 1000 || isMarketClosed) {
-                console.log(`[Server] ⚡ Cache hit for ${code} (age: ${Math.round(cacheAge / 1000)}s)`);
-                return res.json({ daily: cached.history, cached: true });
+                cachedDataOk = true;
+                // [v4.3.2] 차트 요청 시 OHLCV(시고저가)와 acml_vol(거래량) 모두 있어야 유효한 캐시로 인정
+                // - stck_oprc 없으면 캔들 차트가 점(Dot)으로 보임
+                // - acml_vol 없으면 세력 평단가(VWAP)가 0이 되어 '서버 스캔 진행 중...' 표시됨
+                if (needChart) {
+                    const h0 = cached.history[0];
+                    const hasOHLC = h0.stck_oprc && parseInt(h0.stck_oprc) > 0;
+                    const hasVol = h0.acml_vol && parseInt(String(h0.acml_vol).replace(/,/g, '')) > 0;
+                    if (!hasOHLC || !hasVol) cachedDataOk = false;
+                }
             }
         }
 
-        // [v4.3.0] 2단계: 캐시 미스 → 속도 제한기 통과 후 KIS API 호출
+        // 캐시 조건 충족 시 KIS 호출 0건으로 즉시 반환!
+        if (cachedDataOk) {
+            console.log(`[Server] ⚡ Cache hit for ${code} (age: ${Math.round(cacheAge / 1000)}s) [chart:${needChart}]`);
+            return res.json({ daily: cached.history, cached: true });
+        }
+
+        // [v4.3.1] 2단계: 캐시 미스 → 속도 제한기 통과 후 KIS API 필요부분만 호출
         await kisRateLimiter.waitForToken();
         const token = await getAccessToken();
 
-        const [invRes, priceRes] = await Promise.all([
-            axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    appkey: APP_KEY,
-                    appsecret: APP_SECRET,
-                    tr_id: 'FHKST01010900',
-                    custtype: 'P'
-                },
-                params: {
-                    FID_COND_MRKT_DIV_CODE: 'J',
-                    FID_INPUT_ISCD: code
-                }
-            }),
-            axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-price`, {
-                headers: {
-                    authorization: `Bearer ${token}`,
-                    appkey: APP_KEY,
-                    appsecret: APP_SECRET,
-                    tr_id: 'FHKST01010400',
-                    custtype: 'P'
-                },
-                params: {
-                    FID_COND_MRKT_DIV_CODE: 'J',
-                    FID_INPUT_ISCD: code,
-                    FID_PERIOD_DIV_CODE: 'D',
-                    FID_ORG_ADJ_PRC: '0'
-                }
-            }).catch(() => ({ data: { output: [] } }))
-        ]);
+        // 날짜 범위 설정 (차트용: 최근 2개월)
+        const d = new Date();
+        const endDate = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        d.setMonth(d.getMonth() - 2);
+        const startDate = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
 
-        const investorData = (invRes.data && invRes.data.output) ? invRes.data.output : [];
-        const priceData = (priceRes.data && priceRes.data.output) ? priceRes.data.output : [];
+        const promises = [];
+        let investorData = [];
 
+        // 1. 투자자 동향 (FHKST01010900) - 만약 최근 캐시가 있다면 최대한 재사용해서 KIS 호출 절약
+        if (cached && cached.history && cached.history.length > 0 && cacheAge < 20 * 60 * 1000) {
+            investorData = cached.history;
+        } else {
+            promises.push(
+                axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: code }
+                }).then(r => r.data.output || []).catch(() => [])
+            );
+        }
+
+        // 2. 가격 데이터 (FHKST03010100) - 차트를 그려야 할 때만 KIS API에 OHLCV 요청!
+        let priceData = [];
+        if (needChart) {
+            promises.push(
+                axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`, {
+                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST03010100', custtype: 'P' },
+                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: code, FID_INPUT_DATE_1: startDate, FID_INPUT_DATE_2: endDate, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
+                }).then(r => r.data.output2 || []).catch(() => [])
+            );
+        }
+
+        // 비동기 통신 동시 진행 (최대 2개 혹은 1개)
+        const resArr = await Promise.all(promises);
+        let ptr = 0;
+        if (investorData.length === 0) investorData = resArr[ptr++];
+        if (needChart) priceData = resArr[ptr++];
+
+        // 오류/주말/야간 빈 응답 시 처리
         if (investorData.length === 0) {
-            // KIS 응답이 비었으면(주말/야간) 캐시라도 반환
             if (cached && cached.history && cached.history.length > 0) {
                 console.log(`[Server] KIS empty, returning cached history for ${code}`);
                 return res.json({ daily: cached.history, cached: true });
@@ -1372,26 +1413,37 @@ app.get('/api/stock-daily/:code', async (req, res) => {
             return res.json({ daily: [] });
         }
 
-        // Merge: 투자자 데이터에 가격 데이터(고가/저가/시가/종가/거래량) 결합
+        // 3. 투자자 데이터에 차트용 가격 데이터 병합
         const merged = investorData.map((invItem, index) => {
-            let priceItem = priceData.find(p => p.stck_bsop_date === invItem.stck_bsop_date);
-            if (!priceItem && priceData.length > 0) {
-                priceItem = priceData[index] || priceData[0];
+            let pItem = null;
+            if (needChart && priceData.length > 0) {
+                pItem = priceData.find(p => p.stck_bsop_date === invItem.stck_bsop_date) || priceData[index] || priceData[0];
+            } else if (needChart && cached && cached.history && cached.history.length > 0) {
+                // [v4.3.2] 차트 데이터 호출 실패(500 등) 시 기존 캐시에서 OHLCV 데이터를 살려냅니다.
+                pItem = cached.history.find(p => p.stck_bsop_date === invItem.stck_bsop_date && p.stck_oprc);
             }
-            if (priceItem) {
+
+            if (pItem && pItem.stck_oprc) {
                 return {
                     ...invItem,
-                    stck_clpr: priceItem.stck_clpr,
-                    stck_hgpr: priceItem.stck_hgpr,
-                    stck_lwpr: priceItem.stck_lwpr,
-                    stck_oprc: priceItem.stck_oprc,
-                    acml_vol: priceItem.acml_vol
+                    stck_clpr: pItem.stck_clpr || invItem.stck_clpr,
+                    stck_oprc: pItem.stck_oprc,
+                    stck_hgpr: pItem.stck_hgpr,
+                    stck_lwpr: pItem.stck_lwpr,
+                    acml_vol: pItem.acml_vol || '0'
                 };
             }
             return invItem;
         });
 
-        console.log(`[Server] 🌐 KIS API fetched for ${code} (${merged.length} days)`);
+        // 4. 차트 데이터를 가져온 김에 서버 캐시에 덮어씌움 -> 다음부턴 캐시 히트 달성!
+        if (needChart && merged.some(m => m.stck_oprc)) {
+            if (!marketAnalysisReport.allAnalysis) marketAnalysisReport.allAnalysis = {};
+            if (!marketAnalysisReport.allAnalysis[code]) marketAnalysisReport.allAnalysis[code] = {};
+            marketAnalysisReport.allAnalysis[code].history = merged;
+        }
+
+        console.log(`[Server] 🌐 API fetched for ${code} (${merged.length} days) [chart:${needChart}]`);
         res.json({ daily: merged });
     } catch (error) {
         console.error(`[Server] Daily fetch error for ${code}:`, error.message);
