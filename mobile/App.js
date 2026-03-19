@@ -1642,7 +1642,7 @@ function MainApp() {
       // [v4.3.0] StockService.getInvestorData()가 이미 서버 프록시(/api/stock-daily)를 호출하며,
       // 서버가 투자자 데이터 + 가격 데이터(OHLCV)를 병합하여 반환합니다.
       // 따라서 별도의 프록시 재호출이 필요 없이 한 번에 차트 데이터까지 확보됩니다.
-      let history = await StockService.getInvestorData(stock.code, true);
+      let history = await StockService.getInvestorData(stock.code, true, true);
 
       if (history && history.length > 0) {
         const analysis = StockService.analyzeSupply(history);

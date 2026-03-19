@@ -27,7 +27,16 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
     foreignMatches.forEach(s => allMatchesMap.set(s.code, { name: s.name, code: s.code }));
     instMatches.forEach(s => allMatchesMap.set(s.code, { name: s.name, code: s.code }));
 
-    const allMatched = Array.from(allMatchesMap.values());
+    let allMatched = Array.from(allMatchesMap.values());
+    const isFallback = allMatched.length === 0;
+
+    if (isFallback) {
+        // [v4.3.1] 2연속 매수 조건을 달성한 종목이 없더라도, 섹터의 자금 흐름이 감지되었다면
+        // 섹터 대표 종목들을 징후 종목으로 띄워주어 '포착 대기중' 빈칸을 채운다
+        const fallbackStocks = (MARKET_WATCH_STOCKS || []).filter(s => s.sector === sector.name);
+        allMatched = fallbackStocks.map(s => ({ name: s.name, code: s.code }));
+    }
+
     const allMatchedNames = allMatched.map(s => s.name);
     const top2 = allMatchedNames.slice(0, 2);
     const restCount = Math.max(0, allMatchedNames.length - 2);
@@ -65,6 +74,9 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
                         {!hasForeign && hasInst && (
                             <View style={[styles.badge, { backgroundColor: isHot ? '#FF8A8A' : '#8A8AFF' }]}><Text style={styles.badgeText}>기관 주도</Text></View>
                         )}
+                        {isFallback && top2.length > 0 && (
+                            <View style={[styles.badge, { backgroundColor: isHot ? 'rgba(255,100,100,0.4)' : 'rgba(100,148,255,0.4)' }]}><Text style={styles.badgeText}>{isHot ? '자금 유입' : '자금 유출'}</Text></View>
+                        )}
                     </View>
                 </View>
 
@@ -75,7 +87,7 @@ const SectorRow = ({ sector, isHot, buyData, sellData, MARKET_WATCH_STOCKS, inde
 
                 <View style={styles.descRow}>
                     <Text style={styles.mainDesc} numberOfLines={1}>
-                        {isHot ? '🔥' : '❄️'} {top2.length > 0 ? top2.join(', ') : '포착 대기중'} {restCount > 0 ? `외 ${restCount}종목 ${isHot ? '포착' : '이탈'}` : (allMatchedNames.length > 0 ? (isHot ? ' 포착' : ' 이탈') : '')}
+                        {isHot ? '🔥' : '❄️'} {top2.length > 0 ? top2.join(', ') : '포착 대기중'} {restCount > 0 ? `외 ${restCount}종목 ${isFallback ? (isHot ? '유입중' : '유출중') : (isHot ? '포착' : '이탈')}` : (allMatchedNames.length > 0 ? (isFallback ? (isHot ? ' 유입중' : ' 유출중') : (isHot ? ' 포착' : ' 이탈')) : '')}
                     </Text>
                     <Text style={styles.moreBtn}>{expanded ? '▲ 접기' : '▼ 더보기'}</Text>
                 </View>

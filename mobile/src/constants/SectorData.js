@@ -113,4 +113,17 @@ export const DEFAULT_SECTORS = [
             { code: '035420', name: 'NAVER' },
         ]
     },
+    {
+        id: 'finance',
+        name: '🏦 기타(금융)',
+        order: 7,
+        stocks: [
+            { code: '105560', name: 'KB금융' },
+            { code: '055550', name: '신한지주' },
+            { code: '086790', name: '하나금융지주' },
+            { code: '032830', name: '삼성생명' },
+            { code: '138040', name: '메리츠금융지주' },
+            { code: '047050', name: '포스코인터내셔널' },
+        ]
+    },
 ];

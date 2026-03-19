@@ -42,9 +42,10 @@ export const StockService = {
     // 서버가 캐시 확인 → 미보유 시에만 KIS API 호출 → 속도 제한기 적용
     // 이전: 앱이 KIS API 직접 호출 (레이트 리미트 위험!)
     // 이후: 앱 → 서버 → (캐시 or KIS API) (안전!)
-    async getInvestorData(code, force = false) {
+    async getInvestorData(code, force = false, needChart = false) {
         try {
-            const res = await fetch(`${SERVER_URL}/api/stock-daily/${code}`);
+            const chartParam = needChart ? '?chart=true' : '';
+            const res = await fetch(`${SERVER_URL}/api/stock-daily/${code}${chartParam}`);
             const data = await res.json();
 
             if (data && data.daily && data.daily.length > 0) {
