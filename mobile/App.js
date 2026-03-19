@@ -1307,15 +1307,15 @@ function MainApp() {
       setTickerItems(aggregatedTickerTexts);
 
       // [v3.9.9] [확정] 시간은 서버의 데이터 생성 시점을, [동기화] 시간은 현재 앱이 새로고침된 시점을 나타냅니다.
-      let displayTime = "";
       if (snapshotRes && snapshotRes.data && snapshotRes.data.updateTime) {
         const sDate = new Date(snapshotRes.data.updateTime);
-        displayTime = `${sDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${sDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+        const displayTime = `${sDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${sDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+        setLastUpdate(displayTime);
       } else {
-        // 서버 데이터가 없는 경우(오프라인 등) 캐시된 마지막 시간을 유지
-        displayTime = lastUpdate || "데이터 없음";
+        // [v5.0.4] 서버 데이터가 없는 경우(예: 서버 재시작 도중) 캐시된 마지막 시간을 안전하게 유지
+        // 기존의 변수참조(closure) 버그로 시간이 증발하던 문제를 콜백 함수로 해결
+        setLastUpdate(prev => prev || "데이터 없음");
       }
-      setLastUpdate(displayTime);
       // [코다리 부장 터치] 분석된 모든 보물들(종목, 섹터, 기관수급)을 금고에 통째로 저장!
       if (results.length > 0) {
         const hasServerSectorData = (snapshotRes && snapshotRes.data && snapshotRes.data.sectors && snapshotRes.data.sectors.length > 0);
@@ -1639,20 +1639,10 @@ function MainApp() {
     };
 
     try {
+      // [v4.3.0] StockService.getInvestorData()가 이미 서버 프록시(/api/stock-daily)를 호출하며,
+      // 서버가 투자자 데이터 + 가격 데이터(OHLCV)를 병합하여 반환합니다.
+      // 따라서 별도의 프록시 재호출이 필요 없이 한 번에 차트 데이터까지 확보됩니다.
       let history = await StockService.getInvestorData(stock.code, true);
-
-      // 데이터 검증 및 프록시 시도
-      const hasOHLCV = history && history.length > 0 && history.some(d => (parseInt(d.stck_hgpr || "0") > 0));
-      if (!history || history.length === 0 || !hasOHLCV) {
-        try {
-          const fetchProxyRes2 = await fetch(`${SERVER_URL}/api/stock-daily/${stock.code}`);
-          const proxyRes = { data: await fetchProxyRes2.json() };
-          if (proxyRes.data && proxyRes.data.daily && proxyRes.data.daily.length > 0) {
-            const sOHLCV = proxyRes.data.daily.some(d => (parseInt(d.stck_hgpr || "0") > 0));
-            if (sOHLCV || !history || history.length === 0) history = proxyRes.data.daily;
-          }
-        } catch (e) { /* ignore */ }
-      }
 
       if (history && history.length > 0) {
         const analysis = StockService.analyzeSupply(history);
