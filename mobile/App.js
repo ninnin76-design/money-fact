@@ -1967,11 +1967,11 @@ function MainApp() {
                 <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(49,130,246,0.1)', justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ fontSize: 16 }}>📡</Text>
                 </View>
-                <View style={{ marginLeft: 10 }}>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.2.0</Text></Text>
-                  <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }} numberOfLines={1}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.2.1</Text></Text>
+                  <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }} numberOfLines={1}>전 종목 실시간 수급 엔진 가동 중</Text>
                 </View>
-                <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                <View style={{ marginLeft: 8, backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, flexShrink: 0 }}>
                   <Text style={{ color: '#00c471', fontSize: 10, fontWeight: '800' }}>● LIVE SCAN</Text>
                 </View>
               </View>
