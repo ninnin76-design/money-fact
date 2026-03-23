@@ -2404,13 +2404,18 @@ function MainApp() {
         <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.2.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
-            onPress={() => { setInboxModal(true); }}
+            onPress={() => {
+              setInboxModal(true);
+              if (unreadCount > 0) {
+                markAllInboxAsRead();
+              }
+            }}
             style={{ padding: 8, position: 'relative' }}
           >
             <Bell size={22} color="#fff" />
             {unreadCount > 0 && (
-              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#ff4d4d', borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
-                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ff4d4d', borderRadius: 7, width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>N</Text>
               </View>
             )}
           </TouchableOpacity>
