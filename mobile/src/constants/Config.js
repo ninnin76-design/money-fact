@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
     SETTING_SELL_STREAK: '@setting_sell_streak',
     SETTING_ACCUM_STREAK: '@setting_accum_streak',
     USER_SECTORS: '@user_sectors',
+    NOTIF_INBOX: '@notif_inbox',
 };
 
 export const SERVER_URL = 'https://money-fact-server.onrender.com';

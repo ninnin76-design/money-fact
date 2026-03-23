@@ -15,7 +15,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import {
   TrendingUp, TrendingDown, Star, Search, Plus, Trash2,
   AlertTriangle, Settings, RefreshCcw, Download, User, X, Save, UploadCloud, Cloud, BarChart3, LineChart, BookOpen, Share2, ChevronUp, ChevronDown, Folder, Heart,
-  Server, Smartphone, Flame, Thermometer as ThermoIcon, Loader2
+  Server, Smartphone, Flame, Thermometer as ThermoIcon, Loader2, Bell
 } from 'lucide-react-native';
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
@@ -84,6 +84,13 @@ const MARKET_WATCH_STOCKS = [
 
 LogBox.ignoreAllLogs();
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
+
+// [v5.1.0] 시스템 글꼴 크기에 영향받지 않도록 전역 폰트 스케일링 비활성화
+// 사용자마다 다른 디바이스 글꼴 크기 때문에 글씨가 겹치는 문제를 원천 차단!
+if (Text.defaultProps == null) Text.defaultProps = {};
+Text.defaultProps.allowFontScaling = false;
+if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+TextInput.defaultProps.allowFontScaling = false;
 
 // --- [코다리 부장] 프리미엄 캔들 스틱 + 이동평균선 + 거래량 차트 ---
 const StockPriceChart = ({ data, currentPrice }) => {
@@ -379,6 +386,23 @@ if (Platform.OS !== 'web') {
               trigger: null,
             });
 
+            // [v5.1.0] 알림 보관함에도 저장 (백그라운드용 직접 저장)
+            try {
+              const inboxRaw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+              let inbox = inboxRaw ? JSON.parse(inboxRaw) : [];
+              const now = new Date();
+              inbox.unshift({
+                id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                timestamp: now.getTime(),
+                date: `${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')}`,
+                time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                stockCode: stock.code, stockName: stock.name,
+                title, body: bodyStr, type: currentStatus, read: false,
+              });
+              if (inbox.length > 200) inbox = inbox.slice(0, 200);
+              await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox));
+            } catch (ie) { }
+
             history[stock.code].streak = currentStatus;
             history[stock.code].streakDate = today;
             hasNewData = true;
@@ -407,6 +431,26 @@ if (Platform.OS !== 'web') {
                   content: { title: "🤫 [시장감시] 조용한 매집 포착", body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!` },
                   trigger: null,
                 });
+
+                // [v5.1.0] 시장감시 알림도 보관함에 저장
+                try {
+                  const inboxRaw2 = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+                  let inbox2 = inboxRaw2 ? JSON.parse(inboxRaw2) : [];
+                  const now2 = new Date();
+                  inbox2.unshift({
+                    id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                    timestamp: now2.getTime(),
+                    date: `${(now2.getMonth() + 1).toString().padStart(2, '0')}.${now2.getDate().toString().padStart(2, '0')}`,
+                    time: `${now2.getHours().toString().padStart(2, '0')}:${now2.getMinutes().toString().padStart(2, '0')}`,
+                    stockCode: stock.code, stockName: stock.name,
+                    title: '🤫 [시장감시] 조용한 매집 포착',
+                    body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!`,
+                    type: 'hidden', read: false,
+                  });
+                  if (inbox2.length > 200) inbox2 = inbox2.slice(0, 200);
+                  await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox2));
+                } catch (ie2) { }
+
                 history[stock.code].hiddenDate = today;
                 hasNewData = true;
               }
@@ -478,6 +522,11 @@ function MainApp() {
   const isRefreshing = useRef(false);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
+  // [v5.1.0] 알림 보관함 (Notification Inbox)
+  const [notifInbox, setNotifInbox] = useState([]);
+  const [inboxModal, setInboxModal] = useState(false);
+  const unreadCount = notifInbox.filter(n => !n.read).length;
+
   // [v4.0.16] 디바운싱: 종목을 여러 개 연속 추가할 때 매번 분석 루프를 돌리지 않고,
   // 마지막 추가 후 800ms 대기 후 한꺼번에 처리하여 체감 속도 5배 향상!
   const addStockDebounceTimer = useRef(null);
@@ -502,8 +551,125 @@ function MainApp() {
   const [detailedInstFlow, setDetailedInstFlow] = useState({ pnsn: 0, ivtg: 0, ins: 0 });
   const [scanStats, setScanStats] = useState(null); // [코다리 부장] 전종목 레이더 스캔 통계
 
+  // [v5.1.0] 알림 보관함 헬퍼 함수들
+  const saveToNotifInbox = async (notification) => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+      let inbox = raw ? JSON.parse(raw) : [];
+      const now = new Date();
+      const newItem = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        timestamp: now.getTime(),
+        date: `${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')}`,
+        time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+        stockCode: notification.stockCode || '',
+        stockName: notification.stockName || '',
+        title: notification.title || '',
+        body: notification.body || '',
+        type: notification.type || 'info',
+        read: false,
+      };
+      inbox.unshift(newItem);
+      // 최대 200개까지만 보관
+      if (inbox.length > 200) inbox = inbox.slice(0, 200);
+      await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox));
+      setNotifInbox(inbox);
+    } catch (e) { console.log('[InboxSave] Error:', e.message); }
+  };
+
+  const loadAndCleanInbox = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+      if (!raw) { setNotifInbox([]); return; }
+      let inbox = JSON.parse(raw);
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      const cleaned = inbox.filter(n => n.timestamp > sevenDaysAgo);
+      if (cleaned.length !== inbox.length) {
+        await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(cleaned));
+      }
+      setNotifInbox(cleaned);
+    } catch (e) { setNotifInbox([]); }
+  };
+
+  const markInboxAsRead = async (id) => {
+    const updated = notifInbox.map(n => n.id === id ? { ...n, read: true } : n);
+    setNotifInbox(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(updated));
+  };
+
+  const markAllInboxAsRead = async () => {
+    const updated = notifInbox.map(n => ({ ...n, read: true }));
+    setNotifInbox(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(updated));
+  };
+
+  const deleteFromInbox = async (id) => {
+    const updated = notifInbox.filter(n => n.id !== id);
+    setNotifInbox(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(updated));
+  };
+
+  const clearAllInbox = async () => {
+    Alert.alert('알림 전체 삭제', '보관함의 모든 알림을 삭제하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제', style: 'destructive', onPress: async () => {
+          setNotifInbox([]);
+          await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify([]));
+        }
+      }
+    ]);
+  };
+
   useEffect(() => {
     init();
+
+    // [v5.1.0] 포그라운드 알림 수신 리스너 (init 밖으로 분리하여 의도치 않은 메모리 누수 방지)
+    let subscription;
+    if (Platform.OS !== 'web') {
+      subscription = Notifications.addNotificationReceivedListener(async notification => {
+        const content = notification.request?.content;
+        if (content) {
+          const title = content.title || '';
+          const bodyText = content.body || '';
+
+          // [중요 로직] 중복 방지: 최근 5초 내 동일한 알림이 보관함에 저장되었다면 무시
+          try {
+            const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+            let inbox = raw ? JSON.parse(raw) : [];
+            const now = Date.now();
+            if (inbox.length > 0) {
+              const latest = inbox[0];
+              if (latest.title === title && (now - latest.timestamp < 5000)) {
+                return; // 중복 알림 저장 무시
+              }
+            }
+          } catch (e) { }
+
+          let stockName = '';
+          let stockCode = '';
+          const nameMatch = bodyText.match(/(?:\[.*?\]\s*)([가-힣A-Za-z0-9.]+?)\s*:/);
+          if (nameMatch) {
+            stockName = nameMatch[1];
+            const found = MARKET_WATCH_STOCKS.find(s => s.name === stockName);
+            if (found) stockCode = found.code;
+          }
+
+          let type = 'info';
+          if (title.includes('이탈') || title.includes('🚨')) type = 'escape';
+          else if (title.includes('쌍끌이') || title.includes('🔥')) type = 'bull';
+          else if (title.includes('변곡점') || title.includes('✨')) type = 'turn';
+          else if (title.includes('매집') || title.includes('🤫')) type = 'hidden';
+
+          saveToNotifInbox({ stockCode, stockName, title, body: bodyText, type });
+        }
+      });
+    }
+
+    // 컴포넌트 언마운트 시 리스너 완벽 정리 (메모리 누수 방지)
+    return () => {
+      if (subscription) subscription.remove();
+    };
   }, []);
 
   const init = async () => {
@@ -563,6 +729,9 @@ function MainApp() {
 
     setIsMarketOpen(StockService.isMarketOpen());
 
+    // [v5.1.0] 알림 보관함 로드 + 7일 지난 알림 자동 정리
+    await loadAndCleanInbox();
+
     // Stage 2: Deferred detailed analysis
     setTimeout(() => {
       // [코다리 부장] 앱 구동 시에는 장외 시간이라도 서버의 최신 스냅샷을 한 번은 가져옵니다.
@@ -571,6 +740,7 @@ function MainApp() {
     }, 500);
 
     setupBackground();
+
   };
 
   // [v4.1.9] 하이브리드 동기화 로직: 평일 08:00~22:00 KST에만 서버 데이터를 가져오고 그 외 시간/휴일에는 서버와 앱 모두 휴식!
@@ -1312,7 +1482,7 @@ function MainApp() {
         const displayTime = `${sDate.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} ${sDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
         setLastUpdate(displayTime);
       } else {
-        // [v5.0.4] 서버 데이터가 없는 경우(예: 서버 재시작 도중) 캐시된 마지막 시간을 안전하게 유지
+        // [v5.2.0] 서버 데이터가 없는 경우(예: 서버 재시작 도중) 캐시된 마지막 시간을 안전하게 유지
         // 기존의 변수참조(closure) 버그로 시간이 증발하던 문제를 콜백 함수로 해결
         setLastUpdate(prev => prev || "데이터 없음");
       }
@@ -1784,7 +1954,7 @@ function MainApp() {
                   <Text style={{ fontSize: 16 }}>📡</Text>
                 </View>
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.0.4</Text></Text>
+                  <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: '800' }}>하이브리드 레이더 <Text style={{ color: '#8b95a1', fontWeight: '400', fontSize: 11 }}>v5.2.0</Text></Text>
                   <Text style={{ color: '#4e5968', fontSize: 10, marginTop: 1 }}>전 종목 실시간 수급 엔진 가동 중</Text>
                 </View>
                 <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(0,196,113,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
@@ -2197,8 +2367,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [V5.0.2] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>V5.0.2 Build 126 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v5.2.0] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v5.2.0 Build 130 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2211,8 +2381,19 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1219" />
       <View style={{ marginTop: insets.top, backgroundColor: '#0b1219', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.0.2</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.2.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity
+            onPress={() => { setInboxModal(true); }}
+            style={{ padding: 8, position: 'relative' }}
+          >
+            <Bell size={22} color="#fff" />
+            {unreadCount > 0 && (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#ff4d4d', borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setManualModal(true)}
             style={{ padding: 8 }}
@@ -2528,6 +2709,188 @@ function MainApp() {
           </View>
         </View>
       </Modal>
+
+      {/* [v5.1.0] 알림 보관함 Full Screen Modal */}
+      <Modal visible={inboxModal} transparent={false} animationType="slide">
+        <View style={[styles.container, { paddingTop: insets?.top || 0, flex: 1 }]}>
+          <StatusBar barStyle="light-content" />
+
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+            <TouchableOpacity
+              onPress={() => setInboxModal(false)}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49, 130, 246, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 }}
+            >
+              <Text style={{ color: '#3182f6', fontSize: 13, fontWeight: 'bold' }}>← 닫기</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>🔔 알림 보관함</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {unreadCount > 0 && (
+                <TouchableOpacity
+                  onPress={markAllInboxAsRead}
+                  style={{ backgroundColor: 'rgba(49,130,246,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
+                >
+                  <Text style={{ color: '#3182f6', fontSize: 11, fontWeight: '700' }}>모두 읽음</Text>
+                </TouchableOpacity>
+              )}
+              {notifInbox.length > 0 && (
+                <TouchableOpacity
+                  onPress={clearAllInbox}
+                  style={{ backgroundColor: 'rgba(255,77,77,0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
+                >
+                  <Text style={{ color: '#ff4d4d', fontSize: 11, fontWeight: '700' }}>전체 삭제</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {notifInbox.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 }}>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(49,130,246,0.08)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                <Bell size={36} color="#3182f6" />
+              </View>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 8 }}>알림이 없습니다</Text>
+              <Text style={{ color: '#8b95a1', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+                수급 시그널이 포착되면{'\n'}이곳에 자동으로 보관됩니다.
+              </Text>
+              <View style={{ marginTop: 24, backgroundColor: 'rgba(255,255,255,0.04)', padding: 14, borderRadius: 12, width: '100%' }}>
+                <Text style={{ color: '#4e5968', fontSize: 11, textAlign: 'center' }}>
+                  💡 관심종목 외에도 시장감시 종목의 알림이 자동 저장됩니다.{'\n'}7일 이후 오래된 알림은 자동으로 정리됩니다.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 40, paddingTop: 12 }}>
+              {/* 7일 자동 삭제 안내 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49,130,246,0.06)', padding: 10, borderRadius: 10, marginBottom: 14 }}>
+                <Text style={{ color: '#4e5968', fontSize: 11, flex: 1 }}>
+                  📋 총 {notifInbox.length}건 · 읽지않음 {unreadCount}건 · 7일 후 자동 삭제
+                </Text>
+              </View>
+
+              {/* 날짜별 그룹핑 */}
+              {(() => {
+                const grouped = {};
+                notifInbox.forEach(n => {
+                  const dateKey = n.date || '날짜 없음';
+                  if (!grouped[dateKey]) grouped[dateKey] = [];
+                  grouped[dateKey].push(n);
+                });
+
+                return Object.entries(grouped).map(([dateKey, items]) => {
+                  // 오늘/어제 표시
+                  const today = new Date();
+                  const todayStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}.${today.getDate().toString().padStart(2, '0')}`;
+                  const yesterday = new Date(Date.now() - 86400000);
+                  const yesterdayStr = `${(yesterday.getMonth() + 1).toString().padStart(2, '0')}.${yesterday.getDate().toString().padStart(2, '0')}`;
+                  let displayDate = dateKey;
+                  if (dateKey === todayStr) displayDate = `오늘 (${dateKey})`;
+                  else if (dateKey === yesterdayStr) displayDate = `어제 (${dateKey})`;
+
+                  return (
+                    <View key={dateKey} style={{ marginBottom: 16 }}>
+                      {/* 날짜 헤더 */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
+                        <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                        <Text style={{ color: '#8b95a1', fontSize: 12, fontWeight: '700', marginHorizontal: 12 }}>{displayDate}</Text>
+                        <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                      </View>
+
+                      {/* 알림 카드 리스트 */}
+                      {items.map(notif => {
+                        const typeConfig = {
+                          bull: { emoji: '🔥', color: '#ff4d4d', bgColor: 'rgba(255,77,77,0.06)', label: '쌍끌이' },
+                          escape: { emoji: '🚨', color: '#3182f6', bgColor: 'rgba(49,130,246,0.06)', label: '이탈' },
+                          turn: { emoji: '✨', color: '#ffb84d', bgColor: 'rgba(255,184,77,0.06)', label: '변곡점' },
+                          hidden: { emoji: '🤫', color: '#00c471', bgColor: 'rgba(0,196,113,0.06)', label: '매집' },
+                          info: { emoji: '📡', color: '#8b95a1', bgColor: 'rgba(255,255,255,0.04)', label: '정보' },
+                        };
+                        const tc = typeConfig[notif.type] || typeConfig.info;
+
+                        return (
+                          <TouchableOpacity
+                            key={notif.id}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              markInboxAsRead(notif.id);
+                              if (notif.stockCode) {
+                                const stockInfo = { name: notif.stockName, code: notif.stockCode, price: 0 };
+                                setInboxModal(false);
+                                setTimeout(() => handleOpenDetail(stockInfo), 300);
+                              }
+                            }}
+                            style={{
+                              backgroundColor: notif.read ? '#0d1b2a' : tc.bgColor,
+                              borderRadius: 14,
+                              padding: 14,
+                              marginBottom: 8,
+                              borderWidth: 1,
+                              borderColor: notif.read ? 'rgba(255,255,255,0.04)' : `${tc.color}22`,
+                              borderLeftWidth: 3,
+                              borderLeftColor: notif.read ? 'rgba(255,255,255,0.08)' : tc.color,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                              {/* 타입 아이콘 */}
+                              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: notif.read ? 'rgba(255,255,255,0.04)' : `${tc.color}15`, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                                <Text style={{ fontSize: 18 }}>{tc.emoji}</Text>
+                              </View>
+
+                              {/* 내용 */}
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                                    {!notif.read && (
+                                      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tc.color, marginRight: 6 }} />
+                                    )}
+                                    <Text style={{ color: notif.read ? '#666' : '#fff', fontSize: 13, fontWeight: '800', flexShrink: 1 }} numberOfLines={1}>
+                                      {notif.title}
+                                    </Text>
+                                  </View>
+                                  <Text style={{ color: '#4e5968', fontSize: 11 }}>{notif.time}</Text>
+                                </View>
+
+                                <Text style={{ color: notif.read ? '#555' : '#b0b8c1', fontSize: 12, lineHeight: 17, marginBottom: 6 }} numberOfLines={2}>
+                                  {notif.body}
+                                </Text>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {notif.stockName ? (
+                                      <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                        <Text style={{ color: '#8b95a1', fontSize: 10, fontWeight: '600' }}>{notif.stockName} {notif.stockCode ? `(${notif.stockCode})` : ''}</Text>
+                                      </View>
+                                    ) : null}
+                                    <View style={{ backgroundColor: `${tc.color}15`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: tc.color, fontSize: 9, fontWeight: '700' }}>{tc.label}</Text>
+                                    </View>
+                                  </View>
+
+                                  {/* 삭제 버튼 */}
+                                  <TouchableOpacity
+                                    onPress={(e) => { e.stopPropagation(); deleteFromInbox(notif.id); }}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    style={{ padding: 4 }}
+                                  >
+                                    <Trash2 size={14} color="#4e5968" />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#3182f6" />

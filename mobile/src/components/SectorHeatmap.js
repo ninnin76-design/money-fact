@@ -128,7 +128,7 @@ const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_ST
             </View>
 
             {/* HOT Section */}
-            {hotSectors.length > 0 && (
+            {hotSectors.length > 0 ? (
                 <View style={styles.sectionArea}>
                     <View style={styles.sectionTitleRow}>
                         <Text style={[styles.sectionTitle, { color: '#FF4D4D' }]}>HOT</Text>
@@ -137,6 +137,12 @@ const SectorHeatmap = ({ sectors = [], lastUpdate, isMarketOpen, MARKET_WATCH_ST
                     {hotSectors.map((s, idx) => (
                         <SectorRow key={'hot' + idx} sector={s} isHot={true} index={idx} buyData={buyData} sellData={sellData} MARKET_WATCH_STOCKS={MARKET_WATCH_STOCKS} onStockPress={onStockPress} />
                     ))}
+                </View>
+            ) : coldSectors.length > 0 && (
+                <View style={{ backgroundColor: 'rgba(255,77,77,0.05)', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,77,77,0.1)' }}>
+                    <Text style={{ color: '#8b95a1', fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+                        🧊 오늘은 전 섹터 외인·기관 순매도 중 — 수급 유입 섹터 없음
+                    </Text>
                 </View>
             )}
 
