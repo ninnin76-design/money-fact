@@ -514,6 +514,7 @@ function MainApp() {
   const [isMarketOpen, setIsMarketOpen] = useState(StockService.isMarketOpen());
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushRegStatus, setPushRegStatus] = useState('확인 중...'); // [v5.2.1] 서버 푸시 등록 상태 안내용
   const [manualModal, setManualModal] = useState(false);
   const [isServerUpdating, setIsServerUpdating] = useState(false); // [v3.9.3] 서버 깨어남/업데이트 중 상태 추가
   const [syncTime, setSyncTime] = useState(null); // [v3.9.4] 모바일 데이터 동기화 시점 (서버에서 데이터를 성공적으로 가져온 시각)
@@ -774,10 +775,12 @@ function MainApp() {
   }, [autoRefresh]);
 
   // [코다리 부장 터치] 서버 푸시 등록 로직! (설정 ON일 때만 제대로 등록)
-  const registerForServerPush = async () => {
+  const registerForServerPush = async (showPrompt = false) => {
     if (Platform.OS === 'web') return;
 
     try {
+      setPushRegStatus('연결 확인 중...');
+
       // 1. Check existing permission
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -785,7 +788,13 @@ function MainApp() {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
-      if (finalStatus !== 'granted') return;
+      if (finalStatus !== 'granted') {
+        setPushRegStatus('❌ 권한 거부됨 (설정 앱에서 허용 필요)');
+        if (showPrompt) {
+          Alert.alert('알림 권한 필요', '기기의 설정 앱 > 머니팩트 앱 선택 > 알림 권한을 허용해 주셔야 푸시 알림을 받을 수 있습니다.');
+        }
+        return;
+      }
 
       // [코다리 부장] Android 8.0 이상 단말에서 APK 설치 후 푸시 알림이 안 오는 문제를 위한 Notification Channel 설정!
       if (Platform.OS === 'android') {
@@ -805,7 +814,7 @@ function MainApp() {
       // 설정이 OFF면 빈 리스트를 보내서 서버가 알림을 안 쏘게 만듭니다!
       const stocksToSend = pushEnabled ? myStocks : [];
 
-      await fetch(`${SERVER_URL}/api/push/register`, {
+      const res = await fetch(`${SERVER_URL}/api/push/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -819,10 +828,15 @@ function MainApp() {
           }
         })
       });
-      // console.log("Server Push Registered:", pushEnabled ? "ACTIVE" : "INACTIVE");
+
+      if (res.ok) {
+        setPushRegStatus(pushEnabled ? '✅ 정상 작동 (서버 연결 완료)' : '⏸️ 알림 꺼짐 상태로 서버 동기화됨');
+      } else {
+        setPushRegStatus('⚠️ 서버 연결 실패 (자동 재시도 예정)');
+      }
 
     } catch (e) {
-      // console.log("Push reg failed:", e);
+      setPushRegStatus('⚠️ 네트워크 오류 (자동 재시도 예정)');
     }
   };
 
@@ -2234,12 +2248,18 @@ function MainApp() {
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.settingMainText}>스마트 푸시 알림</Text>
                 <Text style={styles.settingSubText}>관심종목의 이탈 신호와 시장의 매집 정황을 알려드립니다.</Text>
+                <Text style={[styles.settingSubText, { marginTop: 4, fontWeight: 'bold', fontSize: 11, color: pushRegStatus.includes('✅') ? '#00cc66' : (pushRegStatus.includes('⚠️') || pushRegStatus.includes('❌') ? '#ff4d4d' : '#8b95a1') }]}>
+                  현재 상태: {pushRegStatus}
+                </Text>
               </View>
               <Switch
                 value={pushEnabled}
                 onValueChange={async (val) => {
                   setPushEnabled(val);
                   await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_ENABLED, val.toString());
+                  if (val === true) {
+                    registerForServerPush(true); // 권한 거부 시 경고창 띄우기
+                  }
                 }}
                 trackColor={{ true: '#3182f6', false: '#333' }}
                 thumbColor={pushEnabled ? '#fff' : '#888'}
