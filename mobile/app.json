@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.eunhee.moneyfact",
-      "versionCode": 130,
+      "versionCode": 131,
       "googleServicesFile": "./google-services.json"
     },
     "web": {

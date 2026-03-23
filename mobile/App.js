@@ -2388,7 +2388,7 @@ function MainApp() {
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
             <Text style={styles.headerTitle}>Money Fact [v5.2.0] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v5.2.0 Build 130 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.footerVersion}>v5.2.1 Build 131 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
