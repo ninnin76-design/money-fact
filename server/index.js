@@ -469,6 +469,7 @@ async function runDeepMarketScan(force = false) {
         console.log(`[Radar 1단계] 광범위 필터 가동 - 전 시장 스캔 중...`);
 
         const candidateMap = new Map();
+        const provisionalMap = new Map(); // [v5.2.0] 장중 잠정치 가집계 맵 (Sector Radar 실시간 보정용)
         let wideNetHits = 0;
         const addCandidate = (code, name) => {
             if (code && !candidateMap.has(code)) {
@@ -542,13 +543,31 @@ async function runDeepMarketScan(force = false) {
         s3Output.forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
         await new Promise(r => setTimeout(r, 500));
 
-        // Source 4: 외인 순매도 랭킹
-        const s4Output = await fetchRankingWithRetry(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
-            tr_id: 'FHPTJ04400000',
-            fields: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: '1', FID_ETC_CLS_CODE: '0' }
-        }, 'Source 4');
-        s4Output.forEach(c => addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm));
-        await new Promise(r => setTimeout(r, 500));
+        // [v5.2.0] 장중 수급 레이더용 가집계 데이터 확보 (외인/기관/합계 랭킹 4종 활용)
+        // 개별 종목 잠정치 API가 불안정하므로, 시장 전체 스냅샷을 먼저 떠서 매핑합니다.
+        const snapshotSorts = [
+            { id: '0', name: '외인순매수' }, { id: '1', name: '외인순매도' },
+            { id: '4', name: '합계순매수' }, { id: '5', name: '합계순매도' }
+        ];
+
+        console.log(`[Radar 1단계] 장중 가집계 스냅샷 확보 중...`);
+        for (const sort of snapshotSorts) {
+            const out = await fetchRankingWithRetry(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total`, {
+                tr_id: 'FHPTJ04400000',
+                fields: { FID_COND_MRKT_DIV_CODE: 'V', FID_COND_SCR_DIV_CODE: '16449', FID_INPUT_ISCD: '0000', FID_DIV_CLS_CODE: '0', FID_RANK_SORT_CLS_CODE: sort.id, FID_ETC_CLS_CODE: '0' }
+            }, `Source-Prov-${sort.name}`);
+
+            out.forEach(c => {
+                if (c.mksc_shrn_iscd) {
+                    // 가집계 데이터 맵에 기록 (이미 있으면 덮어쓰지 않음 - 우선순위 유지)
+                    if (!provisionalMap.has(c.mksc_shrn_iscd)) {
+                        provisionalMap.set(c.mksc_shrn_iscd, c);
+                    }
+                    addCandidate(c.mksc_shrn_iscd, c.hts_kor_isnm);
+                }
+            });
+            await new Promise(r => setTimeout(r, 200));
+        }
 
         // [v4.0.15] 엑기스 집중 모드: 전종목 배치 스캔(Source 5) 제거
         // 500 에러의 주원인이었던 2,800개 전종목 무작위 스캔을 생략하고, 검증된 랭킹 종목 위주로 분석합니다.
@@ -621,17 +640,13 @@ async function runDeepMarketScan(force = false) {
                         const oVal = parseInt(d0.orgn_ntby_qty || 0);
 
                         if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
-                            try {
-                                const provRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01012100', custtype: 'P' },
-                                    params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
-                                });
-                                const prov = provRes.data.output;
-                                if (prov) {
-                                    d0.frgn_ntby_qty = prov.frgn_ntby_qty || '0';
-                                    d0.orgn_ntby_qty = prov.ivtg_ntby_qty || '0';
-                                }
-                            } catch (provErr) { /* ignore */ }
+                            // [v5.2.0] 실패하던 개별 종목 잠정치 API(FHKST01012100) 대신, 
+                            // 1단계에서 확보한 가집계 스냅샷(Snapshot)에서 데이터를 보정합니다.
+                            const prov = provisionalMap.get(stk.code);
+                            if (prov) {
+                                d0.frgn_ntby_qty = String(prov.frgn_ntby_qty || '0');
+                                d0.orgn_ntby_qty = String(prov.orgn_ntby_qty || '0');
+                            }
                         }
                     }
 
