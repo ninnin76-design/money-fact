@@ -12,6 +12,7 @@ const { Expo } = require('expo-server-sdk');
 const expo = new Expo();
 const PUSH_TOKENS_FILE = path.join(__dirname, 'push_tokens.json');
 const PUSH_HISTORY_FILE = path.join(__dirname, 'push_history.json');
+const NOTIFICATION_ARCHIVE_FILE = path.join(__dirname, 'notification_archive.json'); // [v5.3.0] 알림 아카이브용
 let pushTokens = [];
 // pushHistory structure: { "token": { "YYYY-MM-DD": { "code_pattern": true, "code_pattern": true } } }
 let pushHistory = {};
@@ -29,6 +30,13 @@ if (fs.existsSync(PUSH_HISTORY_FILE)) {
 
 }
 
+let notificationArchive = {}; // [v5.3.0] 알림 보관함용 서버 아카이브
+if (fs.existsSync(NOTIFICATION_ARCHIVE_FILE)) {
+    try {
+        notificationArchive = JSON.parse(fs.readFileSync(NOTIFICATION_ARCHIVE_FILE, 'utf8'));
+    } catch (e) { }
+}
+
 const savePushTokens = () => {
     try {
         fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(pushTokens, null, 2));
@@ -40,6 +48,12 @@ const savePushHistory = () => {
         fs.writeFileSync(PUSH_HISTORY_FILE, JSON.stringify(pushHistory, null, 2));
     } catch (e) { }
 
+};
+
+const saveNotificationArchive = () => {
+    try {
+        fs.writeFileSync(NOTIFICATION_ARCHIVE_FILE, JSON.stringify(notificationArchive, null, 2));
+    } catch (e) { }
 };
 
 dotenv.config();
@@ -1086,6 +1100,34 @@ async function runDeepMarketScan(force = false) {
             if (pushMessages.length > 0) {
                 await sendPushNotifications(pushMessages);
                 savePushHistory();
+
+                // [v5.3.0] 알림 아카이브 저장 (앱에서 알림 꺼져있어도 '보관함'에서 볼 수 있도록)
+                pushMessages.forEach(msg => {
+                    const token = msg.to;
+                    const notifId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+                    // Push data에도 ID를 심어줘서 앱에서 중복 체크 가능하게 함
+                    if (msg.data) {
+                        msg.data.id = notifId;
+                        msg.data.timestamp = Date.now();
+                    }
+
+                    if (!notificationArchive[token]) notificationArchive[token] = [];
+                    notificationArchive[token].unshift({
+                        id: notifId,
+                        timestamp: Date.now(),
+                        title: msg.title,
+                        body: msg.body,
+                        type: msg.data ? msg.data.type : 'info',
+                        stockCode: msg.data ? msg.data.stockCode : '',
+                        stockName: msg.data ? msg.data.stockName : '',
+                    });
+                    // 토큰당 최근 100개까지만 보존
+                    if (notificationArchive[token].length > 100) {
+                        notificationArchive[token] = notificationArchive[token].slice(0, 100);
+                    }
+                });
+                saveNotificationArchive();
             } else {
                 console.log(`[Push] 패턴 조건 충족 종목이 없거나 이미 발송 완료.`);
             }
@@ -1121,6 +1163,13 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
 app.get('/api/snapshot', (req, res) => {
     res.json(marketAnalysisReport);
+});
+
+// [v5.3.0] 특정 토큰에 대한 알림 아카이브 조회 API
+app.get('/api/notifications/:token', (req, res) => {
+    const { token } = req.params;
+    const messages = notificationArchive[token] || [];
+    res.json({ messages });
 });
 
 const ALL_STOCKS = require('./popular_stocks');

@@ -557,21 +557,30 @@ function MainApp() {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
       let inbox = raw ? JSON.parse(raw) : [];
+
+      // [Deduplication] ID가 있으면 이미 있는 건지 확인
+      const targetId = notification.id || `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      if (inbox.some(n => n.id === targetId)) return;
+
       const now = new Date();
+      const timestamp = notification.timestamp || now.getTime();
+      const dateObj = new Date(timestamp);
+
       const newItem = {
-        id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-        timestamp: now.getTime(),
-        date: `${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')}`,
-        time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+        id: targetId,
+        timestamp: timestamp,
+        date: notification.date || `${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getDate().toString().padStart(2, '0')}`,
+        time: notification.time || `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`,
         stockCode: notification.stockCode || '',
         stockName: notification.stockName || '',
         title: notification.title || '',
         body: notification.body || '',
         type: notification.type || 'info',
-        read: false,
+        read: notification.read || false,
       };
       inbox.unshift(newItem);
-      // 최대 200개까지만 보관
+      // Sort and Limit
+      inbox.sort((a, b) => b.timestamp - a.timestamp);
       if (inbox.length > 200) inbox = inbox.slice(0, 200);
       await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox));
       setNotifInbox(inbox);
@@ -596,6 +605,44 @@ function MainApp() {
     const updated = notifInbox.map(n => n.id === id ? { ...n, read: true } : n);
     setNotifInbox(updated);
     await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(updated));
+  };
+
+  const syncServerNotifications = async (token) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${SERVER_URL}/api/notifications/${token}`);
+      if (!res.ok) return;
+      const serverNotifs = await res.json();
+      if (!Array.isArray(serverNotifs)) return;
+
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+      let localInbox = raw ? JSON.parse(raw) : [];
+      const localIds = new Set(localInbox.map(n => n.id));
+
+      let hasNew = false;
+      serverNotifs.forEach(sn => {
+        if (!localIds.has(sn.id)) {
+          localInbox.unshift({
+            ...sn,
+            read: false, // Server doesn't track read status, default to false
+            date: sn.date || new Date(sn.timestamp).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(' ', ''),
+            time: sn.time || new Date(sn.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          });
+          hasNew = true;
+        }
+      });
+
+      if (hasNew) {
+        // Sort by timestamp descending
+        localInbox.sort((a, b) => b.timestamp - a.timestamp);
+        // Limit to 200
+        if (localInbox.length > 200) localInbox = localInbox.slice(0, 200);
+        await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(localInbox));
+        setNotifInbox(localInbox);
+      }
+    } catch (e) {
+      console.log('[SyncNotifs] Error:', e.message);
+    }
   };
 
   const markAllInboxAsRead = async () => {
@@ -634,19 +681,6 @@ function MainApp() {
           const title = content.title || '';
           const bodyText = content.body || '';
 
-          // [중요 로직] 중복 방지: 최근 5초 내 동일한 알림이 보관함에 저장되었다면 무시
-          try {
-            const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
-            let inbox = raw ? JSON.parse(raw) : [];
-            const now = Date.now();
-            if (inbox.length > 0) {
-              const latest = inbox[0];
-              if (latest.title === title && (now - latest.timestamp < 5000)) {
-                return; // 중복 알림 저장 무시
-              }
-            }
-          } catch (e) { }
-
           let stockName = '';
           let stockCode = '';
           const nameMatch = bodyText.match(/(?:\[.*?\]\s*)([가-힣A-Za-z0-9.]+?)\s*:/);
@@ -662,7 +696,15 @@ function MainApp() {
           else if (title.includes('변곡점') || title.includes('✨')) type = 'turn';
           else if (title.includes('매집') || title.includes('🤫')) type = 'hidden';
 
-          saveToNotifInbox({ stockCode, stockName, title, body: bodyText, type });
+          saveToNotifInbox({
+            id: content.data?.id,
+            timestamp: content.data?.timestamp,
+            title,
+            body: bodyText,
+            type,
+            stockCode,
+            stockName
+          });
         }
       });
     }
@@ -831,6 +873,8 @@ function MainApp() {
 
       if (res.ok) {
         setPushRegStatus(pushEnabled ? '✅ 정상 작동 (서버 연결 완료)' : '⏸️ 알림 꺼짐 상태로 서버 동기화됨');
+        // 푸시 설정 여부와 관계없이 서버의 알림 아카이브를 가져옵니다!
+        syncServerNotifications(pushTokenString);
       } else {
         setPushRegStatus('⚠️ 서버 연결 실패 (자동 재시도 예정)');
       }
@@ -2387,8 +2431,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v5.2.0] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v5.2.1 Build 131 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v5.3.0] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v5.3.0 Build 132 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2401,7 +2445,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1219" />
       <View style={{ marginTop: insets.top, backgroundColor: '#0b1219', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.2.1</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.3.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => {

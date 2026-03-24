@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>머니 팩트(Money Fact) v5.2.0 - 세력 수급의 모든 것</title>
+    <title>머니 팩트(Money Fact) v5.3.0 - 세력 수급의 모든 것</title>
     <!-- SEO Meta Tags -->
-    <meta name="description" content="외국인과 기관의 실시간 수급을 추적하는 프리미엄 주식 분석 솔루션. Money Fact v5.2.0.">
-    <meta property="og:title" content="머니 팩트(Money Fact) v5.2.0">
-    <meta property="og:description" content="Expo 51 최신 엔진과 네이티브 빌드를 완벽 최적화한 V5.2.0 업데이트 버전을 만나보세요.">
+    <meta name="description" content="외국인과 기관의 실시간 수급을 추적하는 프리미엄 주식 분석 솔루션. Money Fact v5.3.0.">
+    <meta property="og:title" content="머니 팩트(Money Fact) v5.3.0">
+    <meta property="og:description" content="실시간 알림 아카이브와 백그라운드 동기화 엔진을 탑재한 v5.3.0 업데이트 버전을 만나보세요.">
 
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&family=Jua&display=swap"
         rel="stylesheet">
@@ -357,7 +357,7 @@
                 </div>
 
                 <div style="margin-top: 24px;">
-                    <span id="version" style="font-size: 14px; opacity: 0.8; margin-top: 5px; display: block;">v5.2.0
+                    <span id="version" style="font-size: 14px; opacity: 0.8; margin-top: 5px; display: block;">v5.3.0
                         Latest</span>
                     <h4 style="font-size: 1.1rem; margin-bottom: 12px; color: var(--primary);">🏷️ 6대 핵심 수급 패턴</h4>
                     <div
@@ -408,7 +408,37 @@
                     정교하고 민감하게 반영한 온도 통계입니다.</p>
             </div>
 
-            <!-- 4. 설정 -->
+            <!-- 4. 알림 보관함 -->
+            <div class="section-header reveal">
+                <i data-lucide="inbox"></i>
+                <h2>📥 알림 보관함 (Notification Inbox)</h2>
+            </div>
+            <div class="card reveal">
+                <div class="card-title">놓친 신호도 놓치지 않는 '알림 아카이브'</div>
+                <p class="card-desc">푸시 알림을 꺼두었거나, 중요한 순간에 알림을 놓치셨나요? 이제 걱정하지 마세요. 모든 수급 신호는 서버에 안전하게 기록됩니다.</p>
+                <div class="visual-block">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <div
+                            style="width: 36px; height: 36px; border-radius: 10px; background: rgba(49, 130, 246, 0.2); display: flex; align-items: center; justify-content: center;">
+                            <i data-lucide="bell-off" style="width: 18px; color: var(--blue);"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 800;">알림 OFF 상태에서도 기록</div>
+                            <div style="font-size: 0.75rem; color: var(--text-sub);">서버 데이터와 실시간 동기화 (Hybrid Sync)</div>
+                        </div>
+                    </div>
+                    <div class="pattern-tag"
+                        style="background: rgba(0, 196, 113, 0.1); color: #00c471; font-size: 0.75rem;">✅ 중복 수신 방지 알고리즘
+                        적용</div>
+                </div>
+                <div style="margin-top: 20px; font-size: 0.85rem; color: var(--text-sub); line-height: 1.8;">
+                    • <b>실시간 동기화</b>: 앱 실행 시 서버의 알림 기록을 자동으로 가져옵니다.<br>
+                    • <b>7일간의 기록</b>: 최근 7일 내 발생한 모든 수급 패턴을 다시 볼 수 있습니다.<br>
+                    • <b>읽음 상태 관리</b>: 읽지 않은 알림은 'N' 배지로 즉시 표시되어 가독성을 높였습니다.
+                </div>
+            </div>
+
+            <!-- 5. 설정 -->
             <div class="section-header reveal">
                 <i data-lucide="settings"></i>
                 <h2>⚙️ 설정 (Settings)</h2>
@@ -455,14 +485,14 @@
     </div> <!-- End of container -->
 
     <div class="footer-cta" id="download-cta">
-        <a href="https://github.com/ninnin76-design/money-fact/raw/main/docs/moneyfact-v5.2.0.apk"
+        <a href="https://github.com/ninnin76-design/money-fact/raw/main/docs/moneyfact-v5.3.0.apk"
             class="btn btn-primary" id="download-btn" download
             style="background: linear-gradient(135deg, var(--primary) 0%, #d9a400 100%); color: #000; text-decoration: none; padding: 16px; border-radius: 50px; display: block; text-align: center; font-weight: 900; box-shadow: 0 10px 20px rgba(252, 196, 25, 0.3);">
             Money Fact 설치하기
-            <span style="display: block; font-size: 10px; opacity: 0.7;">v5.2.0 최신버전 (장중 섹터 레이더 실시간 가집계 매핑 도입)</span>
+            <span style="display: block; font-size: 10px; opacity: 0.7;">v5.3.0 최신버전 (알림 보관함 서버 동기화 엔진 탑재)</span>
         </a>
         <p class="version-info" style="text-align: center; color: #888; font-size: 11px; margin-top: 8px;">최신 업데이트:
-            2026.03.23 (v5.2.0)</p>
+            2026.03.23 (v5.3.0)</p>
     </div>
 
     <script>
