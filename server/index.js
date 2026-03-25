@@ -738,7 +738,7 @@ async function runDeepMarketScan(force = false) {
             const d = val.daily[0] || {};
 
             // [v4.0.17] KIS API 404 에러 방지 - 개별 주식의 거래량과 가격을 곱하여 '억원' 단위 매수 금액 추산
-            const currentPrice = parseInt(val.price || 0);
+            const currentPrice = parseInt(String(val.price || '0').replace(/,/g, '')) || 0;
             const amtRatio = currentPrice / 100000000;
 
             const fQty = parseInt(String(d.frgn_ntby_qty || 0).replace(/,/g, '')) || 0;
@@ -807,14 +807,14 @@ async function runDeepMarketScan(force = false) {
                 if (!daily || daily.length < 5) return false;
                 let totalRange = 0;
                 for (let j = 0; j < 5; j++) {
-                    const close = parseInt(daily[j].stck_clpr || 1);
-                    const high = parseInt(daily[j].stck_hgpr || daily[j].stck_clpr);
-                    const low = parseInt(daily[j].stck_lwpr || daily[j].stck_clpr);
+                    const close = parseInt(String(daily[j].stck_clpr || '1').replace(/,/g, ''));
+                    const high = parseInt(String(daily[j].stck_hgpr || daily[j].stck_clpr || '1').replace(/,/g, ''));
+                    const low = parseInt(String(daily[j].stck_lwpr || daily[j].stck_clpr || '1').replace(/,/g, ''));
                     totalRange += ((high - low) / close) * 100;
                 }
                 const avgRange = totalRange / 5;
-                const currentPrice = parseInt(daily[0].stck_clpr);
-                const fiveDayAgo = parseInt(daily[4].stck_clpr);
+                const currentPrice = parseInt(String(daily[0].stck_clpr || '0').replace(/,/g, '')) || 0;
+                const fiveDayAgo = parseInt(String(daily[4].stck_clpr || '0').replace(/,/g, '')) || 0;
                 const fiveDayChange = fiveDayAgo > 0 ? ((currentPrice - fiveDayAgo) / fiveDayAgo) * 100 : 0;
                 const rate = parseFloat(daily[0].prdy_ctrt || 0);
 
