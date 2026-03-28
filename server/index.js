@@ -1040,6 +1040,40 @@ async function runDeepMarketScan(force = false) {
             const pushMessages = [];
             const todayStr = kstDate.toISOString().split('T')[0];
 
+            // =====================================================
+            // [v5.3.2] 🏆 시장 수급 대장주 포착 (Market Supply Leader)
+            // 관심종목과 무관하게 서버가 스캔한 전 시장('historyData') 중에서
+            // 외인+기관 쌍끌이 매수 연속일이 가장 강력한 Top 1 종목을 찾습니다.
+            // =====================================================
+            let marketLeader = null;
+            let leaderScore = 0;
+
+            for (const [code, sData] of historyData.entries()) {
+                if (!sData.daily || sData.daily.length === 0) continue;
+                const fStreak = analyzeStreak(sData.daily, '2'); // 외인
+                const iStreak = analyzeStreak(sData.daily, '1'); // 기관
+
+                // 쌍끌이 점수 = 외인 연속 매수일 + 기관 연속 매수일 (둘 다 1일 이상이어야 유효)
+                if (fStreak.buyStreak >= 1 && iStreak.buyStreak >= 1) {
+                    const score = fStreak.buyStreak + iStreak.buyStreak;
+                    if (score > leaderScore) {
+                        leaderScore = score;
+                        marketLeader = {
+                            code,
+                            name: sData.name || code,
+                            fBuy: fStreak.buyStreak,
+                            iBuy: iStreak.buyStreak,
+                            price: sData.price || '0',
+                            rate: sData.rate || '0'
+                        };
+                    }
+                }
+            }
+
+            if (marketLeader && leaderScore >= 4) {
+                console.log(`[Push] 🏆 시장 수급 대장주 포착! ${marketLeader.name}(${marketLeader.code}) - 외인 ${marketLeader.fBuy}일+기관 ${marketLeader.iBuy}일 연속 쌍끌이 (점수:${leaderScore})`);
+            }
+
             for (const tokenEntry of pushTokens) {
                 if (!Expo.isExpoPushToken(tokenEntry.token)) continue;
                 // Initialize today's history for this token
@@ -1056,6 +1090,42 @@ async function runDeepMarketScan(force = false) {
                 const userAlerts = [];
                 let highestPriority = 4; // 1: 이탈, 2: 쌍끌이, 3: 변곡, 4: 매집
                 let pushTitle = '📊 Money Fact 알림';
+
+                // [v5.3.2] 🏆 시장 수급 대장주 호외 알림 (하루 1회, 점수 4 이상만)
+                if (marketLeader && leaderScore >= 4 && tokenDailyHistory['__market_leader'] !== marketLeader.code) {
+                    tokenDailyHistory['__market_leader'] = marketLeader.code;
+                    const rateStr = parseFloat(marketLeader.rate) >= 0 ? `+${marketLeader.rate}%` : `${marketLeader.rate}%`;
+                    const leaderMsg = `🏆 [시장 수급대장 포착] ${marketLeader.name}(${rateStr}): 외인 ${marketLeader.fBuy}일 + 기관 ${marketLeader.iBuy}일 연속 쌍끌이 매수! 시장에서 가장 강력한 수급이 집중되고 있습니다.`;
+
+                    // 수급 대장주 전용 별도 푸시 (관심종목 알림과 독립!)
+                    pushMessages.push({
+                        to: tokenEntry.token,
+                        title: '🚨 [시장 수급대장 포착]',
+                        body: leaderMsg,
+                        sound: 'default',
+                        priority: 'high',
+                        data: {
+                            type: 'market_leader',
+                            stockCode: marketLeader.code,
+                            stockName: marketLeader.name
+                        }
+                    });
+
+                    // 알림 아카이브에도 저장
+                    if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
+                    notificationArchive[tokenEntry.token].unshift({
+                        id: `${Date.now()}_leader_${Math.random().toString(36).substr(2, 6)}`,
+                        timestamp: Date.now(),
+                        title: '🚨 [시장 수급대장 포착]',
+                        body: leaderMsg,
+                        type: 'market_leader',
+                        stockCode: marketLeader.code,
+                        stockName: marketLeader.name,
+                    });
+                    if (notificationArchive[tokenEntry.token].length > 100) {
+                        notificationArchive[tokenEntry.token] = notificationArchive[tokenEntry.token].slice(0, 100);
+                    }
+                }
 
                 for (const us of scanStocks) {
                     const stockData = historyData.get(us.code);
