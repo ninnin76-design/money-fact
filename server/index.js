@@ -67,6 +67,13 @@ const KIS_BASE_URL = process.env.KIS_BASE_URL || 'https://openapi.koreainvestmen
 const APP_KEY = process.env.KIS_APP_KEY;
 const APP_SECRET = process.env.KIS_APP_SECRET;
 
+// [v5.3.1] 듀얼 토큰 엔진: 백그라운드 스캐너 전용 키 (없으면 메인 키로 폴백)
+const APP_KEY_BG = process.env.KIS_APP_KEY_BG || APP_KEY;
+const APP_SECRET_BG = process.env.KIS_APP_SECRET_BG || APP_SECRET;
+const hasDualEngine = !!(process.env.KIS_APP_KEY_BG && process.env.KIS_APP_SECRET_BG);
+if (hasDualEngine) console.log('[Server] 🔥 듀얼 토큰 엔진 활성화! BG키=스캐너, 메인키=유저응답');
+else console.log('[Server] ⚙️ 싱글 토큰 모드 (KIS_APP_KEY_BG 미설정)');
+
 const MARKET_WATCH_STOCKS = [
     { name: '삼성전자', code: '005930', sector: '반도체' }, { name: 'SK하이닉스', code: '000660', sector: '반도체' },
     { name: 'HPSP', code: '403870', sector: '반도체' }, { name: '한미반도체', code: '042700', sector: '반도체' },
@@ -235,84 +242,123 @@ const saveDb = () => {
 };
 
 const TOKEN_FILE = path.join(__dirname, 'real_token_cache.json');
+const TOKEN_FILE_BG = path.join(__dirname, 'real_token_cache_bg.json'); // [v5.3.1] BG 토큰 별도 캐시
 
 let tokenRequestPromise = null;
+let tokenRequestPromiseBG = null; // [v5.3.1] BG 토큰 요청 전용
+let lastRateLimitTimeBG = 0; // [v5.3.1] BG 키 전용 Rate Limit 쿨다운
 
+// =====================================================
+// [메인 토큰] 유저 실시간 응답용 (stock-daily, stock-price 등)
+// =====================================================
 async function getAccessToken() {
     // 1. Try to read from file first
     if (fs.existsSync(TOKEN_FILE)) {
         try {
-
             const saved = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
             const expiry = new Date(saved.expiry);
-            // proactive refresh if < 10 mins remaining
             if (new Date(new Date().getTime() + 10 * 60 * 1000) < expiry) {
                 return saved.token;
             }
-
         } catch (e) { }
-
     }
 
     // 2. Return existing promise if request pending
     if (tokenRequestPromise) {
-        console.log("[Token] Waiting for pending token request...");
+        console.log("[Token-Main] Waiting for pending token request...");
         return tokenRequestPromise;
     }
 
     // 3. Check if we are currently in Rate Limit cooldown
     const now = Date.now();
     if (now - lastRateLimitTime < 65000) {
-        console.log("[Token] Skipping request due to active Rate Limit cooldown...");
+        console.log("[Token-Main] Skipping request due to active Rate Limit cooldown...");
         return null;
     }
 
     // 4. Request New Token
     tokenRequestPromise = (async () => {
         try {
-            console.log("[Token] Requesting NEW token from KIS...");
-
-            // [v4.2.3] 기존 캐시 파일이 문제를 일으킬 수 있으므로 갱신 시도 시 일단 제거 고려
-            // (여기서는 에러 발생 시에만 제거하는 방식으로 안전하게 처리)
-
+            console.log("[Token-Main] Requesting NEW token from KIS...");
             const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
                 grant_type: 'client_credentials', appkey: APP_KEY, appsecret: APP_SECRET
             });
-
-            if (!res.data.access_token) {
-                throw new Error("KIS response does not contain access_token");
-            }
-
+            if (!res.data.access_token) throw new Error("KIS response does not contain access_token");
             const newToken = res.data.access_token;
             const newExpiry = new Date(now + (res.data.expires_in - 60) * 1000);
-
             fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: newToken, expiry: newExpiry }));
-            console.log("[Token] New token saved/refreshed.");
-            marketAnalysisReport.lastError = null; // 성공 시 에러 클리어
+            console.log("[Token-Main] New token saved/refreshed.");
+            marketAnalysisReport.lastError = null;
             return newToken;
         } catch (e) {
             const errData = e.response ? e.response.data : null;
             const errDetail = errData ? JSON.stringify(errData) : e.message;
-            console.error("[Token] Failed to get token:", errDetail);
-
-            // [v4.2.3] 토큰 관련 에러가 발생하면 캐시 파일을 삭제하여 다음 시도 시 무조건 새로 받게 함
-            if (fs.existsSync(TOKEN_FILE)) {
-                try { fs.unlinkSync(TOKEN_FILE); } catch (f) { }
-            }
-
+            console.error("[Token-Main] Failed to get token:", errDetail);
+            if (fs.existsSync(TOKEN_FILE)) { try { fs.unlinkSync(TOKEN_FILE); } catch (f) { } }
             marketAnalysisReport.lastError = `[Token Error] ${errDetail}`;
-
-            if (e.response?.status === 403) {
-                console.log("[Token] Rate Limit Hit! Entering 65s cooldown...");
-                lastRateLimitTime = Date.now();
-            }
+            if (e.response?.status === 403) { console.log("[Token-Main] Rate Limit Hit! 65s cooldown..."); lastRateLimitTime = Date.now(); }
             return null;
-        } finally {
-            tokenRequestPromise = null;
-        }
+        } finally { tokenRequestPromise = null; }
     })();
-
     return tokenRequestPromise;
+}
+
+// =====================================================
+// [v5.3.1] 듀얼 토큰 엔진: 백그라운드 스캐너 전용 토큰
+// 메인 키와 완전히 독립적으로 동작하여 서로 간섭하지 않습니다.
+// BG 키가 미설정이면 메인 토큰으로 폴백합니다.
+// =====================================================
+async function getAccessTokenBG() {
+    if (!hasDualEngine) return getAccessToken(); // 폴백: 싱글 모드
+
+    // 1. BG 캐시 파일에서 읽기
+    if (fs.existsSync(TOKEN_FILE_BG)) {
+        try {
+            const saved = JSON.parse(fs.readFileSync(TOKEN_FILE_BG, 'utf8'));
+            const expiry = new Date(saved.expiry);
+            if (new Date(new Date().getTime() + 10 * 60 * 1000) < expiry) {
+                return saved.token;
+            }
+        } catch (e) { }
+    }
+
+    // 2. 중복 요청 방지
+    if (tokenRequestPromiseBG) {
+        console.log("[Token-BG] Waiting for pending BG token request...");
+        return tokenRequestPromiseBG;
+    }
+
+    // 3. BG 키 전용 Rate Limit 쿨다운 체크
+    const now = Date.now();
+    if (now - lastRateLimitTimeBG < 65000) {
+        console.log("[Token-BG] BG 키 Rate Limit 쿨다운 중... 메인 키로 폴백");
+        return getAccessToken(); // BG 키가 막혔으면 임시로 메인 키 사용
+    }
+
+    // 4. BG 전용 토큰 발급
+    tokenRequestPromiseBG = (async () => {
+        try {
+            console.log("[Token-BG] 🔑 Requesting NEW BG token from KIS...");
+            const res = await axios.post(`${KIS_BASE_URL}/oauth2/tokenP`, {
+                grant_type: 'client_credentials', appkey: APP_KEY_BG, appsecret: APP_SECRET_BG
+            });
+            if (!res.data.access_token) throw new Error("BG: KIS response does not contain access_token");
+            const newToken = res.data.access_token;
+            const newExpiry = new Date(now + (res.data.expires_in - 60) * 1000);
+            fs.writeFileSync(TOKEN_FILE_BG, JSON.stringify({ token: newToken, expiry: newExpiry }));
+            console.log("[Token-BG] 🔑 BG token saved/refreshed.");
+            return newToken;
+        } catch (e) {
+            const errDetail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+            console.error("[Token-BG] Failed to get BG token:", errDetail);
+            if (fs.existsSync(TOKEN_FILE_BG)) { try { fs.unlinkSync(TOKEN_FILE_BG); } catch (f) { } }
+            if (e.response?.status === 403) { console.log("[Token-BG] BG Rate Limit Hit! 65s cooldown..."); lastRateLimitTimeBG = Date.now(); }
+            // BG 키 실패 시 메인 키로 폴백
+            console.log("[Token-BG] ⚠️ BG 키 실패, 메인 키로 폴백합니다.");
+            return getAccessToken();
+        } finally { tokenRequestPromiseBG = null; }
+    })();
+    return tokenRequestPromiseBG;
 }
 
 // --- Shared Token Endpoint (For 5 Users Sharing 1 Token) ---
@@ -471,7 +517,10 @@ async function runDeepMarketScan(force = false) {
         marketAnalysisReport.status = 'SCANNING';
     }
     try {
-        const token = await getAccessToken();
+        // [v5.3.1] 듀얼 토큰 엔진: 백그라운드 스캐너는 BG 전용 토큰을 사용합니다!
+        const token = await getAccessTokenBG();
+        const bgKey = hasDualEngine ? APP_KEY_BG : APP_KEY;
+        const bgSecret = hasDualEngine ? APP_SECRET_BG : APP_SECRET;
 
         // [v3.6.1] 70개 주요 섹터 종목 코드 미리 생성 (하단 루프 및 재시도 로직에서 사용)
         const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
@@ -501,7 +550,7 @@ async function runDeepMarketScan(force = false) {
         async function fetchRankingWithRetry(url, params, sourceName) {
             try {
                 const res = await axios.get(url, {
-                    headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: params.tr_id, custtype: 'P' },
+                    headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: params.tr_id, custtype: 'P' },
                     params: params.fields
                 });
                 return res.data.output || [];
@@ -511,7 +560,7 @@ async function runDeepMarketScan(force = false) {
                     await new Promise(r => setTimeout(r, 10000));
                     try {
                         const res2 = await axios.get(url, {
-                            headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: params.tr_id, custtype: 'P' },
+                            headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: params.tr_id, custtype: 'P' },
                             params: params.fields
                         });
                         return res2.data.output || [];
@@ -642,7 +691,7 @@ async function runDeepMarketScan(force = false) {
             while (retryCount <= maxRetries && !success) {
                 try {
                     const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                        headers: { authorization: `Bearer ${token}`, appkey: APP_KEY, appsecret: APP_SECRET, tr_id: 'FHKST01010900', custtype: 'P' },
+                        headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: 'FHKST01010900', custtype: 'P' },
                         params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
                     });
                     const daily = invRes.data.output || [];
@@ -940,12 +989,14 @@ async function runDeepMarketScan(force = false) {
         const isCurrentlyEmpty = buyCount === 0 && sellCount === 0;
         const hasExistingData = marketAnalysisReport.buyData && Object.values(marketAnalysisReport.buyData).some(l => l && l.length > 0);
 
+        // [v4.1.0] 시장 전체 수급(instFlow)과 섹터 정보는 종목 포착 여부와 상관없이 '항상' 최신으로 유지합니다.
+        marketAnalysisReport.instFlow = instTotals;
+        marketAnalysisReport.sectors = sectorList.slice(0, 6);
+
         if (!isCurrentlyEmpty || !hasExistingData) {
             marketAnalysisReport.buyData = newBuyData;
             marketAnalysisReport.sellData = newSellData;
             marketAnalysisReport.allAnalysis = newAllAnalysis; // [v3.6.2] 대규모 맵 저장
-            marketAnalysisReport.sectors = sectorList.slice(0, 6);
-            marketAnalysisReport.instFlow = instTotals;
             console.log(`[Radar] 스냅샷 데이터 업데이트 완료 (매수:${buyCount}건, 매도:${sellCount}건)`);
         } else {
             console.log(`[Radar] 현재 주말/휴장 등으로 분석 결과가 0건이므로 기존 유의미한 데이터를 보존합니다.`);
@@ -996,7 +1047,8 @@ async function runDeepMarketScan(force = false) {
                 if (!pushHistory[tokenEntry.token][todayStr]) pushHistory[tokenEntry.token][todayStr] = {};
 
                 const userStocks = tokenEntry.stocks || [];
-                if (userStocks.length === 0) continue;
+                // [v5.3.1] 관심종목이 없어도 시장감시 목록(MARKET_WATCH_STOCKS)으로 알림 수신 가능
+                const scanStocks = userStocks.length > 0 ? userStocks : MARKET_WATCH_STOCKS;
 
                 const userSettings = tokenEntry.settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 };
                 const tokenDailyHistory = pushHistory[tokenEntry.token][todayStr];
@@ -1005,7 +1057,7 @@ async function runDeepMarketScan(force = false) {
                 let highestPriority = 4; // 1: 이탈, 2: 쌍끌이, 3: 변곡, 4: 매집
                 let pushTitle = '📊 Money Fact 알림';
 
-                for (const us of userStocks) {
+                for (const us of scanStocks) {
                     const stockData = historyData.get(us.code);
                     if (!stockData) continue;
 
@@ -1065,7 +1117,7 @@ async function runDeepMarketScan(force = false) {
 
                         // 'none' 상태로 변한 것은 알림 주지 않고, 유의미한 패턴으로 변했을 때만 알림
                         if (msg && patternKey !== 'none') {
-                            userAlerts.push(msg);
+                            userAlerts.push({ msg, stockCode: us.code, stockName: us.name, type: patternKey });
                             if (priority < highestPriority) {
                                 highestPriority = priority;
                             }
@@ -1082,8 +1134,11 @@ async function runDeepMarketScan(force = false) {
                     // 시간대별 맞춤 타이틀 적용
                     if (hour === 15) pushTitle = `[종가 배팅] ${pushTitle}`;
 
+                    // [v5.3.1] 첫 번째 알림의 종목 정보를 data에 포함 (알림 보관함에서 종목명/코드 표시용)
+                    const firstAlert = userAlerts[0];
+
                     // Limit to 3 messages per push so it doesn't get cut off entirely
-                    const limitedAlerts = userAlerts.slice(0, 3);
+                    const limitedAlerts = userAlerts.slice(0, 3).map(a => a.msg);
                     if (userAlerts.length > 3) limitedAlerts.push(`...외 ${userAlerts.length - 3}건`);
 
                     pushMessages.push({
@@ -1092,7 +1147,29 @@ async function runDeepMarketScan(force = false) {
                         body: limitedAlerts.join('\n'),
                         sound: 'default',
                         priority: 'high',
-                        data: { type: 'pattern_alert' }
+                        data: {
+                            type: firstAlert.type || 'pattern_alert',
+                            stockCode: firstAlert.stockCode || '',
+                            stockName: firstAlert.stockName || ''
+                        }
+                    });
+
+                    // [v5.3.1] 각 알림별로 아카이브에 개별 저장 (종목별 추적 가능하게)
+                    userAlerts.forEach(alert => {
+                        if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
+                        const notifId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+                        notificationArchive[tokenEntry.token].unshift({
+                            id: notifId,
+                            timestamp: Date.now(),
+                            title: pushTitle,
+                            body: alert.msg,
+                            type: alert.type || 'pattern_alert',
+                            stockCode: alert.stockCode || '',
+                            stockName: alert.stockName || '',
+                        });
+                        if (notificationArchive[tokenEntry.token].length > 100) {
+                            notificationArchive[tokenEntry.token] = notificationArchive[tokenEntry.token].slice(0, 100);
+                        }
                     });
                 }
             } // End user tokens loop
@@ -1101,32 +1178,7 @@ async function runDeepMarketScan(force = false) {
                 await sendPushNotifications(pushMessages);
                 savePushHistory();
 
-                // [v5.3.0] 알림 아카이브 저장 (앱에서 알림 꺼져있어도 '보관함'에서 볼 수 있도록)
-                pushMessages.forEach(msg => {
-                    const token = msg.to;
-                    const notifId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
-                    // Push data에도 ID를 심어줘서 앱에서 중복 체크 가능하게 함
-                    if (msg.data) {
-                        msg.data.id = notifId;
-                        msg.data.timestamp = Date.now();
-                    }
-
-                    if (!notificationArchive[token]) notificationArchive[token] = [];
-                    notificationArchive[token].unshift({
-                        id: notifId,
-                        timestamp: Date.now(),
-                        title: msg.title,
-                        body: msg.body,
-                        type: msg.data ? msg.data.type : 'info',
-                        stockCode: msg.data ? msg.data.stockCode : '',
-                        stockName: msg.data ? msg.data.stockName : '',
-                    });
-                    // 토큰당 최근 100개까지만 보존
-                    if (notificationArchive[token].length > 100) {
-                        notificationArchive[token] = notificationArchive[token].slice(0, 100);
-                    }
-                });
+                // [v5.3.1] 알림 아카이브는 이미 개별 알림별로 위에서 저장됨 (종목별 추적 가능)
                 saveNotificationArchive();
             } else {
                 console.log(`[Push] 패턴 조건 충족 종목이 없거나 이미 발송 완료.`);
