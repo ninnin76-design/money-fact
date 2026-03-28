@@ -20,7 +20,7 @@ import {
 import { Svg, Path, G, Line, Rect, Text as TextSVG } from 'react-native-svg';
 
 // Services & Components
-import { AuthService } from './src/services/AuthService';
+
 import { StockService } from './src/services/StockService';
 import { StorageService } from './src/services/StorageService';
 import Ticker from './src/components/Ticker';
@@ -322,8 +322,10 @@ if (Platform.OS !== 'web') {
       const rawStocks = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
       if (!rawStocks) return BackgroundFetch.BackgroundFetchResult.NoData;
 
+      // [v5.3.1] 푸시 설정 여부와 무관하게 알림 보관함 저장은 항상 수행
+      // 푸시가 꺼져 있으면 모바일 알림만 안 보내고, 보관함에는 기록합니다.
       const notifEnabled = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_ENABLED);
-      if (notifEnabled === 'false') return BackgroundFetch.BackgroundFetchResult.NoData;
+      const isPushEnabled = notifEnabled !== 'false';
 
       const myStocks = JSON.parse(rawStocks);
 
@@ -381,10 +383,13 @@ if (Platform.OS !== 'web') {
               title = "🤫 히든 매집 포착!";
             }
 
-            await Notifications.scheduleNotificationAsync({
-              content: { title, body: bodyStr },
-              trigger: null,
-            });
+            // [v5.3.1] 푸시 설정이 켜져 있을 때만 모바일 알림 발송
+            if (isPushEnabled) {
+              await Notifications.scheduleNotificationAsync({
+                content: { title, body: bodyStr },
+                trigger: null,
+              });
+            }
 
             // [v5.1.0] 알림 보관함에도 저장 (백그라운드용 직접 저장)
             try {
@@ -427,10 +432,13 @@ if (Platform.OS !== 'web') {
               if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
 
               if (history[stock.code].hiddenDate !== today) {
-                await Notifications.scheduleNotificationAsync({
-                  content: { title: "🤫 [시장감시] 조용한 매집 포착", body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!` },
-                  trigger: null,
-                });
+                // [v5.3.1] 푸시 설정이 켜져 있을 때만 모바일 알림 발송
+                if (isPushEnabled) {
+                  await Notifications.scheduleNotificationAsync({
+                    content: { title: "🤫 [시장감시] 조용한 매집 포착", body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!` },
+                    trigger: null,
+                  });
+                }
 
                 // [v5.1.0] 시장감시 알림도 보관함에 저장
                 try {
@@ -549,7 +557,7 @@ function MainApp() {
   ]);
   const [serverBuy, setServerBuy] = useState({});
   const [serverSell, setServerSell] = useState({});
-  const [detailedInstFlow, setDetailedInstFlow] = useState({ pnsn: 0, ivtg: 0, ins: 0 });
+  const [detailedInstFlow, setDetailedInstFlow] = useState({ pnsn: 0, ivtg: 0, ins: 0, foreign: 0, institution: 0 });
   const [scanStats, setScanStats] = useState(null); // [코다리 부장] 전종목 레이더 스캔 통계
 
   // [v5.1.0] 알림 보관함 헬퍼 함수들
@@ -612,30 +620,34 @@ function MainApp() {
     try {
       const res = await fetch(`${SERVER_URL}/api/notifications/${token}`);
       if (!res.ok) return;
-      const serverNotifs = await res.json();
-      if (!Array.isArray(serverNotifs)) return;
+      const serverResponse = await res.json();
+      // [v5.3.1] 서버가 { messages: [...] } 형태로 반환하므로 올바르게 파싱
+      const serverNotifs = Array.isArray(serverResponse) ? serverResponse : (serverResponse.messages || []);
+      if (!Array.isArray(serverNotifs) || serverNotifs.length === 0) return;
 
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
       let localInbox = raw ? JSON.parse(raw) : [];
       const localIds = new Set(localInbox.map(n => n.id));
+      // [v5.3.1] 내용 기반 중복 방지 (같은 title+body가 이미 있으면 건너뜀)
+      const localContentKeys = new Set(localInbox.map(n => `${n.title}||${n.body}`));
 
       let hasNew = false;
       serverNotifs.forEach(sn => {
-        if (!localIds.has(sn.id)) {
+        const contentKey = `${sn.title}||${sn.body}`;
+        if (!localIds.has(sn.id) && !localContentKeys.has(contentKey)) {
           localInbox.unshift({
             ...sn,
-            read: false, // Server doesn't track read status, default to false
+            read: false,
             date: sn.date || new Date(sn.timestamp).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(' ', ''),
             time: sn.time || new Date(sn.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
           });
+          localContentKeys.add(contentKey);
           hasNew = true;
         }
       });
 
       if (hasNew) {
-        // Sort by timestamp descending
         localInbox.sort((a, b) => b.timestamp - a.timestamp);
-        // Limit to 200
         if (localInbox.length > 200) localInbox = localInbox.slice(0, 200);
         await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(localInbox));
         setNotifInbox(localInbox);
@@ -940,6 +952,8 @@ function MainApp() {
     let snapshotStocks = [];
     let fullTimeStr = lastUpdate;
     let calibratedServerSectors = [];
+    // [v5.3.1] 블록 스코프 버그 수정: 이 변수를 외부에 선언하여 하위 블록에서도 접근 가능하게 함
+    // 기존에는 내부 블록에 'let'으로 재선언되어 외부에서는 항상 false였음 (주도섹터 데이터 덮어쓰기 원인)
     let hasServerMarketData = false;
     let aggregatedTickerTexts = [];
 
@@ -1012,7 +1026,8 @@ function MainApp() {
               setIsServerUpdating(false);
             }
 
-            let hasServerMarketData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
+            // [v5.3.1] 외부 스코프의 hasServerMarketData에 값 할당 (let 재선언 제거!)
+            hasServerMarketData = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
               (Object.values(allBuy).some(l => l && l.length > 0)) ||
               (Object.values(allSell).some(l => l && l.length > 0));
             const hasServerData = hasServerMarketData; // 하위 호환성 유지
@@ -1465,13 +1480,11 @@ function MainApp() {
           setSectors(updatedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
         }
       } else {
-        // [v4.0.14] 서버 데이터 수신 시 불필요한 중복 보정 제거
-        // 서버에서 이미 '억원' 단위로 정밀 보정하여 보내주므로, 앱에서는 수치만 반올림하여 사용합니다.
-        const calibratedSectors = (snapshotRes.data.sectors || []).map(s => {
-          let f = Number(s.flow) || 0;
-          return { ...s, flow: Math.round(f) };
-        });
-        setSectors(calibratedSectors.sort((a, b) => Math.abs(b.flow) - Math.abs(a.flow)).slice(0, 6));
+        // [v5.3.1] 서버 데이터가 유효한 경우:
+        // ②(1135행)에서 이미 setSectors(calibratedServerSectors)로 서버 최신 데이터를 설정했으므로
+        // 여기서는 추가 setSectors 호출을 생략하고, 서버 데이터가 보존되도록 합니다.
+        // (이전에는 여기서 다시 setSectors를 호출하여 분석 루프 동안의 화면 깜빡임 원인이 되었음)
+        console.log("[v5.3.1] 서버 섹터/심리 데이터 유지 (로컬 덮어쓰기 방지)");
       }
       // [v4.0.14] 서버로부터 '억원' 단위를 직접 수신하므로 추가적인 큰 수 나누기(/100000000)는 불필요
       const roundedInstTotals = {
@@ -1983,17 +1996,26 @@ function MainApp() {
 
       const getSentimentInfo = () => {
         const dateStr = lastUpdate ? lastUpdate.substring(0, 6).trim() : new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+
+        // [v4.1.0] 수급 강도에 따른 온도 계산 로직 (Scale 최적화: 억원 단위 데이터를 10~95 범위로 매핑)
+        // 시장 전체 수급은 '천억' 단위일 때 유의미하므로 ±1조(10000억)를 최대치로 산정하여 계산합니다.
+        const totalStrength = fStrength + iStrength;
+
         if (isMarketOpen) {
+          // 장중에는 보다 역동적으로 반응 (50도 기준 ±45도 범위)
+          const liveTemp = 50 + (totalStrength / 200);
           return {
             title: "급변하는 실시간 수급 현황",
-            desc: `🔥 [${dateStr}] 외국인(${fStrength > 0 ? '매수우위' : '매도우위'})과 기관(${iStrength > 0 ? '매수우위' : '매도우위'})이 시장의 방향을 결정하고 있습니다.`,
-            temp: 50 + (fStrength * 2) + (iStrength * 2)
+            desc: `🔥 [${dateStr}] 외국인(${fStrength >= 0 ? '매수우위' : '매도우위'})과 기관(${iStrength >= 0 ? '매수우위' : '매도우위'})이 시장의 방향을 결정하고 있습니다.`,
+            temp: liveTemp
           };
         } else {
+          // 장 종료 후에는 좀 더 안정적인 지표 사용
+          const closedTemp = 50 + (fStrength > 0 ? 5 : -5) + (iStrength > 0 ? 5 : -5) + (totalStrength / 400);
           return {
             title: "오늘의 시장 종합 심리",
-            desc: `📊 [${dateStr}] 외국인은 ${fStrength > 0 ? '순매수' : '순매도'}, 기관은 ${iStrength > 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
-            temp: 50 + (fStrength > 0 ? 10 : -10) + (iStrength > 0 ? 10 : -10) + (fStrength + iStrength) / 200
+            desc: `📊 [${dateStr}] 외국인은 ${fStrength >= 0 ? '순매수' : '순매도'}, 기관은 ${iStrength >= 0 ? '순매수' : '순매도'}를 기록하며 장을 마감했습니다.`,
+            temp: closedTemp
           };
         }
       };

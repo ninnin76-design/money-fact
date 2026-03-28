@@ -1,10 +1,4 @@
 
-export const KIS_CONFIG = {
-    BASE_URL: 'https://openapi.koreainvestment.com:9443',
-    APP_KEY: 'PSpAyCQS1AvvJCDi6VWtoZOBMsSy1VRuyE34',
-    APP_SECRET: 'LpPkeiUNYGTfBw8V+jFimhhjv6QUMVVP3hHXEzEPXvVZAsP3r1+Bs1ZafccTx+D9zvTvNqR8nkeWR9wMS+SPEjxTgk0lHqZzun3ErjZMATfwToIEeJMzRYxX2AQvY26R/98eM0Ib6D4qd4iShfgBW9UuJVqvdWaLxAzlW6yHlOn+f2BWajk=',
-};
-
 export const STORAGE_KEYS = {
     MY_STOCKS: '@my_stocks',
     KIS_TOKEN: '@kis_token',
