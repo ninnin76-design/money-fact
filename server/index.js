@@ -6,6 +6,42 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+
+// [v5.3.7] Firebase Realtime DB - 스냅샷 클라우드 영구 보관용 (기존 FIREBASE_DB_URL 재활용!)
+// allAnalysis는 용량이 크므로 제외하고, 핵심 수급 데이터만 클라우드에 보관합니다.
+
+// [v5.3.7] Firebase에 스냅샷 저장 헬퍼 함수
+async function saveSnapshotToFirebase(data) {
+    const fbUrl = process.env.FIREBASE_DB_URL;
+    if (!fbUrl) return;
+    try {
+        // allAnalysis(종목별 상세 히스토리)는 용량이 매우 크므로 제외
+        const { allAnalysis, ...coreData } = data;
+        coreData.firebaseSavedAt = new Date().toISOString();
+        await axios.put(`${fbUrl}/market_snapshot/latest.json`, coreData);
+        console.log(`[Firebase] ☁️ 스냅샷 클라우드 저장 완료! (${coreData.updateTime})`);
+    } catch (e) {
+        console.error('[Firebase] ❌ 스냅샷 저장 실패:', e.message);
+    }
+}
+
+// [v5.3.7] Firebase에서 스냅샷 복원 헬퍼 함수
+async function loadSnapshotFromFirebase() {
+    const fbUrl = process.env.FIREBASE_DB_URL;
+    if (!fbUrl) return null;
+    try {
+        const res = await axios.get(`${fbUrl}/market_snapshot/latest.json`);
+        if (!res.data || !res.data.updateTime) {
+            console.log('[Firebase] 📭 클라우드에 저장된 스냅샷 없음');
+            return null;
+        }
+        console.log(`[Firebase] ☁️ 클라우드 스냅샷 복원 성공! (${res.data.updateTime})`);
+        return res.data;
+    } catch (e) {
+        console.error('[Firebase] ❌ 스냅샷 복원 실패:', e.message);
+        return null;
+    }
+}
 const { Expo } = require('expo-server-sdk');
 
 // --- Expo Push Setup ---
@@ -209,20 +245,39 @@ let marketAnalysisReport = {
     lastError: null
 };
 
-try {
-    if (fs.existsSync(SNAPSHOT_FILE)) {
-        const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-        if (snap && (snap.updateTime || snap.marketReport)) {
-            // 구조 보정: snap 자체가 데이터거나 snap.marketReport 안에 데이터가 있을 수 있음
-            const restoredData = snap.marketReport || snap;
-            marketAnalysisReport = { ...marketAnalysisReport, ...restoredData };
-            marketAnalysisReport.status = 'READY'; // 복원된 데이터가 있으므로 즉시 READY 상태로 전환
-            console.log(`[Server] 🏛️ Snapshot restored successfully. Last update: ${marketAnalysisReport.updateTime}`);
+// [v5.3.7] 스냅샷 복원: Firebase 우선 → 로컬 파일 폴백
+// 서버 기동 시 async IIFE로 Firebase 복원을 시도하고, 실패하면 로컬 파일에서 복원합니다.
+(async () => {
+    let restored = false;
+    // 1단계: Firebase에서 복원 시도
+    try {
+        const fbSnap = await loadSnapshotFromFirebase();
+        if (fbSnap && fbSnap.updateTime) {
+            marketAnalysisReport = { ...marketAnalysisReport, ...fbSnap };
+            marketAnalysisReport.status = 'READY';
+            console.log(`[Server] 🔥 Firebase 스냅샷 복원 완료! Last update: ${marketAnalysisReport.updateTime}`);
+            restored = true;
+        }
+    } catch (e) {
+        console.error('[Server] Firebase 복원 실패, 로컬 파일로 폴백:', e.message);
+    }
+    // 2단계: Firebase 복원 실패 시 로컬 파일에서 복원 (기존 방식)
+    if (!restored) {
+        try {
+            if (fs.existsSync(SNAPSHOT_FILE)) {
+                const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
+                if (snap && (snap.updateTime || snap.marketReport)) {
+                    const restoredData = snap.marketReport || snap;
+                    marketAnalysisReport = { ...marketAnalysisReport, ...restoredData };
+                    marketAnalysisReport.status = 'READY';
+                    console.log(`[Server] 🏛️ 로컬 스냅샷 복원 완료. Last update: ${marketAnalysisReport.updateTime}`);
+                }
+            }
+        } catch (e) {
+            console.error('[Server] Critical error loading snapshot:', e.message);
         }
     }
-} catch (e) {
-    console.error("[Server] Critical error loading snapshot:", e.message);
-}
+})();
 
 // --- User Portfolio Database ---
 const DB_FILE = path.join(__dirname, 'db.json');
@@ -1075,6 +1130,8 @@ async function runDeepMarketScan(force = false) {
         // [v4.2.1] 스캔 진행 중 임시 데이터 제거
         delete marketAnalysisReport._scanProgress;
         fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(marketAnalysisReport));
+        // [v5.3.7] Firebase 클라우드에도 동시 저장 (비동기 - 서버 블로킹 방지)
+        saveSnapshotToFirebase(marketAnalysisReport).catch(e => console.error('[Firebase] 비동기 저장 오류:', e.message));
 
         console.log(`[Radar] ===== 스냅샷 저장 완료! 매수 감지: ${Object.values(newBuyData).reduce((a, b) => a + b.length, 0)}건, 매도 감지: ${Object.values(newSellData).reduce((a, b) => a + b.length, 0)}건 =====`);
 
