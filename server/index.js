@@ -518,10 +518,32 @@ async function runDeepMarketScan(force = false) {
         marketAnalysisReport.status = 'SCANNING';
     }
     try {
-        // [v5.3.1] 듀얼 토큰 엔진: 백그라운드 스캐너는 BG 전용 토큰을 사용합니다!
-        const token = await getAccessTokenBG();
+        // [v5.3.6] 듀얼 토큰 라운드 로빈 엔진: 두 키가 번갈아 API를 호출하여 부하를 균등 분산합니다!
+        const tokenBG = await getAccessTokenBG();
+        // [v5.3.6] BG 토큰 발급 직후 1초 대기 → KIS의 연속 토큰 요청 Rate Limit 회피
+        await new Promise(r => setTimeout(r, 1000));
+        let tokenMain = await getAccessToken();
+
+        // [v5.3.6] 메인 토큰 발급 실패 시 BG 토큰으로 안전 폴백 (라운드 로빈 비활성화)
+        const roundRobinActive = hasDualEngine && !!tokenMain && !!tokenBG;
+        if (hasDualEngine && !tokenMain) {
+            console.log(`[Radar] ⚠️ 메인 토큰 발급 실패! BG 토큰 단독 모드로 전환합니다.`);
+            tokenMain = tokenBG; // 폴백
+        }
+
+        // [v5.3.6] 라운드 로빈 헬퍼: 인덱스에 따라 BG↔메인 토큰/키를 번갈아 반환
+        const getRoundRobin = (idx) => {
+            if (!roundRobinActive) return { token: tokenBG, key: hasDualEngine ? APP_KEY_BG : APP_KEY, secret: hasDualEngine ? APP_SECRET_BG : APP_SECRET };
+            if (idx % 2 === 0) return { token: tokenBG, key: APP_KEY_BG, secret: APP_SECRET_BG };
+            return { token: tokenMain, key: APP_KEY, secret: APP_SECRET };
+        };
+        if (roundRobinActive) console.log(`[Radar] 🔄 라운드 로빈 활성화! 짝수=BG키, 홀수=메인키`);
+        else if (hasDualEngine) console.log(`[Radar] ⚙️ BG 키 단독 모드 (메인 토큰 폴백)`);
+
+        // [v5.3.6] 1단계 Wide Net 스캔에서 사용할 공통 변수 (하위 호환성 유지)
         const bgKey = hasDualEngine ? APP_KEY_BG : APP_KEY;
         const bgSecret = hasDualEngine ? APP_SECRET_BG : APP_SECRET;
+        const token = tokenBG;
 
         // [v3.6.1] 주요 섹터 종목 코드
         const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
@@ -692,15 +714,16 @@ async function runDeepMarketScan(force = false) {
         for (let i = 0; i < fullList.length; i++) {
             const stk = fullList[i];
 
-            // [v4.0.15] 600ms 간격으로 더 천천히 진행 (유량 제한 및 500 에러 방지)
-            await new Promise(r => setTimeout(r, 600));
+            // [v5.3.6] 라운드 로빈: 두 키가 번갈아 호출 → 부하 50% 분산 + 딜레이 절반
+            await new Promise(r => setTimeout(r, 300));
 
-            // [v4.0.15] 안전 장치: 30개 종목마다 3초간 휴식 (Cool-down)
-            if (i > 0 && i % 30 === 0) {
-                console.log(`[Radar] KIS 서버 과부하 방지: 3초간 휴식 중... (${i}/${fullList.length})`);
-                await new Promise(r => setTimeout(r, 3000));
+            // [v5.3.6] 안전 장치: 50개 종목마다 2초간 휴식 (키 2개 분산이라 텀 완화)
+            if (i > 0 && i % 50 === 0) {
+                console.log(`[Radar] 라운드 로빈 쿨다운: 2초 휴식 (${i}/${fullList.length})`);
+                await new Promise(r => setTimeout(r, 2000));
             }
 
+            const rr = getRoundRobin(i); // 이번 종목에 사용할 토큰/키 세트
             let retryCount = 0;
             const maxRetries = 2; // 총 3회 시도
             let success = false;
@@ -708,7 +731,7 @@ async function runDeepMarketScan(force = false) {
             while (retryCount <= maxRetries && !success) {
                 try {
                     const invRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                        headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: 'FHKST01010900', custtype: 'P' },
+                        headers: { authorization: `Bearer ${rr.token}`, appkey: rr.key, appsecret: rr.secret, tr_id: 'FHKST01010900', custtype: 'P' },
                         params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code, FID_PERIOD_DIV_CODE: 'D', FID_ORG_ADJ_PRC: '0' }
                     });
                     const daily = invRes.data.output || [];
@@ -729,8 +752,10 @@ async function runDeepMarketScan(force = false) {
                                 // [v5.3.5] 가집계(Top순위)에 잡히지 않은 '핵심 감시 종목(섹터/시장/유저관심)'은 
                                 // 장중 수급 파악 및 주도 섹터 판단을 위해 반드시 잠정치가 필요하므로 개별 호출로 채워 넣습니다!
                                 try {
+                                    // [v5.3.6] 잠정치 보정도 라운드 로빈 적용 (반대 키 사용으로 부하 분산)
+                                    const rrProv = getRoundRobin(i + 1); // 메인 호출과 반대 키 사용
                                     const exactProvRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
-                                        headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: 'FHKST01012100', custtype: 'P' },
+                                        headers: { authorization: `Bearer ${rrProv.token}`, appkey: rrProv.key, appsecret: rrProv.secret, tr_id: 'FHKST01012100', custtype: 'P' },
                                         params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
                                     });
                                     if (exactProvRes.data.output && exactProvRes.data.output.length > 0) {
@@ -1339,8 +1364,15 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 });
 
 // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
+// [v5.3.5] 서버가 새 스캔 중(SCANNING)이라도, 이전 캐시 데이터가 살아있으면
+// status를 'READY'로 즉시 응답하여 앱이 불필요한 로딩 오버레이를 띄우지 않도록 합니다.
 app.get('/api/snapshot', (req, res) => {
-    res.json(marketAnalysisReport);
+    const response = { ...marketAnalysisReport };
+    if (response.status === 'SCANNING' && response.updateTime && response.buyData) {
+        response.status = 'READY';
+        console.log(`[Snapshot API] 스캔 진행 중이나 기존 캐시 데이터 존재 → READY로 즉시 응답 (캐시: ${response.updateTime})`);
+    }
+    res.json(response);
 });
 
 // [v5.3.0] 특정 토큰에 대한 알림 아카이브 조회 API
