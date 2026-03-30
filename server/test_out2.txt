@@ -1,0 +1,16 @@
+캐시 토큰 사용
+
+=== TEST: inquire-daily-indexchartprice (FHKUP03500100) ===
+FAIL 2: 500 Request failed with status code 500
+
+=== TEST: inquire-index-price (FHPUP02100000) ===
+FAIL 4: 500 Request failed with status code 500
+
+=== TEST: inquire-index-daily-price (FHPUP02120000) ===
+FAIL 5: 500 Request failed with status code 500
+
+=== TEST: inquire-member (FHKST01010600) ===
+FAIL member: 500 Request failed with status code 500
+
+=== TEST: HHPPG046600C1 (프로그램매매 투자자매매동향) ===
+FAIL rpp: 404 Request failed with status code 404

@@ -424,6 +424,7 @@ app.post('/api/push/register', (req, res) => {
         token: pushToken,
         syncKey: syncKey || 'anonymous',
         stocks: stocks || [],
+        pushEnabled: req.body.pushEnabled !== false, // [v5.3.3] 푸시 ON/OFF 상태 저장
         settings: settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 },
         updatedAt: new Date().toISOString()
     };
@@ -522,8 +523,24 @@ async function runDeepMarketScan(force = false) {
         const bgKey = hasDualEngine ? APP_KEY_BG : APP_KEY;
         const bgSecret = hasDualEngine ? APP_SECRET_BG : APP_SECRET;
 
-        // [v3.6.1] 70개 주요 섹터 종목 코드 미리 생성 (하단 루프 및 재시도 로직에서 사용)
+        // [v3.6.1] 주요 섹터 종목 코드
         const sectorStockCodes = new Set(SECTOR_WATCH_STOCKS.map(s => s.code));
+
+        // [v5.3.5] 반드시 장중 잠정치(추정치)가 필요한 '핵심 추적 종목' 세트 생성 (시장감시 + 섹터감시 + 모든 유저 관심종목)
+        const essentialStockCodes = new Set([
+            ...MARKET_WATCH_STOCKS.map(s => s.code),
+            ...SECTOR_WATCH_STOCKS.map(s => s.code)
+        ]);
+        pushTokens.forEach(entry => {
+            (entry.stocks || []).forEach(s => {
+                if (s.code) essentialStockCodes.add(s.code);
+            });
+        });
+        Object.values(Object.assign({}, global.userStore || {})).forEach(user => {
+            (user.stocks || []).forEach(s => {
+                if (s.code) essentialStockCodes.add(s.code);
+            });
+        });
 
         // ========================================================
         // [코다리 부장] 1단계: 광범위 필터 (The Wide Net)
@@ -703,12 +720,29 @@ async function runDeepMarketScan(force = false) {
                         const oVal = parseInt(d0.orgn_ntby_qty || 0);
 
                         if ((isNaN(fVal) || fVal === 0) && (isNaN(oVal) || oVal === 0)) {
-                            // [v5.2.0] 실패하던 개별 종목 잠정치 API(FHKST01012100) 대신, 
-                            // 1단계에서 확보한 가집계 스냅샷(Snapshot)에서 데이터를 보정합니다.
+                            // [v5.2.0] 개별 종목 잠정치 API 최적화: 1단계에서 확보한 가집계 스냅샷(Snapshot)에서 데이터를 보정합니다.
                             const prov = provisionalMap.get(stk.code);
                             if (prov) {
                                 d0.frgn_ntby_qty = String(prov.frgn_ntby_qty || '0');
                                 d0.orgn_ntby_qty = String(prov.orgn_ntby_qty || '0');
+                            } else if (essentialStockCodes.has(stk.code)) {
+                                // [v5.3.5] 가집계(Top순위)에 잡히지 않은 '핵심 감시 종목(섹터/시장/유저관심)'은 
+                                // 장중 수급 파악 및 주도 섹터 판단을 위해 반드시 잠정치가 필요하므로 개별 호출로 채워 넣습니다!
+                                try {
+                                    const exactProvRes = await axios.get(`${KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor`, {
+                                        headers: { authorization: `Bearer ${token}`, appkey: bgKey, appsecret: bgSecret, tr_id: 'FHKST01012100', custtype: 'P' },
+                                        params: { FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: stk.code }
+                                    });
+                                    if (exactProvRes.data.output && exactProvRes.data.output.length > 0) {
+                                        const exactProv = exactProvRes.data.output[0];
+                                        d0.frgn_ntby_qty = String(exactProv.frgn_ntby_qty || '0');
+                                        d0.orgn_ntby_qty = String(exactProv.orgn_ntby_qty || '0');
+                                    }
+                                    // 개별 호출에 따른 API 부하 방지용 짧은 휴식
+                                    await new Promise(r => setTimeout(r, 150));
+                                } catch (e) {
+                                    // 500 에러 등 발생 시 조용히 넘어감
+                                }
                             }
                         }
                     }
@@ -1080,8 +1114,11 @@ async function runDeepMarketScan(force = false) {
                 if (!pushHistory[tokenEntry.token]) pushHistory[tokenEntry.token] = {};
                 if (!pushHistory[tokenEntry.token][todayStr]) pushHistory[tokenEntry.token][todayStr] = {};
 
+                // [v5.3.3] 푸시 OFF인 사용자는 모바일 푸시만 안 보내고, 알림 아카이브(보관함)에는 저장!
+                const isPushEnabled = tokenEntry.pushEnabled !== false;
+
                 const userStocks = tokenEntry.stocks || [];
-                // [v5.3.1] 관심종목이 없어도 시장감시 목록(MARKET_WATCH_STOCKS)으로 알림 수신 가능
+                // [v5.3.3] 관심종목이 없어도 시장감시 목록(MARKET_WATCH_STOCKS)으로 알림 수신 가능
                 const scanStocks = userStocks.length > 0 ? userStocks : MARKET_WATCH_STOCKS;
 
                 const userSettings = tokenEntry.settings || { buyStreak: 3, sellStreak: 3, accumStreak: 3 };
@@ -1095,35 +1132,43 @@ async function runDeepMarketScan(force = false) {
                 if (marketLeader && leaderScore >= 4 && tokenDailyHistory['__market_leader'] !== marketLeader.code) {
                     tokenDailyHistory['__market_leader'] = marketLeader.code;
                     const rateStr = parseFloat(marketLeader.rate) >= 0 ? `+${marketLeader.rate}%` : `${marketLeader.rate}%`;
-                    const leaderMsg = `🏆 [시장 수급대장 포착] ${marketLeader.name}(${rateStr}): 외인 ${marketLeader.fBuy}일 + 기관 ${marketLeader.iBuy}일 연속 쌍끌이 매수! 시장에서 가장 강력한 수급이 집중되고 있습니다.`;
+                    const leaderMsg = `🏆 [시장 수급대장 포착] ${marketLeader.name}(${marketLeader.code}, ${rateStr}): 외인 ${marketLeader.fBuy}일 + 기관 ${marketLeader.iBuy}일 연속 쌍끌이 매수! 시장에서 가장 강력한 수급이 집중되고 있습니다.`;
 
-                    // 수급 대장주 전용 별도 푸시 (관심종목 알림과 독립!)
-                    pushMessages.push({
-                        to: tokenEntry.token,
-                        title: '🚨 [시장 수급대장 포착]',
-                        body: leaderMsg,
-                        sound: 'default',
-                        priority: 'high',
-                        data: {
+                    // 수급 대장주 전용 별도 푸시 (푸시 ON일 때만 발송)
+                    if (isPushEnabled) {
+                        pushMessages.push({
+                            to: tokenEntry.token,
+                            title: '🚨 [시장 수급대장 포착]',
+                            body: leaderMsg,
+                            sound: 'default',
+                            priority: 'high',
+                            data: {
+                                type: 'market_leader',
+                                stockCode: marketLeader.code,
+                                stockName: marketLeader.name
+                            }
+                        });
+                    }
+
+                    // 알림 아카이브에도 저장 (중복 방지: 오늘 같은 대장주 알림이 이미 있으면 건너뜀)
+                    if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
+                    const leaderDup = notificationArchive[tokenEntry.token].some(n => {
+                        const nDate = new Date(n.timestamp).toISOString().split('T')[0];
+                        return nDate === todayStr && n.type === 'market_leader' && n.stockCode === marketLeader.code;
+                    });
+                    if (!leaderDup) {
+                        notificationArchive[tokenEntry.token].unshift({
+                            id: `${Date.now()}_leader_${marketLeader.code}_${Math.random().toString(36).substr(2, 4)}`,
+                            timestamp: Date.now(),
+                            title: '🚨 [시장 수급대장 포착]',
+                            body: leaderMsg,
                             type: 'market_leader',
                             stockCode: marketLeader.code,
-                            stockName: marketLeader.name
+                            stockName: marketLeader.name,
+                        });
+                        if (notificationArchive[tokenEntry.token].length > 100) {
+                            notificationArchive[tokenEntry.token] = notificationArchive[tokenEntry.token].slice(0, 100);
                         }
-                    });
-
-                    // 알림 아카이브에도 저장
-                    if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
-                    notificationArchive[tokenEntry.token].unshift({
-                        id: `${Date.now()}_leader_${Math.random().toString(36).substr(2, 6)}`,
-                        timestamp: Date.now(),
-                        title: '🚨 [시장 수급대장 포착]',
-                        body: leaderMsg,
-                        type: 'market_leader',
-                        stockCode: marketLeader.code,
-                        stockName: marketLeader.name,
-                    });
-                    if (notificationArchive[tokenEntry.token].length > 100) {
-                        notificationArchive[tokenEntry.token] = notificationArchive[tokenEntry.token].slice(0, 100);
                     }
                 }
 
@@ -1158,25 +1203,25 @@ async function runDeepMarketScan(force = false) {
                     if (isEscapeSignal) {
                         patternKey = 'escape';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `❄️ [동반 이탈 경고] ${us.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
+                            msg = `❄️ [동반 이탈 경고] ${us.name}(${us.code}): 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
                             priority = 1;
                         }
                     } else if (isBullSignal) {
                         patternKey = 'bull';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `🔥 [동반 쌍끌이 포착] ${us.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
+                            msg = `🔥 [동반 쌍끌이 포착] ${us.name}(${us.code}): 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
                             priority = 2;
                         }
                     } else if (isTurnSignal) {
                         patternKey = 'turn';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `✨ [변곡점 발생] ${us.name}: 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
+                            msg = `✨ [변곡점 발생] ${us.name}(${us.code}): 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
                             priority = 3;
                         }
                     } else if (isHiddenAcc) {
                         patternKey = 'hidden';
                         if (tokenDailyHistory[us.code] !== patternKey) {
-                            msg = `🤫 [히든 매집] ${us.name}: 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다. 소문나기 전에 확인하세요.`;
+                            msg = `🤫 [히든 매집] ${us.name}(${us.code}): 주가는 고요하지만 세력은 은밀히 물량 확보 중입니다. 소문나기 전에 확인하세요.`;
                             priority = 4;
                         }
                     }
@@ -1211,24 +1256,35 @@ async function runDeepMarketScan(force = false) {
                     const limitedAlerts = userAlerts.slice(0, 3).map(a => a.msg);
                     if (userAlerts.length > 3) limitedAlerts.push(`...외 ${userAlerts.length - 3}건`);
 
-                    pushMessages.push({
-                        to: tokenEntry.token,
-                        title: pushTitle,
-                        body: limitedAlerts.join('\n'),
-                        sound: 'default',
-                        priority: 'high',
-                        data: {
-                            type: firstAlert.type || 'pattern_alert',
-                            stockCode: firstAlert.stockCode || '',
-                            stockName: firstAlert.stockName || ''
-                        }
-                    });
+                    // [v5.3.3] 푸시 ON일 때만 모바일 푸시 발송 (푸시 OFF이어도 아카이브는 아래에서 저장)
+                    if (isPushEnabled) {
+                        pushMessages.push({
+                            to: tokenEntry.token,
+                            title: pushTitle,
+                            body: limitedAlerts.join('\n'),
+                            sound: 'default',
+                            priority: 'high',
+                            data: {
+                                type: firstAlert.type || 'pattern_alert',
+                                stockCode: firstAlert.stockCode || '',
+                                stockName: firstAlert.stockName || ''
+                            }
+                        });
+                    }
 
-                    // [v5.3.1] 각 알림별로 아카이브에 개별 저장 (종목별 추적 가능하게)
+                    // [v5.3.3] 각 알림별로 아카이브에 개별 저장 (종목코드+패턴 기반 중복 방지)
                     userAlerts.forEach(alert => {
                         if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
-                        const notifId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-                        notificationArchive[tokenEntry.token].unshift({
+                        // 중복 방지: 같은 종목코드+같은 패턴이 이미 오늘 아카이브에 있으면 건너뜀
+                        const existingArchive = notificationArchive[tokenEntry.token];
+                        const isDuplicate = existingArchive.some(n => {
+                            const nDate = new Date(n.timestamp).toISOString().split('T')[0];
+                            return nDate === todayStr && n.stockCode === (alert.stockCode || '') && n.type === (alert.type || 'pattern_alert');
+                        });
+                        if (isDuplicate) return; // 중복이면 저장 안 함
+
+                        const notifId = `${Date.now()}_${alert.stockCode}_${alert.type}_${Math.random().toString(36).substr(2, 4)}`;
+                        existingArchive.unshift({
                             id: notifId,
                             timestamp: Date.now(),
                             title: pushTitle,
@@ -1237,21 +1293,21 @@ async function runDeepMarketScan(force = false) {
                             stockCode: alert.stockCode || '',
                             stockName: alert.stockName || '',
                         });
-                        if (notificationArchive[tokenEntry.token].length > 100) {
-                            notificationArchive[tokenEntry.token] = notificationArchive[tokenEntry.token].slice(0, 100);
+                        if (existingArchive.length > 100) {
+                            notificationArchive[tokenEntry.token] = existingArchive.slice(0, 100);
                         }
                     });
                 }
             } // End user tokens loop
 
+            // [v5.3.3] 푸시 메시지(모바일 알림)가 없어도, 푸시 OFF 사용자의 아카이브/히스토리가 갱신되었을 수 있으므로 무조건 저장!
+            savePushHistory();
+            saveNotificationArchive();
+
             if (pushMessages.length > 0) {
                 await sendPushNotifications(pushMessages);
-                savePushHistory();
-
-                // [v5.3.1] 알림 아카이브는 이미 개별 알림별로 위에서 저장됨 (종목별 추적 가능)
-                saveNotificationArchive();
             } else {
-                console.log(`[Push] 패턴 조건 충족 종목이 없거나 이미 발송 완료.`);
+                console.log(`[Push] 발송할 모바일 푸시 메시지가 없습니다 (아카이브는 저장 완료).`);
             }
         } else if (pushTokens.length > 0) {
             // Not push time

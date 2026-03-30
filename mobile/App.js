@@ -319,38 +319,38 @@ if (Platform.OS !== 'web') {
       // [코다리 부장 터치] 장외 시간에는 백그라운드도 푹 쉬어야죠! 배터리 절약!
       if (!StockService.isMarketOpen()) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-      const rawStocks = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
-      if (!rawStocks) return BackgroundFetch.BackgroundFetchResult.NoData;
-
-      // [v5.3.1] 푸시 설정 여부와 무관하게 알림 보관함 저장은 항상 수행
+      // [v5.3.3] 푸시 설정 여부와 무관하게 알림 보관함 저장은 항상 수행
       // 푸시가 꺼져 있으면 모바일 알림만 안 보내고, 보관함에는 기록합니다.
       const notifEnabled = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_ENABLED);
       const isPushEnabled = notifEnabled !== 'false';
 
-      const myStocks = JSON.parse(rawStocks);
+      // [v5.3.3] 관심종목이 없어도 MARKET_WATCH_STOCKS로 폴백하여 알림 수신 가능!
+      const rawStocks = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
+      const myStocks = rawStocks ? JSON.parse(rawStocks) : [];
 
       const rawHistory = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_HISTORY);
       let history = rawHistory ? JSON.parse(rawHistory) : {};
       const today = new Date().toISOString().split('T')[0];
       let hasNewData = false;
 
-      for (const stock of myStocks) {
-        const data = await StockService.getInvestorData(stock.code);
-        if (data && data.length > 0) {
-          // [코다리 부장 터치] 백그라운드에서도 사용자 설정값(민감도)을 존중합니다!
-          const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
-          const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
-          const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
-          const buyLimit = parseInt(buyLimitRaw) || 3;
-          const sellLimit = parseInt(sellLimitRaw) || 3;
-          const accumLimit = parseInt(accumLimitRaw) || 3;
+      // 사용자 설정값(민감도) 한 번만 읽기
+      const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
+      const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
+      const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
+      const buyLimit = parseInt(buyLimitRaw) || 3;
+      const sellLimit = parseInt(sellLimitRaw) || 3;
+      const accumLimit = parseInt(accumLimitRaw) || 3;
+
+      // [v5.3.3] 4대 패턴 분석 함수 (관심종목 + 시장감시 종목 공용)
+      const analyzeAndNotify = async (stock, isWatchList = false) => {
+        try {
+          const data = await StockService.getInvestorData(stock.code);
+          if (!data || data.length === 0) return;
 
           const { fStreak, iStreak } = StockService.analyzeSupply(data);
-          const currentPrice = parseInt(data[0].stck_clpr || 0);
-          const vwap = StockService.calculateVWAP(data, buyLimit);
           const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
 
-          // 1. Streak Alert 🚨🔥✨
+          // 4대 패턴 감지
           const isEscapeSignal = fStreak <= -sellLimit && iStreak <= -sellLimit;
           const isBullSignal = fStreak >= 1 && iStreak >= 1 && (fStreak + iStreak) >= buyLimit;
           const isTurnSignal = (fStreak === 1 && iStreak <= -sellLimit) || (iStreak === 1 && fStreak <= -sellLimit);
@@ -361,43 +361,59 @@ if (Platform.OS !== 'web') {
           else if (isTurnSignal) currentStatus = 'turn';
           else if (isHiddenAcc) currentStatus = 'hidden';
 
+          if (currentStatus === 'none') return;
+
           if (!history[stock.code]) {
             history[stock.code] = { streak: '', hiddenDate: '', streakDate: '' };
           }
 
-          if (currentStatus !== 'none' && history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today) {
-            let title = `Money Fact: ${stock.name}`;
-            let bodyStr = "";
+          // 히든 매집은 hiddenDate로, 나머지는 streak+streakDate로 중복 방지
+          const isNewStreak = currentStatus !== 'hidden'
+            ? (history[stock.code].streak !== currentStatus && history[stock.code].streakDate !== today)
+            : (history[stock.code].hiddenDate !== today);
 
-            if (currentStatus === 'escape') {
-              bodyStr = `❄️ [동반 이탈 경고] ${stock.name}: 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
-              title = "🚨 수급 이탈 알림!";
-            } else if (currentStatus === 'bull') {
-              bodyStr = `🔥 [동반 쌍끌이 포착] ${stock.name}: 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
-              title = "🔥 특급 쌍끌이 시그널!";
-            } else if (currentStatus === 'turn') {
-              bodyStr = `✨ [변곡점 발생] ${stock.name}: 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
-              title = "✨ 변곡점 포착!";
-            } else if (currentStatus === 'hidden') {
-              bodyStr = `🤫 [히든 매집] ${stock.name}: 주가는 고요하지만 세력은 은밀히 물량을 확보 중입니다. 소문나기 전에 확인하세요.`;
-              title = "🤫 히든 매집 포착!";
-            }
+          if (!isNewStreak) return;
 
-            // [v5.3.1] 푸시 설정이 켜져 있을 때만 모바일 알림 발송
-            if (isPushEnabled) {
-              await Notifications.scheduleNotificationAsync({
-                content: { title, body: bodyStr },
-                trigger: null,
-              });
-            }
+          const prefix = isWatchList ? '[시장감시] ' : '';
+          let title = `📊 Money Fact: ${stock.name}`;
+          let bodyStr = '';
 
-            // [v5.1.0] 알림 보관함에도 저장 (백그라운드용 직접 저장)
-            try {
-              const inboxRaw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
-              let inbox = inboxRaw ? JSON.parse(inboxRaw) : [];
+          if (currentStatus === 'escape') {
+            bodyStr = `❄️ [${prefix}동반 이탈 경고] ${stock.name}(${stock.code}): 외인·기관 모두 손절 중! 리스크 관리가 시급합니다.`;
+            title = '🚨 수급 이탈 알림!';
+          } else if (currentStatus === 'bull') {
+            bodyStr = `🔥 [${prefix}동반 쌍끌이 포착] ${stock.name}(${stock.code}): 외인·기관이 작정하고 쓸어담는 중! 시세 분출이 임박했습니다.`;
+            title = '🔥 특급 쌍끌이 시그널!';
+          } else if (currentStatus === 'turn') {
+            bodyStr = `✨ [${prefix}변곡점 발생] ${stock.name}(${stock.code}): 기나긴 매도세를 멈추고 수급이 상방으로 꺾였습니다. 신규 진입 적기!`;
+            title = '✨ 변곡점 포착!';
+          } else if (currentStatus === 'hidden') {
+            bodyStr = `🤫 [${prefix}조용한 매집 포착] ${stock.name}(${stock.code}): 주가는 고요하지만 세력은 은밀히 물량을 확보 중입니다.`;
+            title = '🤫 히든 매집 포착!';
+          }
+
+          // 푸시 설정이 켜져 있을 때만 모바일 알림 발송
+          if (isPushEnabled) {
+            await Notifications.scheduleNotificationAsync({
+              content: { title, body: bodyStr, data: { stockCode: stock.code, stockName: stock.name, type: currentStatus } },
+              trigger: null,
+            });
+          }
+
+          // 알림 보관함에도 저장
+          try {
+            const inboxRaw = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
+            let inbox = inboxRaw ? JSON.parse(inboxRaw) : [];
+
+            // 중복 방지: 오늘 같은 종목+패턴이 이미 있으면 건너뜀
+            const isDup = inbox.some(n => {
+              const nDate = n.timestamp ? new Date(n.timestamp).toISOString().split('T')[0] : '';
+              return nDate === today && n.stockCode === stock.code && n.type === currentStatus;
+            });
+            if (!isDup) {
               const now = new Date();
               inbox.unshift({
-                id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                id: `${Date.now()}_${stock.code}_${currentStatus}_${Math.random().toString(36).substr(2, 4)}`,
                 timestamp: now.getTime(),
                 date: `${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')}`,
                 time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
@@ -406,65 +422,31 @@ if (Platform.OS !== 'web') {
               });
               if (inbox.length > 200) inbox = inbox.slice(0, 200);
               await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox));
-            } catch (ie) { }
+            }
+          } catch (ie) { }
 
+          // 히스토리 업데이트
+          if (currentStatus === 'hidden') {
+            history[stock.code].hiddenDate = today;
+          } else {
             history[stock.code].streak = currentStatus;
             history[stock.code].streakDate = today;
-            hasNewData = true;
           }
-        }
+          hasNewData = true;
+        } catch (e) { }
+      };
+
+      // === 1단계: 관심종목 4대 패턴 분석 ===
+      for (const stock of myStocks) {
+        await analyzeAndNotify(stock, false);
       }
 
-      // --- [New] Check Watch List for Suspicious Accumulation (All Stocks) ---
-      // Filter out stocks already in my list to avoid duplicate checks
-      const watchList = MARKET_WATCH_STOCKS.filter(ws => !myStocks.some(ms => ms.code === ws.code));
-
-      // Limit check to avoid timeout (check first 10 or randomize, but here we do all watch list ~30 items)
+      // === 2단계: 시장감시 종목 4대 패턴 분석 (관심종목과 겹치지 않는 종목만) ===
+      // [v5.3.3] 관심종목이 없어도 MARKET_WATCH_STOCKS 전체를 분석합니다!
+      const myCodes = new Set(myStocks.map(s => s.code));
+      const watchList = MARKET_WATCH_STOCKS.filter(ws => !myCodes.has(ws.code));
       for (const stock of watchList) {
-        try {
-          const data = await StockService.getInvestorData(stock.code);
-          if (data && data.length > 0) {
-            const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
-            const accumLimit = parseInt(accumLimitRaw) || 3;
-            const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
-
-            if (isHiddenAcc) {
-              if (!history[stock.code]) history[stock.code] = { streak: '', vwapDate: '', hiddenDate: '' };
-
-              if (history[stock.code].hiddenDate !== today) {
-                // [v5.3.1] 푸시 설정이 켜져 있을 때만 모바일 알림 발송
-                if (isPushEnabled) {
-                  await Notifications.scheduleNotificationAsync({
-                    content: { title: "🤫 [시장감시] 조용한 매집 포착", body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!` },
-                    trigger: null,
-                  });
-                }
-
-                // [v5.1.0] 시장감시 알림도 보관함에 저장
-                try {
-                  const inboxRaw2 = await AsyncStorage.getItem(STORAGE_KEYS.NOTIF_INBOX);
-                  let inbox2 = inboxRaw2 ? JSON.parse(inboxRaw2) : [];
-                  const now2 = new Date();
-                  inbox2.unshift({
-                    id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-                    timestamp: now2.getTime(),
-                    date: `${(now2.getMonth() + 1).toString().padStart(2, '0')}.${now2.getDate().toString().padStart(2, '0')}`,
-                    time: `${now2.getHours().toString().padStart(2, '0')}:${now2.getMinutes().toString().padStart(2, '0')}`,
-                    stockCode: stock.code, stockName: stock.name,
-                    title: '🤫 [시장감시] 조용한 매집 포착',
-                    body: `${stock.name}: 시장 주도 섹터에서 세력 매집 포착!`,
-                    type: 'hidden', read: false,
-                  });
-                  if (inbox2.length > 200) inbox2 = inbox2.slice(0, 200);
-                  await AsyncStorage.setItem(STORAGE_KEYS.NOTIF_INBOX, JSON.stringify(inbox2));
-                } catch (ie2) { }
-
-                history[stock.code].hiddenDate = today;
-                hasNewData = true;
-              }
-            }
-          }
-        } catch (e) { }
+        await analyzeAndNotify(stock, true);
       }
 
       if (hasNewData) {
@@ -570,8 +552,21 @@ function MainApp() {
       const targetId = notification.id || `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       if (inbox.some(n => n.id === targetId)) return;
 
-      const now = new Date();
-      const timestamp = notification.timestamp || now.getTime();
+      // [v5.3.3] 종목코드+패턴 기반 중복 방지 (같은 날 같은 종목 같은 패턴이면 중복)
+      const today = new Date().toISOString().split('T')[0];
+      if (notification.stockCode && notification.type) {
+        const hasSameAlert = inbox.some(n => {
+          const nDate = n.timestamp ? new Date(n.timestamp).toISOString().split('T')[0] : '';
+          return nDate === today && n.stockCode === notification.stockCode && n.type === notification.type;
+        });
+        if (hasSameAlert) return; // 중복이면 저장 안 함
+      }
+
+      // 내용 기반 중복 방지 (title+body 동일)
+      const contentKey = `${notification.title}||${notification.body}`;
+      if (inbox.some(n => `${n.title}||${n.body}` === contentKey)) return;
+
+      const timestamp = notification.timestamp || Date.now();
       const dateObj = new Date(timestamp);
 
       const newItem = {
@@ -633,17 +628,32 @@ function MainApp() {
 
       let hasNew = false;
       serverNotifs.forEach(sn => {
+        // [v5.3.3] 종목코드+패턴 기반 중복 방지 강화
         const contentKey = `${sn.title}||${sn.body}`;
-        if (!localIds.has(sn.id) && !localContentKeys.has(contentKey)) {
-          localInbox.unshift({
-            ...sn,
-            read: false,
-            date: sn.date || new Date(sn.timestamp).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(' ', ''),
-            time: sn.time || new Date(sn.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        const stockTypeKey = sn.stockCode && sn.type ? `${sn.stockCode}_${sn.type}` : null;
+
+        // ID 중복 체크
+        if (localIds.has(sn.id)) return;
+        // 내용 중복 체크
+        if (localContentKeys.has(contentKey)) return;
+        // 종목+패턴 중복 체크 (오늘 날짜 기준)
+        if (stockTypeKey) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const hasSame = localInbox.some(n => {
+            const nDate = n.timestamp ? new Date(n.timestamp).toISOString().split('T')[0] : '';
+            return nDate === todayStr && n.stockCode === sn.stockCode && n.type === sn.type;
           });
-          localContentKeys.add(contentKey);
-          hasNew = true;
+          if (hasSame) return;
         }
+
+        localInbox.unshift({
+          ...sn,
+          read: false,
+          date: sn.date || new Date(sn.timestamp).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(' ', ''),
+          time: sn.time || new Date(sn.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        });
+        localContentKeys.add(contentKey);
+        hasNew = true;
       });
 
       if (hasNew) {
@@ -693,20 +703,33 @@ function MainApp() {
           const title = content.title || '';
           const bodyText = content.body || '';
 
-          let stockName = '';
-          let stockCode = '';
-          const nameMatch = bodyText.match(/(?:\[.*?\]\s*)([가-힣A-Za-z0-9.]+?)\s*:/);
-          if (nameMatch) {
-            stockName = nameMatch[1];
-            const found = MARKET_WATCH_STOCKS.find(s => s.name === stockName);
-            if (found) stockCode = found.code;
+          // [v5.3.3] 서버 푸시에서 보낸 data를 우선 사용 (종목코드 정확도 향상)
+          let stockName = content.data?.stockName || '';
+          let stockCode = content.data?.stockCode || '';
+
+          // data에 없으면 본문에서 파싱 시도 (폴백)
+          if (!stockName && bodyText) {
+            const nameMatch = bodyText.match(/(?:\[.*?\]\s*)([\uAC00-\uD7A3A-Za-z0-9.]+?)\s*[:(]/);
+            if (nameMatch) {
+              stockName = nameMatch[1];
+              const found = MARKET_WATCH_STOCKS.find(s => s.name === stockName);
+              if (found) stockCode = found.code;
+            }
+          }
+          // 본문에서 종목코드 추출 시도 (예: 한화에어로스페이스(012450))
+          if (!stockCode && bodyText) {
+            const codeMatch = bodyText.match(/\((\d{6})/);
+            if (codeMatch) stockCode = codeMatch[1];
           }
 
-          let type = 'info';
-          if (title.includes('이탈') || title.includes('🚨')) type = 'escape';
-          else if (title.includes('쌍끌이') || title.includes('🔥')) type = 'bull';
-          else if (title.includes('변곡점') || title.includes('✨')) type = 'turn';
-          else if (title.includes('매집') || title.includes('🤫')) type = 'hidden';
+          let type = content.data?.type || 'info';
+          if (type === 'info') {
+            if (title.includes('이탈') || title.includes('🚨')) type = 'escape';
+            else if (title.includes('쌍끌이') || title.includes('🔥')) type = 'bull';
+            else if (title.includes('변곡점') || title.includes('✨')) type = 'turn';
+            else if (title.includes('매집') || title.includes('🤫')) type = 'hidden';
+            else if (title.includes('대장') || title.includes('🏆')) type = 'market_leader';
+          }
 
           saveToNotifInbox({
             id: content.data?.id,
@@ -864,8 +887,9 @@ function MainApp() {
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId || '9427acd0-1304-4333-bd02-35dcb7a29021';
       const pushTokenString = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 
-      // 3. Send to Server (Only if enabled!)
-      // 설정이 OFF면 빈 리스트를 보내서 서버가 알림을 안 쏘게 만듭니다!
+      // 3. Send to Server
+      // [v5.3.3] 푸시 ON: 관심종목 보냄 (빈 배열이면 서버가 MARKET_WATCH_STOCKS로 폴백하여 시장감시 알림 수신!)
+      // 푸시 OFF: 빈 리스트를 보내서 서버가 알림을 안 쏘게 만듭니다!
       const stocksToSend = pushEnabled ? myStocks : [];
 
       const res = await fetch(`${SERVER_URL}/api/push/register`, {
@@ -875,6 +899,7 @@ function MainApp() {
           pushToken: pushTokenString,
           syncKey: syncKey || 'anonymous',
           stocks: stocksToSend,
+          pushEnabled: pushEnabled, // [v5.3.3] 서버가 ON/OFF 상태를 알 수 있게 전달
           settings: {
             buyStreak: settingBuyStreak,
             sellStreak: settingSellStreak,
