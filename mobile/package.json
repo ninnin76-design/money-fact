@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "5.2.0",
+  "version": "5.3.8",
   "main": "expo/AppEntry",
   "scripts": {
     "start": "expo start",

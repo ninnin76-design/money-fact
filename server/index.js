@@ -277,6 +277,13 @@ let marketAnalysisReport = {
             console.error('[Server] Critical error loading snapshot:', e.message);
         }
     }
+
+    // [v4.3.0] Serverless First Loading: Firebase/로컬 캐시 복원이 끝난 후 갱신 여부 판단
+    const shouldScanNow = !marketAnalysisReport.updateTime || (new Date() - new Date(marketAnalysisReport.updateTime) > 60 * 60 * 1000);
+    if (shouldScanNow) {
+        console.log("[Server] Data stale or missing. Starting immediate market scan (Background Hot-Swap)...");
+        runDeepMarketScan(true);
+    }
 })();
 
 // --- User Portfolio Database ---
@@ -1404,12 +1411,7 @@ async function runDeepMarketScan(force = false) {
     }
 }
 
-// [코다리 부장 터치] 서버가 켜질 때 데이터가 너무 오래됐거나 없으면 즉시 한 번 구워줍니다!
-const shouldScanNow = !marketAnalysisReport.updateTime || (new Date() - new Date(marketAnalysisReport.updateTime) > 60 * 60 * 1000);
-if (shouldScanNow) {
-    console.log("[Server] Data stale or missing. Starting immediate market scan...");
-    runDeepMarketScan(true);
-}
+// [코다리 부장] 초기 스캔 로직은 상단의 async IIFE 스냅샷 복원 이후로 이동됨 (Hot-Swap)
 
 // [코다리 부장] setInterval은 app.listen 콜백에서 1회만 실행 (중복 방지)
 
@@ -1422,12 +1424,12 @@ app.get('/api/analysis/supply/:period/:investor', (req, res) => {
 
 // [코다리 부장 터치] 앱이 밤에도 한 방에 전체 데이터를 받아갈 수 있는 스냅샷 API!
 // [v5.3.5] 서버가 새 스캔 중(SCANNING)이라도, 이전 캐시 데이터가 살아있으면
-// status를 'READY'로 즉시 응답하여 앱이 불필요한 로딩 오버레이를 띄우지 않도록 합니다.
+// 상태를 그대로 주되 캐시 데이터를 같이 내려보냅니다. (앱이 Hot-Swap으로 먼저 띄워줌)
 app.get('/api/snapshot', (req, res) => {
     const response = { ...marketAnalysisReport };
     if (response.status === 'SCANNING' && response.updateTime && response.buyData) {
-        response.status = 'READY';
-        console.log(`[Snapshot API] 스캔 진행 중이나 기존 캐시 데이터 존재 → READY로 즉시 응답 (캐시: ${response.updateTime})`);
+        // response.status = 'READY'; // (제거됨: 정직하게 SCANNING 반환하여 앱이 백그라운드 폴링하게 유도)
+        console.log(`[Snapshot API] 스캔 진행 중이나 기존 캐시 데이터 존재 → SCANNING + 캐시 함께 전송 (캐시: ${response.updateTime})`);
     }
     res.json(response);
 });

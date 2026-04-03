@@ -1034,7 +1034,15 @@ function MainApp() {
               if (!isInitial) {
                 setIsServerUpdating(false);
               } else {
-                setIsServerUpdating(true);
+                // [v5.3.8] Hot-Swap: 서버는 SCANNING 상태더라도 이미 내려준 캐시 데이터가 유효하면 화면을 먼저 열어줍니다!
+                const hasValidCachePayload = (snap.allAnalysis && Object.keys(snap.allAnalysis).length > 0) ||
+                  (allBuy && Object.keys(allBuy).length > 0);
+                if (hasValidCachePayload) {
+                  console.log("[Hot-Swap] 서버 스캔 중이나 유효한 캐시 데이터 도착! 화면부터 즉시 개방합니다.");
+                  setIsServerUpdating(false); // 로딩 해제!
+                } else {
+                  setIsServerUpdating(true);
+                }
               }
 
               // [v4.0.0] 스캔 중이면 30초마다 반복 폴링 (최대 10회 = 5분)
