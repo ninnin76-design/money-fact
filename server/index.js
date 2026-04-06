@@ -1331,63 +1331,110 @@ async function runDeepMarketScan(force = false) {
                     }
                 } // End user stocks loop
 
+                // [v5.3.9] 종목별 개별 푸시 발송 + 아카이브 저장 (기존: 전체를 1개 메시지로 번들링)
                 if (userAlerts.length > 0) {
-                    if (highestPriority === 1) pushTitle = '🚨 수급 이탈 알림!';
-                    else if (highestPriority === 2) pushTitle = '🔥 특급 쌍끌이 시그널!';
-                    else if (highestPriority === 3) pushTitle = '✨ 변곡점 포착!';
-                    else if (highestPriority === 4) pushTitle = '🤫 히든 매집 포착!';
+                    // 시간대별 맞춤 타이틀 프리픽스
+                    const timePrefix = hour === 15 ? '[종가 배팅] ' : '';
 
-                    // 시간대별 맞춤 타이틀 적용
-                    if (hour === 15) pushTitle = `[종가 배팅] ${pushTitle}`;
-
-                    // [v5.3.1] 첫 번째 알림의 종목 정보를 data에 포함 (알림 보관함에서 종목명/코드 표시용)
-                    const firstAlert = userAlerts[0];
-
-                    // Limit to 3 messages per push so it doesn't get cut off entirely
-                    const limitedAlerts = userAlerts.slice(0, 3).map(a => a.msg);
-                    if (userAlerts.length > 3) limitedAlerts.push(`...외 ${userAlerts.length - 3}건`);
-
-                    // [v5.3.3] 푸시 ON일 때만 모바일 푸시 발송 (푸시 OFF이어도 아카이브는 아래에서 저장)
-                    if (isPushEnabled) {
-                        pushMessages.push({
-                            to: tokenEntry.token,
-                            title: pushTitle,
-                            body: limitedAlerts.join('\n'),
-                            sound: 'default',
-                            priority: 'high',
-                            data: {
-                                type: firstAlert.type || 'pattern_alert',
-                                stockCode: firstAlert.stockCode || '',
-                                stockName: firstAlert.stockName || ''
-                            }
-                        });
-                    }
-
-                    // [v5.3.3] 각 알림별로 아카이브에 개별 저장 (종목코드+패턴 기반 중복 방지)
+                    // [v5.3.9] 각 알림을 개별 푸시로 발송 (기존: 합쳐서 1개만 보냄 → 이제 종목별로 각각 옴!)
                     userAlerts.forEach(alert => {
+                        // 패턴별 타이틀 결정
+                        let alertTitle = '📊 Money Fact 알림';
+                        if (alert.type === 'escape') alertTitle = '🚨 수급 이탈 알림!';
+                        else if (alert.type === 'bull') alertTitle = '🔥 특급 쌍끌이 시그널!';
+                        else if (alert.type === 'turn') alertTitle = '✨ 변곡점 포착!';
+                        else if (alert.type === 'hidden') alertTitle = '🤫 히든 매집 포착!';
+                        alertTitle = `${timePrefix}${alertTitle}`;
+
+                        // 푸시 ON일 때만 모바일 푸시 발송
+                        if (isPushEnabled) {
+                            pushMessages.push({
+                                to: tokenEntry.token,
+                                title: alertTitle,
+                                body: alert.msg,
+                                sound: 'default',
+                                priority: 'high',
+                                data: {
+                                    type: alert.type || 'pattern_alert',
+                                    stockCode: alert.stockCode || '',
+                                    stockName: alert.stockName || ''
+                                }
+                            });
+                        }
+
+                        // 아카이브에 개별 저장 (종목코드+패턴 기반 중복 방지)
                         if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
-                        // 중복 방지: 같은 종목코드+같은 패턴이 이미 오늘 아카이브에 있으면 건너뜀
                         const existingArchive = notificationArchive[tokenEntry.token];
                         const isDuplicate = existingArchive.some(n => {
                             const nDate = new Date(n.timestamp).toISOString().split('T')[0];
                             return nDate === todayStr && n.stockCode === (alert.stockCode || '') && n.type === (alert.type || 'pattern_alert');
                         });
-                        if (isDuplicate) return; // 중복이면 저장 안 함
-
-                        const notifId = `${Date.now()}_${alert.stockCode}_${alert.type}_${Math.random().toString(36).substr(2, 4)}`;
-                        existingArchive.unshift({
-                            id: notifId,
-                            timestamp: Date.now(),
-                            title: pushTitle,
-                            body: alert.msg,
-                            type: alert.type || 'pattern_alert',
-                            stockCode: alert.stockCode || '',
-                            stockName: alert.stockName || '',
-                        });
-                        if (existingArchive.length > 100) {
-                            notificationArchive[tokenEntry.token] = existingArchive.slice(0, 100);
+                        if (!isDuplicate) {
+                            const notifId = `${Date.now()}_${alert.stockCode}_${alert.type}_${Math.random().toString(36).substr(2, 4)}`;
+                            existingArchive.unshift({
+                                id: notifId,
+                                timestamp: Date.now(),
+                                title: alertTitle,
+                                body: alert.msg,
+                                type: alert.type || 'pattern_alert',
+                                stockCode: alert.stockCode || '',
+                                stockName: alert.stockName || '',
+                            });
+                            if (existingArchive.length > 100) {
+                                notificationArchive[tokenEntry.token] = existingArchive.slice(0, 100);
+                            }
                         }
                     });
+                }
+
+                // [v5.3.9] 🏭 섹터 수급 변화 알림 (관심종목 외 SECTOR_WATCH_STOCKS에서 유의미한 패턴 감지 시 발송)
+                const userStockCodes = new Set((tokenEntry.stocks || []).map(s => s.code));
+                const sectorAlertStocks = SECTOR_WATCH_STOCKS.filter(sw => !userStockCodes.has(sw.code));
+                for (const sws of sectorAlertStocks) {
+                    const swData = historyData.get(sws.code);
+                    if (!swData) continue;
+                    const swForeign = analyzeStreak(swData.daily, '2');
+                    const swInst = analyzeStreak(swData.daily, '1');
+                    // 쌍끌이(외인+기관 동시 매수 5일 이상)만 섹터 알림으로 발송 (스팸 방지)
+                    const swScore = swForeign.buyStreak + swInst.buyStreak;
+                    if (swForeign.buyStreak >= 2 && swInst.buyStreak >= 2 && swScore >= 5) {
+                        const sectorDayKey = `__sector_${sws.code}`;
+                        if (tokenDailyHistory[sectorDayKey] !== 'sent') {
+                            tokenDailyHistory[sectorDayKey] = 'sent';
+                            const sectorMsg = `🏭 [${sws.sector} 섹터 수급] ${sws.name}(${sws.code}): 외인 ${swForeign.buyStreak}일 + 기관 ${swInst.buyStreak}일 연속 매수! 섹터 전반에 자금이 유입되고 있습니다.`;
+                            if (isPushEnabled) {
+                                pushMessages.push({
+                                    to: tokenEntry.token,
+                                    title: `🏭 [${sws.sector}] 섹터 수급 포착!`,
+                                    body: sectorMsg,
+                                    sound: 'default',
+                                    priority: 'high',
+                                    data: { type: 'sector_alert', stockCode: sws.code, stockName: sws.name }
+                                });
+                            }
+                            // 아카이브 저장
+                            if (!notificationArchive[tokenEntry.token]) notificationArchive[tokenEntry.token] = [];
+                            const sectorArchive = notificationArchive[tokenEntry.token];
+                            const sectorDup = sectorArchive.some(n => {
+                                const nDate = new Date(n.timestamp).toISOString().split('T')[0];
+                                return nDate === todayStr && n.stockCode === sws.code && n.type === 'sector_alert';
+                            });
+                            if (!sectorDup) {
+                                sectorArchive.unshift({
+                                    id: `${Date.now()}_sector_${sws.code}_${Math.random().toString(36).substr(2, 4)}`,
+                                    timestamp: Date.now(),
+                                    title: `🏭 [${sws.sector}] 섹터 수급 포착!`,
+                                    body: sectorMsg,
+                                    type: 'sector_alert',
+                                    stockCode: sws.code,
+                                    stockName: sws.name,
+                                });
+                                if (sectorArchive.length > 100) {
+                                    notificationArchive[tokenEntry.token] = sectorArchive.slice(0, 100);
+                                }
+                            }
+                        }
+                    }
                 }
             } // End user tokens loop
 
@@ -1449,9 +1496,27 @@ const POPULAR_STOCKS = Array.from(new Map(ALL_STOCKS.map(s => [s.code, s])).valu
 console.log(`[Server] Loaded ${POPULAR_STOCKS.length} unique stocks (Deduplicated from ${ALL_STOCKS.length})`);
 
 // Helper: Calculate Streak
+// [v5.3.9] analyzeStreak 수정: 장 초반 데이터가 0인 날은 스킵하여 어제까지의 streak을 올바르게 반환!
+// 기존에는 net===0이면 즉시 break하여 장 시작 전 9시 푸시에서 모든 streak이 0으로 나가는 버그가 있었음.
+// 이제 calcIndependentStreak와 동일하게 0인 날을 건너뛰어, 실제 거래가 발생한 날부터 연속성을 체크합니다.
 function analyzeStreak(daily, inv) {
     let buyStreak = 0, sellStreak = 0;
-    for (let j = 0; j < daily.length; j++) {
+
+    // [v5.3.9 FIX] 오늘 데이터가 0인 경우 스킵 (장 시작 전/잠정치 미반영 대응)
+    let startIdx = 0;
+    while (startIdx < daily.length) {
+        const d = daily[startIdx];
+        let net = 0;
+        const fQty = parseInt(d.frgn_ntby_qty || 0) || 0;
+        const oQty = parseInt(d.orgn_ntby_qty || 0) || 0;
+        if (inv === '0') net = fQty + oQty;
+        else if (inv === '2') net = fQty;
+        else if (inv === '1') net = oQty;
+        if (net !== 0) break; // 유효한 데이터 발견!
+        startIdx++;
+    }
+
+    for (let j = startIdx; j < daily.length; j++) {
         const d = daily[j];
         let net = 0;
         const fQty = parseInt(d.frgn_ntby_qty || 0) || 0;
@@ -1468,7 +1533,7 @@ function analyzeStreak(daily, inv) {
             sellStreak++;
             if (buyStreak > 0) break;
         } else {
-            break;
+            break; // 중간에 0이 나오면 연속성 끊김 (시작만 스킵)
         }
     }
     return { buyStreak, sellStreak };
