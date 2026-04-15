@@ -808,9 +808,9 @@ async function runDeepMarketScan(force = false) {
                             // [v5.2.0] 개별 종목 잠정치 API 최적화: 1단계에서 확보한 가집계 스냅샷(Snapshot)에서 데이터를 보정합니다.
                             const prov = provisionalMap.get(stk.code);
                             if (prov) {
-                                // 가집계 API는 '천주' 단위이므로 1000을 곱해 주 단위로 맞춰줍니다.
-                                d0.frgn_ntby_qty = String((parseInt(prov.frgn_ntby_qty || '0') || 0) * 1000);
-                                d0.orgn_ntby_qty = String((parseInt(prov.orgn_ntby_qty || '0') || 0) * 1000);
+                                // [v5.4.0] 가집계 API(FHPTJ04400000)는 '주' 단위로 반환하므로 변환 없이 그대로 사용합니다.
+                                d0.frgn_ntby_qty = String(parseInt(prov.frgn_ntby_qty || '0') || 0);
+                                d0.orgn_ntby_qty = String(parseInt(prov.orgn_ntby_qty || '0') || 0);
                             } else if (essentialStockCodes.has(stk.code)) {
                                 // [v5.3.5] 가집계(Top순위)에 잡히지 않은 '핵심 감시 종목(섹터/시장/유저관심)'은 
                                 // 장중 수급 파악 및 주도 섹터 판단을 위해 반드시 잠정치가 필요하므로 개별 호출로 채워 넣습니다!
@@ -823,9 +823,9 @@ async function runDeepMarketScan(force = false) {
                                     });
                                     if (exactProvRes.data.output && exactProvRes.data.output.length > 0) {
                                         const exactProv = exactProvRes.data.output[0];
-                                        // 개별 가집계 API도 '천주' 단위이므로 1000을 곱해 보정합니다.
-                                        d0.frgn_ntby_qty = String((parseInt(exactProv.frgn_ntby_qty || '0') || 0) * 1000);
-                                        d0.orgn_ntby_qty = String((parseInt(exactProv.orgn_ntby_qty || '0') || 0) * 1000);
+                                        // [v5.4.0] 개별 가집계 API(FHKST01012100)도 '주' 단위로 반환하므로 변환 없이 그대로 사용합니다.
+                                        d0.frgn_ntby_qty = String(parseInt(exactProv.frgn_ntby_qty || '0') || 0);
+                                        d0.orgn_ntby_qty = String(parseInt(exactProv.orgn_ntby_qty || '0') || 0);
                                     }
                                     // 개별 호출에 따른 API 부하 방지용 짧은 휴식
                                     await new Promise(r => setTimeout(r, 150));
