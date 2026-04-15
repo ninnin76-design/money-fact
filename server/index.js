@@ -1160,8 +1160,8 @@ async function runDeepMarketScan(force = false) {
             isPushTime = mList.some(t => hour === t.h && currentMins >= t.m1 && currentMins <= t.m2);
         }
 
-        if (pushTokens.length > 0 && isPushTime) {
-            console.log(`[Push] 타겟 시간 도달! ${pushTokens.length}명의 등록 사용자에게 4대 핵심 패턴 알림 확인 중...`);
+        if (pushTokens.length > 0) {
+            console.log(`[Push] 알림 분석 가동 (푸시 대상: ${pushTokens.length}명). 보관함 업데이트 및 조건부 푸시 발송 확인 중...`);
             const pushMessages = [];
             const todayStr = kstDate.toISOString().split('T')[0];
 
@@ -1225,8 +1225,8 @@ async function runDeepMarketScan(force = false) {
                     const rateStr = parseFloat(marketLeader.rate) >= 0 ? `+${marketLeader.rate}%` : `${marketLeader.rate}%`;
                     const leaderMsg = `🏆 [시장 수급대장 포착] ${marketLeader.name}(${marketLeader.code}, ${rateStr}): 외인 ${marketLeader.fBuy}일 + 기관 ${marketLeader.iBuy}일 연속 쌍끌이 매수! 시장에서 가장 강력한 수급이 집중되고 있습니다.`;
 
-                    // 수급 대장주 전용 별도 푸시 (푸시 ON일 때만 발송)
-                    if (isPushEnabled) {
+                    // 수급 대장주 전용 별도 푸시 (푸시 ON이고 지정된 시간대일 때만 발송)
+                    if (isPushEnabled && isPushTime) {
                         pushMessages.push({
                             to: tokenEntry.token,
                             title: '🚨 [시장 수급대장 포착]',
@@ -1346,8 +1346,8 @@ async function runDeepMarketScan(force = false) {
                         else if (alert.type === 'hidden') alertTitle = '🤫 히든 매집 포착!';
                         alertTitle = `${timePrefix}${alertTitle}`;
 
-                        // 푸시 ON일 때만 모바일 푸시 발송
-                        if (isPushEnabled) {
+                        // 푸시 ON이고 지정된 시간대일 때만 모바일 푸시 발송
+                        if (isPushEnabled && isPushTime) {
                             pushMessages.push({
                                 to: tokenEntry.token,
                                 title: alertTitle,
@@ -1402,7 +1402,7 @@ async function runDeepMarketScan(force = false) {
                         if (tokenDailyHistory[sectorDayKey] !== 'sent') {
                             tokenDailyHistory[sectorDayKey] = 'sent';
                             const sectorMsg = `🏭 [${sws.sector} 섹터 수급] ${sws.name}(${sws.code}): 외인 ${swForeign.buyStreak}일 + 기관 ${swInst.buyStreak}일 연속 매수! 섹터 전반에 자금이 유입되고 있습니다.`;
-                            if (isPushEnabled) {
+                            if (isPushEnabled && isPushTime) {
                                 pushMessages.push({
                                     to: tokenEntry.token,
                                     title: `🏭 [${sws.sector}] 섹터 수급 포착!`,
@@ -1447,9 +1447,6 @@ async function runDeepMarketScan(force = false) {
             } else {
                 console.log(`[Push] 발송할 모바일 푸시 메시지가 없습니다 (아카이브는 저장 완료).`);
             }
-        } else if (pushTokens.length > 0) {
-            // Not push time
-            console.log(`[Push] 사용자 스캔 생략 (지정된 알림 시간이 아님)`);
         }
 
         console.log(`[Radar] ====== 2단계 하이브리드 레이더 임무 완료! ======`);
@@ -1692,7 +1689,10 @@ app.get('/api/sync/load', async (req, res) => {
 
     if (!data) return res.status(404).json({ error: 'No data found' });
     console.log(`[Sync] Loaded data for key: ${syncKey}`);
-    const stocks = Array.isArray(data) ? data : (data.stocks || []);
+    
+    // 유저님의 요구사항: 어떤 이름으로든 저장된 종목 데이터를 찾아 관심종목으로 전달합니다.
+    const stocks = Array.isArray(data) ? data : (data.stocks || (data.watchlist && data.watchlist.favorites) || []);
+    
     const settings = data.settings || {};
     const watchlist = data.watchlist || null;
     res.json({ stocks, settings, watchlist, version: data.version || 1, updatedAt: data.updatedAt });
