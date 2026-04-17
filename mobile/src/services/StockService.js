@@ -90,10 +90,14 @@ export const StockService = {
         return { fStreak, iStreak, sentiment };
     },
 
-    checkHiddenAccumulation(dailyData, streakThreshold = 3) {
-        if (!dailyData || dailyData.length < 5) return false;
+    checkHiddenAccumulation(dailyData, accumDays = 5, buyDays = 3) {
+        if (!dailyData || dailyData.length < Math.max(accumDays, buyDays)) return false;
+        
         let totalDailyRange = 0;
-        for (let i = 0; i < 5; i++) {
+        const checkDays = Math.min(dailyData.length, accumDays);
+        
+        // [v4.3.7] 주가 횡보 정체 판단은 '매집 포착 기준일(accumDays)' 동안 수행
+        for (let i = 0; i < checkDays; i++) {
             const close = parseInt(dailyData[i].stck_clpr || 1);
             if (dailyData[i].stck_hgpr && dailyData[i].stck_lwpr) {
                 const high = parseInt(dailyData[i].stck_hgpr);
@@ -101,13 +105,17 @@ export const StockService = {
                 totalDailyRange += ((high - low) / (close || 1)) * 100;
             } else totalDailyRange += Math.abs(parseFloat(dailyData[i].prdy_ctrt || 0));
         }
-        const avgDailyRange = totalDailyRange / 5;
+        
+        const avgDailyRange = totalDailyRange / checkDays;
         const currentClose = parseInt(dailyData[0].stck_clpr || 0);
-        const fiveDayAgoClose = parseInt(dailyData[4].stck_clpr || 0);
-        const fiveDayChange = fiveDayAgoClose > 0 ? ((currentClose - fiveDayAgoClose) / fiveDayAgoClose) * 100 : 0;
+        const startDayClose = parseInt(dailyData[checkDays - 1].stck_clpr || 0);
+        const periodChange = startDayClose > 0 ? ((currentClose - startDayClose) / startDayClose) * 100 : 0;
+        
         const { fStreak, iStreak } = this.analyzeSupply(dailyData);
         const todayChange = Math.abs(parseFloat(dailyData[0].prdy_ctrt || 0));
-        return avgDailyRange < 2.5 && todayChange < 3.0 && Math.abs(fiveDayChange) < 3.0 && (fStreak >= streakThreshold || iStreak >= streakThreshold);
+        
+        // [v4.3.7] 수급 연속성 판단은 '매수 포착 기준일(buyDays)'을 사용
+        return avgDailyRange < 2.5 && todayChange < 3.0 && Math.abs(periodChange) < 3.0 && (fStreak >= buyDays || iStreak >= buyDays);
     },
 
     calculateVWAP(dailyData, days = 5) {

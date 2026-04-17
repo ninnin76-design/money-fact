@@ -2,11 +2,10 @@
   "expo": {
     "name": "Money Fact",
     "slug": "mobile",
-    "version": "5.3.8",
+    "version": "5.4.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -22,7 +21,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.eunhee.moneyfact",
-      "versionCode": 140,
+      "versionCode": 142,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -33,7 +32,7 @@
         "projectId": "9427acd0-1304-4333-bd02-35dcb7a29021"
       }
     },
-    "runtimeVersion": "5.3.8",
+    "runtimeVersion": "5.4.2",
     "updates": {
       "url": "https://u.expo.dev/9427acd0-1304-4333-bd02-35dcb7a29021",
       "fallbackToCacheTimeout": 0

@@ -87,10 +87,14 @@ LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
 
 // [v5.1.0] 시스템 글꼴 크기에 영향받지 않도록 전역 폰트 스케일링 비활성화
 // 사용자마다 다른 디바이스 글꼴 크기 때문에 글씨가 겹치는 문제를 원천 차단!
-if (Text.defaultProps == null) Text.defaultProps = {};
-Text.defaultProps.allowFontScaling = false;
-if (TextInput.defaultProps == null) TextInput.defaultProps = {};
-TextInput.defaultProps.allowFontScaling = false;
+try {
+  if (Text.defaultProps == null) Text.defaultProps = {};
+  Text.defaultProps.allowFontScaling = false;
+  if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+  TextInput.defaultProps.allowFontScaling = false;
+} catch (e) {
+  // Ignore in RN 0.74+ where Text is not extensible
+}
 
 // --- [코다리 부장] 프리미엄 캔들 스틱 + 이동평균선 + 거래량 차트 ---
 const StockPriceChart = ({ data, currentPrice }) => {
@@ -348,7 +352,7 @@ if (Platform.OS !== 'web') {
           if (!data || data.length === 0) return;
 
           const { fStreak, iStreak } = StockService.analyzeSupply(data);
-          const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit);
+          const isHiddenAcc = StockService.checkHiddenAccumulation(data, accumLimit, buyLimit);
 
           // 4대 패턴 감지
           const isEscapeSignal = fStreak <= -sellLimit && iStreak <= -sellLimit;
@@ -1101,7 +1105,7 @@ function MainApp() {
                       iStreak: is,
                       sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + streak * 10) : (50 - streak * 10)),
                       vwap: item.vwap || 0,
-                      isHiddenAccumulation: item.isHiddenAccumulation || false
+                      isHiddenAccumulation: (item.isHiddenAccumulation && (Math.abs(fs) >= settingBuyStreak || Math.abs(is) >= settingBuyStreak)) || false
                     });
                   }
                 });
@@ -1150,8 +1154,22 @@ function MainApp() {
                       iStreak: item.iStreak || 0,
                       sentiment: item.sentiment || 50,
                       vwap: item.vwap || 0,
-                      isHiddenAccumulation: item.isHiddenAccumulation || false
+                      isHiddenAccumulation: (item.isHiddenAccumulation && ((item.fStreak || 0) >= settingBuyStreak || (item.iStreak || 0) >= settingBuyStreak)) || false
                     });
+                  } else {
+                    const existing = snapshotStocks.find(s => s.code === code);
+                    if (existing) {
+                      existing.isHiddenAccumulation = existing.isHiddenAccumulation || item.isHiddenAccumulation || false;
+                      if (!existing.vwap && item.vwap) existing.vwap = item.vwap;
+
+                      // Update streaks if the detailed analysis has higher magnitude
+                      if (item.fStreak !== undefined && Math.abs(item.fStreak) > Math.abs(existing.fStreak || 0)) {
+                        existing.fStreak = item.fStreak;
+                      }
+                      if (item.iStreak !== undefined && Math.abs(item.iStreak) > Math.abs(existing.iStreak || 0)) {
+                        existing.iStreak = item.iStreak;
+                      }
+                    }
                   }
                 });
               }
@@ -1278,13 +1296,20 @@ function MainApp() {
       setAnalyzedStocks([...results]);
       analyzedStocksRef.current = [...results]; // Update ref immediately
 
+      // [v5.3.9] 하이패스: 초기 실행 시 스냅샷 데이터가 로드되면 즉시 전체 로딩 화면을 걷어냅니다!
+      // 이후 개별 종목 정밀 분석 루프는 백그라운드에서 조용히 진행됩니다.
+      if (isInitial) {
+        setLoading(false);
+        setIsServerUpdating(false);
+      }
+
       // [v3.7.1+] '매집 추천 종목' 또는 '연속 수급 종목'들은 서버 스캔 범위를 벗어나더라도 끝까지 리스트에 살아남도록 합니다!
       // 서버가 상위 800여 개 종목만 정밀 분석하더라도, 이미 발견된 보물 종목(매집주)은 놓치지 않고 유지합니다.
       analyzedStocksRef.current.forEach(prev => {
         if (!snapshotExistingCodes.has(prev.code)) {
           // [v3.9.8] 보존 조건: 히든매집, 3일 이상 연속수급, 또는 즐겨찾기(My Stocks)
           const isFav = myStocks.some(ms => ms.code === prev.code);
-          const isTreasure = prev.isHiddenAccumulation || Math.abs(prev.fStreak) >= 3 || Math.abs(prev.iStreak) >= 3;
+          const isTreasure = prev.isHiddenAccumulation || Math.abs(prev.fStreak) >= settingBuyStreak || Math.abs(prev.iStreak) >= settingBuyStreak;
 
           if (isFav || isTreasure) {
             results.push(prev);
@@ -1346,8 +1371,14 @@ function MainApp() {
         const existingData = results.find(r => r.code === stock.code);
         const isDataInvalid = !existingData || existingData.price === 0 || existingData.isWaiting;
 
-        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid) {
+        // [v5.3.8] 서버 스냅샷 데이터 활용 최적화 고도화
+        // 단, 관심종목(isMyStockItem)은 유저의 설정값(5일 등)에 따른 정밀 재검증이 필요하므로 스킵하지 않습니다.
+        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid && !isMyStockItem) {
           if (!isUserAction && !forceFetch) {
+            continue;
+          }
+          // [v5.3.9] 초기 실행(isInitial)이고 스냅샷에 데이터가 있다면, 굳이 개별 API를 다시 쏘지 않고 스냅샷을 신뢰합니다.
+          if (isInitial) {
             continue;
           }
         }
@@ -1375,7 +1406,7 @@ function MainApp() {
           if (data && data.length > 0) {
             const analysis = StockService.analyzeSupply(data);
             const vwap = StockService.calculateVWAP(data, settingBuyStreak);
-            const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak);
+            const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak, settingBuyStreak);
             const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
             const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
             const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
@@ -1555,13 +1586,13 @@ function MainApp() {
         }
 
         // 2. 외국인 연속 매수 1위
-        const topForeign = results.filter(s => s.fStreak >= 3).sort((a, b) => b.fStreak - a.fStreak)[0];
+        const topForeign = results.filter(s => s.fStreak >= settingBuyStreak).sort((a, b) => b.fStreak - a.fStreak)[0];
         if (topForeign) {
           aggregatedTickerTexts.push(`🌎 외인 픽 1위: [${topForeign.name}] ${topForeign.fStreak}일 연속 폭풍 매수 중!`);
         }
 
         // 3. 기관 연속 매수 1위
-        const topInst = results.filter(s => s.iStreak >= 3).sort((a, b) => b.iStreak - a.iStreak)[0];
+        const topInst = results.filter(s => s.iStreak >= settingBuyStreak).sort((a, b) => b.iStreak - a.iStreak)[0];
         if (topInst) {
           aggregatedTickerTexts.push(`🏢 기관 픽 1위: [${topInst.name}] ${topInst.iStreak}일 연속 강력 러브콜!`);
         }
@@ -1921,7 +1952,7 @@ function MainApp() {
       if (history && history.length > 0) {
         const analysis = StockService.analyzeSupply(history);
         const vwapVal = StockService.calculateVWAP(history, settingBuyStreak);
-        const isHidden = StockService.checkHiddenAccumulation(history, settingAccumStreak);
+        const isHidden = StockService.checkHiddenAccumulation(history, settingAccumStreak, settingBuyStreak);
         const curPrice = stock.price > 0 ? stock.price : (parseInt(history[0].stck_clpr || 0) || 0);
 
         setSelectedStock(prev => ({
@@ -2106,17 +2137,39 @@ function MainApp() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {settingAccumStreak}일↑)</Text>
+          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {Math.min(settingBuyStreak, settingAccumStreak)}일↑)</Text>
           {loading && analyzedStocks.length === 0 ? (
             <ActivityIndicator size="large" color="#3182f6" style={{ marginTop: 20 }} />
           ) : (
             <>
-              {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak))
-                .map(s => (
-                  <StockCard key={s.code} stock={s} onPress={() => handleOpenDetail(s)} />
-                ))}
-              {analyzedStocks.filter(s => s.isHiddenAccumulation && (s.fStreak >= settingAccumStreak || s.iStreak >= settingAccumStreak)).length === 0
-                && <Text style={styles.emptyText}>현재 기준을 만족하는 매집 종목이 없습니다.</Text>}
+              {analyzedStocks.filter(s => {
+                const isMyStock = myStocks.some(ms => ms.code === s.code);
+                const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
+                const isHidden = s.isHiddenAccumulation;
+                // [v5.3.9] 내 관심종목의 연속 수급 또는 '시장 전체' 히든 매집 포착된 경우 모두 노출
+                return (isMyStock && hasStreak) || isHidden;
+              })
+                .map(s => {
+                  const isMyStock = myStocks.some(ms => ms.code === s.code);
+                  return (
+                    <StockCard
+                      key={s.code}
+                      stock={s}
+                      buyLimit={settingBuyStreak}
+                      sellLimit={settingSellStreak}
+                      isFavorite={isMyStock}
+                      onFavoriteToggle={() => handleToggleFavorite(s)}
+                      onPress={() => handleOpenDetail(s)}
+                    />
+                  );
+                })}
+              {analyzedStocks.filter(s => {
+                const isMyStock = myStocks.some(ms => ms.code === s.code);
+                const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
+                const isHidden = s.isHiddenAccumulation;
+                return (isMyStock && hasStreak) || isHidden;
+              }).length === 0
+                && <Text style={styles.emptyText}>현재 포착된 매집 의심 종목이 없습니다.</Text>}
             </>
           )}
           <View style={{ height: 40 }} />
@@ -2365,129 +2418,125 @@ function MainApp() {
               />
             </View>
 
-            {pushEnabled && (
-              <View style={styles.dividerLight} />
-            )}
+            <View style={styles.dividerLight} />
 
-            {pushEnabled && (
-              <View>
-                <View style={styles.sensitivityHeader}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>PRO 기능</Text>
-                  </View>
-                  <Text style={[styles.cardHeaderTitle, { marginLeft: 8 }]}>감지 민감도 개별 설정</Text>
+            <View>
+              <View style={styles.sensitivityHeader}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>PRO 기능</Text>
                 </View>
-
-                <View style={styles.sensitivityRow}>
-                  <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1}>🎯 매수 포착 기준</Text>
-                    <Text style={styles.sensitivityDesc}>{settingBuyStreak}일 이상 연속 매수 시 알림</Text>
-                  </View>
-                  <View style={styles.stepperContainer}>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.max(2, settingBuyStreak - 1);
-                        setSettingBuyStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepperValue}>{settingBuyStreak}</Text>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.min(30, settingBuyStreak + 1);
-                        setSettingBuyStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
-                  <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1}>⚠️ 매도 경고 기준</Text>
-                    <Text style={styles.sensitivityDesc}>{settingSellStreak}일 이상 연속 매도 시 알림</Text>
-                  </View>
-                  <View style={styles.stepperContainer}>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.max(2, settingSellStreak - 1);
-                        setSettingSellStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepperValue}>{settingSellStreak}</Text>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.min(30, settingSellStreak + 1);
-                        setSettingSellStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
-                  <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                    <Text style={styles.sensitivityLabel} numberOfLines={1}>🤫 매집 포착 기준</Text>
-                    <Text style={styles.sensitivityDesc}>{settingAccumStreak}일 이상 매집 정황 시 알림</Text>
-                  </View>
-                  <View style={styles.stepperContainer}>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.max(2, settingAccumStreak - 1);
-                        setSettingAccumStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepperValue}>{settingAccumStreak}</Text>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const next = Math.min(30, settingAccumStreak + 1);
-                        setSettingAccumStreak(next);
-                        await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
-                      }}
-                      style={styles.stepperBtn}
-                    >
-                      <Text style={styles.stepperBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <Text style={[styles.premiumDescText, { marginTop: 16, color: '#ff9800', fontWeight: '600' }]}>
-                  * 장마감 시간(20:00 ~ 익일 08:00) 중 변경된 설정은 익일 장 시작 시 데이터에 정식 반영됩니다.
-                </Text>
-
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { marginTop: 12 }]}
-                  onPress={handleSaveSettings}
-                >
-                  <Save size={16} color="#fff" />
-                  <Text style={styles.actionBtnText}>설정 저장 및 적용하기</Text>
-                </TouchableOpacity>
+                <Text style={[styles.cardHeaderTitle, { marginLeft: 8 }]}>감지 민감도 개별 설정</Text>
               </View>
-            )}
+
+              <View style={styles.sensitivityRow}>
+                <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
+                  <Text style={styles.sensitivityLabel} numberOfLines={1}>🎯 매수 포착 기준</Text>
+                  <Text style={styles.sensitivityDesc}>{settingBuyStreak}일 이상 연속 매수 시 알림</Text>
+                </View>
+                <View style={styles.stepperContainer}>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.max(2, settingBuyStreak - 1);
+                      setSettingBuyStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepperValue}>{settingBuyStreak}</Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.min(30, settingBuyStreak + 1);
+                      setSettingBuyStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
+                <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
+                  <Text style={styles.sensitivityLabel} numberOfLines={1}>⚠️ 매도 경고 기준</Text>
+                  <Text style={styles.sensitivityDesc}>{settingSellStreak}일 이상 연속 매도 시 알림</Text>
+                </View>
+                <View style={styles.stepperContainer}>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.max(2, settingSellStreak - 1);
+                      setSettingSellStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepperValue}>{settingSellStreak}</Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.min(30, settingSellStreak + 1);
+                      setSettingSellStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
+                <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
+                  <Text style={styles.sensitivityLabel} numberOfLines={1}>🤫 매집 포착 기준</Text>
+                  <Text style={styles.sensitivityDesc}>{settingAccumStreak}일 이상 매집 정황 시 알림</Text>
+                </View>
+                <View style={styles.stepperContainer}>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.max(2, settingAccumStreak - 1);
+                      setSettingAccumStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepperValue}>{settingAccumStreak}</Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const next = Math.min(30, settingAccumStreak + 1);
+                      setSettingAccumStreak(next);
+                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
+                    }}
+                    style={styles.stepperBtn}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <Text style={[styles.premiumDescText, { marginTop: 16, color: '#ff9800', fontWeight: '600' }]}>
+                * 장마감 시간(20:00 ~ 익일 08:00) 중 변경된 설정은 익일 장 시작 시 데이터에 정식 반영됩니다.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.primaryActionBtn, { marginTop: 12 }]}
+                onPress={handleSaveSettings}
+              >
+                <Save size={16} color="#fff" />
+                <Text style={styles.actionBtnText}>설정 저장 및 적용하기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v5.3.0] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v5.3.0 Build 132 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v5.3.5] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v5.3.5 Build 135 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2500,7 +2549,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1219" />
       <View style={{ marginTop: insets.top, backgroundColor: '#0b1219', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.3.0</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.3.5</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => {
@@ -2678,7 +2727,7 @@ function MainApp() {
 
               {(() => {
                 const getScore = (streak) => {
-                  if (streak >= 3) return 2;
+                  if (streak >= settingBuyStreak) return 2;
                   if (streak > 0) return 1;
                   if (streak <= -3) return -2;
                   if (streak < 0) return -1;
@@ -2698,7 +2747,7 @@ function MainApp() {
                 let patternTag = null;
                 let patternColor = '#888';
 
-                if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) { patternTag = '🔥 동반쌍끌이'; patternColor = '#ff4d4d'; }
+                if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= settingBuyStreak)) { patternTag = '🔥 동반쌍끌이'; patternColor = '#ff4d4d'; }
                 else if ((selectedStock.fStreak === 1 && selectedStock.iStreak >= 1) || (selectedStock.iStreak === 1 && selectedStock.fStreak >= 1)) { patternTag = '✨ 변곡점 발생'; patternColor = '#ffb84d'; }
                 else if (selectedStock.isHiddenAccumulation) { patternTag = '🤫 히든 매집'; patternColor = '#00ff00'; }
                 else if (iScore >= 2 && fScore <= 0) { patternTag = '🏢 기관 주도'; patternColor = '#3182f6'; }
@@ -2879,8 +2928,8 @@ function MainApp() {
               <Text style={{ color: '#8b95a1', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
                 수급 시그널이 포착되면{'\n'}이곳에 자동으로 보관됩니다.
               </Text>
-              <View style={{ marginTop: 24, backgroundColor: 'rgba(255,255,255,0.04)', padding: 14, borderRadius: 12, width: '100%' }}>
-                <Text style={{ color: '#4e5968', fontSize: 11, textAlign: 'center' }}>
+              <View style={{ marginTop: 24, backgroundColor: 'rgba(255,255,255,0.06)', padding: 14, borderRadius: 12, width: '100%' }}>
+                <Text style={{ color: '#8b95a1', fontSize: 11, textAlign: 'center' }}>
                   💡 관심종목 외에도 시장감시 종목의 알림이 자동 저장됩니다.{'\n'}7일 이후 오래된 알림은 자동으로 정리됩니다.
                 </Text>
               </View>
@@ -2888,8 +2937,8 @@ function MainApp() {
           ) : (
             <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 40, paddingTop: 12 }}>
               {/* 7일 자동 삭제 안내 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49,130,246,0.06)', padding: 10, borderRadius: 10, marginBottom: 14 }}>
-                <Text style={{ color: '#4e5968', fontSize: 11, flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(49,130,246,0.08)', padding: 10, borderRadius: 10, marginBottom: 14 }}>
+                <Text style={{ color: '#a0aec0', fontSize: 11, flex: 1 }}>
                   📋 총 {notifInbox.length}건 · 읽지않음 {unreadCount}건 · 7일 후 자동 삭제
                 </Text>
               </View>
@@ -2946,19 +2995,19 @@ function MainApp() {
                               }
                             }}
                             style={{
-                              backgroundColor: notif.read ? '#0d1b2a' : tc.bgColor,
+                              backgroundColor: notif.read ? '#141e2e' : tc.bgColor,
                               borderRadius: 14,
                               padding: 14,
                               marginBottom: 8,
                               borderWidth: 1,
-                              borderColor: notif.read ? 'rgba(255,255,255,0.04)' : `${tc.color}22`,
+                              borderColor: notif.read ? 'rgba(255,255,255,0.08)' : `${tc.color}22`,
                               borderLeftWidth: 3,
-                              borderLeftColor: notif.read ? 'rgba(255,255,255,0.08)' : tc.color,
+                              borderLeftColor: notif.read ? 'rgba(255,255,255,0.12)' : tc.color,
                             }}
                           >
                             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                               {/* 타입 아이콘 */}
-                              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: notif.read ? 'rgba(255,255,255,0.04)' : `${tc.color}15`, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: notif.read ? 'rgba(255,255,255,0.08)' : `${tc.color}15`, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                                 <Text style={{ fontSize: 18 }}>{tc.emoji}</Text>
                               </View>
 
@@ -2969,22 +3018,22 @@ function MainApp() {
                                     {!notif.read && (
                                       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tc.color, marginRight: 6 }} />
                                     )}
-                                    <Text style={{ color: notif.read ? '#666' : '#fff', fontSize: 13, fontWeight: '800', flexShrink: 1 }} numberOfLines={1}>
+                                    <Text style={{ color: notif.read ? '#c8d0d8' : '#fff', fontSize: 13, fontWeight: '800', flexShrink: 1 }} numberOfLines={1}>
                                       {notif.title}
                                     </Text>
                                   </View>
-                                  <Text style={{ color: '#4e5968', fontSize: 11 }}>{notif.time}</Text>
+                                  <Text style={{ color: '#8b95a1', fontSize: 11 }}>{notif.time}</Text>
                                 </View>
 
-                                <Text style={{ color: notif.read ? '#555' : '#b0b8c1', fontSize: 12, lineHeight: 17, marginBottom: 6 }} numberOfLines={2}>
+                                <Text style={{ color: notif.read ? '#9aa5b1' : '#d0d8e0', fontSize: 12, lineHeight: 17, marginBottom: 6 }} numberOfLines={2}>
                                   {notif.body}
                                 </Text>
 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                     {notif.stockName ? (
-                                      <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                                        <Text style={{ color: '#8b95a1', fontSize: 10, fontWeight: '600' }}>{notif.stockName} {notif.stockCode ? `(${notif.stockCode})` : ''}</Text>
+                                      <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                        <Text style={{ color: '#a0aec0', fontSize: 10, fontWeight: '600' }}>{notif.stockName} {notif.stockCode ? `(${notif.stockCode})` : ''}</Text>
                                       </View>
                                     ) : null}
                                     <View style={{ backgroundColor: `${tc.color}15`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>

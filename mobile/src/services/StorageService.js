@@ -8,8 +8,12 @@ export const StorageService = {
     },
 
     async loadMyStocks() {
-        const saved = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
-        return saved ? JSON.parse(saved) : [];
+        try {
+            const saved = await AsyncStorage.getItem(STORAGE_KEYS.MY_STOCKS);
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
     },
 
     async saveUserSectors(sectors) {
@@ -17,8 +21,12 @@ export const StorageService = {
     },
 
     async loadUserSectors() {
-        const saved = await AsyncStorage.getItem(STORAGE_KEYS.USER_SECTORS);
-        return saved ? JSON.parse(saved) : null;
+        try {
+            const saved = await AsyncStorage.getItem(STORAGE_KEYS.USER_SECTORS);
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
     },
 
     async backup(syncKey, stocks, settings, userSectors) {

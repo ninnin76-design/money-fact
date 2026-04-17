@@ -91,9 +91,9 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
 
     // --- 수급박스 양음블럭 & 패턴 로직 ---
     const getScore = (streak) => {
-        if (streak >= 3) return 2;
+        if (streak >= buyLimit) return 2;
         if (streak > 0) return 1;
-        if (streak <= -3) return -2;
+        if (streak <= -sellLimit) return -2;
         if (streak < 0) return -1;
         return 0;
     };
@@ -114,7 +114,7 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
     let patternTag = null;
     let patternColor = '#888';
 
-    if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= 3)) {
+    if (fScore >= 1 && iScore >= 1 && (fScore + iScore >= buyLimit)) {
         patternTag = '🔥 동반쌍끌이';
         patternColor = '#ff4d4d';
     } else if ((fStreak === 1 && iStreak >= 1) || (iStreak === 1 && fStreak >= 1)) {
@@ -129,7 +129,7 @@ const StockCard = ({ stock, onPress, onDelete, buyLimit = 3, sellLimit = 3, isFa
     } else if (fScore >= 2 && iScore <= 0) {
         patternTag = '🌎 외인 주도';
         patternColor = '#c431f6';
-    } else if (totalScore <= -3) {
+    } else if (totalScore <= -sellLimit) {
         patternTag = '❄️ 동반 이탈';
         patternColor = '#888';
     }
