@@ -343,7 +343,7 @@ if (Platform.OS !== 'web') {
       const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
       const buyLimit = parseInt(buyLimitRaw) || 3;
       const sellLimit = parseInt(sellLimitRaw) || 3;
-      const accumLimit = parseInt(accumLimitRaw) || 3;
+      const accumLimit = parseInt(accumLimitRaw) || 5;
 
       // [v5.3.3] 4대 패턴 분석 함수 (관심종목 + 시장감시 종목 공용)
       const analyzeAndNotify = async (stock, isWatchList = false) => {
@@ -527,10 +527,10 @@ function MainApp() {
   const addStockDebounceTimer = useRef(null);
   const pendingStocksRef = useRef([]);
 
-  // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
+  // [코다리 부장 터치] 감지 민감도 설정 (기본값)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
   const [settingSellStreak, setSettingSellStreak] = useState(3);
-  const [settingAccumStreak, setSettingAccumStreak] = useState(3);
+  const [settingAccumStreak, setSettingAccumStreak] = useState(5);
 
   // Sample Sectors
   const [sectors, setSectors] = useState([
@@ -803,11 +803,11 @@ function MainApp() {
     setPushEnabled(notif !== 'false');
 
     const buySet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
-    if (buySet) setSettingBuyStreak(parseInt(buySet) || 5);
+    setSettingBuyStreak(buySet ? parseInt(buySet) : 3);
     const sellSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
-    if (sellSet) setSettingSellStreak(parseInt(sellSet) || 5);
+    setSettingSellStreak(sellSet ? parseInt(sellSet) : 3);
     const accumSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
-    if (accumSet) setSettingAccumStreak(parseInt(accumSet) || 5);
+    setSettingAccumStreak(accumSet ? parseInt(accumSet) : 5);
 
     setIsMarketOpen(StockService.isMarketOpen());
 
@@ -2137,7 +2137,22 @@ function MainApp() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: {Math.min(settingBuyStreak, settingAccumStreak)}일↑)</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, marginBottom: 5 }}>
+            <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>나의 매집 의심 종목</Text>
+            <Text style={{ fontSize: 11, color: '#888' }}>
+              조건: 매집(횡보) {settingAccumStreak}일 / 매수 {settingBuyStreak}일
+            </Text>
+          </View>
+          
+          <View style={{ backgroundColor: 'rgba(49,130,246,0.1)', padding: 12, borderRadius: 8, marginBottom: 15, marginHorizontal: 16 }}>
+            <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>💡 히든 매집 포착 기준 (🤫)</Text>
+            <Text style={{ color: '#aaa', fontSize: 11, lineHeight: 16 }}>
+              1. <Text style={{ color: '#fff' }}>잔잔한 차트:</Text> 최근 {settingAccumStreak}일간 고점-저점 변동성 2.5% 미만{'\n'}
+              2. <Text style={{ color: '#fff' }}>박스권 유지:</Text> 당일 및 {settingAccumStreak}일 전체 등락폭 3% 이내{'\n'}
+              3. <Text style={{ color: '#fff' }}>몰래 담기:</Text> 외인/기관 중 한 곳이라도 {settingBuyStreak}일 이상 연속 매수
+            </Text>
+          </View>
+
           {loading && analyzedStocks.length === 0 ? (
             <ActivityIndicator size="large" color="#3182f6" style={{ marginTop: 20 }} />
           ) : (
@@ -2146,7 +2161,7 @@ function MainApp() {
                 const isMyStock = myStocks.some(ms => ms.code === s.code);
                 const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
                 const isHidden = s.isHiddenAccumulation;
-                // [v5.3.9] 내 관심종목의 연속 수급 또는 '시장 전체' 히든 매집 포착된 경우 모두 노출
+                // 나의 관심종목 중 연속수급이 들어오거나, 시장 전체에서 '히든 매집' 포착된 종목
                 return (isMyStock && hasStreak) || isHidden;
               })
                 .map(s => {
