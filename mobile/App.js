@@ -495,7 +495,11 @@ function MainApp() {
       analyzedStocksRef.current = val;
     }
   };
-  const [tickerItems, setTickerItems] = useState(["[v4.2.4] 주말/야간에도 차트와 평단가를 즉시 조회할 수 있는 하이패스 시스템이 적용되었습니다!", "💡 종목 클릭 시 리스트에서 사라지는 현상이 수정되었습니다."]);
+  const [tickerItems, setTickerItems] = useState([
+    "[v5.4.0] ⭐ 별표(관심종목) 등록 시 매집 종목이 사라지던 현상을 완벽하게 해결했습니다!",
+    "🚀 머니팩트 엔진 고도화: 한 번 포착된 보물 종목은 끝까지 추적합니다.",
+    "💡 장중 미세 변동에도 '나의 매집 종목' 지위를 유지하는 스마트 로직 적용!"
+  ]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -527,7 +531,7 @@ function MainApp() {
   const addStockDebounceTimer = useRef(null);
   const pendingStocksRef = useRef([]);
 
-  // [코다리 부장 터치] 감지 민감도 설정 (기본값)
+  // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
   const [settingSellStreak, setSettingSellStreak] = useState(3);
   const [settingAccumStreak, setSettingAccumStreak] = useState(5);
@@ -1406,7 +1410,13 @@ function MainApp() {
           if (data && data.length > 0) {
             const analysis = StockService.analyzeSupply(data);
             const vwap = StockService.calculateVWAP(data, settingBuyStreak);
-            const hidden = StockService.checkHiddenAccumulation(data, settingAccumStreak, settingBuyStreak);
+            let finalHidden = StockService.checkHiddenAccumulation(data, settingAccumStreak, settingBuyStreak);
+            if (!finalHidden) {
+              const prevData = existingIdx >= 0 ? results[existingIdx] : null;
+              if (prevData && prevData.isHiddenAccumulation) {
+                finalHidden = true; // [v5.3.10] 한 번 포착된 히든 매집 종목은 장중 미세 변동으로 인한 탈락을 방지하기 위해 오늘 내 지위를 유지합니다.
+              }
+            }
             const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
             const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
             const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
@@ -1438,7 +1448,7 @@ function MainApp() {
               name: stockName,
               ...analysis,
               vwap,
-              isHiddenAccumulation: hidden,
+              isHiddenAccumulation: finalHidden,
               price: currentPrice,
               isWaiting: false
             };
@@ -2137,22 +2147,7 @@ function MainApp() {
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, marginBottom: 5 }}>
-            <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>나의 매집 의심 종목</Text>
-            <Text style={{ fontSize: 11, color: '#888' }}>
-              조건: 매집(횡보) {settingAccumStreak}일 / 매수 {settingBuyStreak}일
-            </Text>
-          </View>
-          
-          <View style={{ backgroundColor: 'rgba(49,130,246,0.1)', padding: 12, borderRadius: 8, marginBottom: 15, marginHorizontal: 16 }}>
-            <Text style={{ color: '#3182f6', fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>💡 히든 매집 포착 기준 (🤫)</Text>
-            <Text style={{ color: '#aaa', fontSize: 11, lineHeight: 16 }}>
-              1. <Text style={{ color: '#fff' }}>잔잔한 차트:</Text> 최근 {settingAccumStreak}일간 고점-저점 변동성 2.5% 미만{'\n'}
-              2. <Text style={{ color: '#fff' }}>박스권 유지:</Text> 당일 및 {settingAccumStreak}일 전체 등락폭 3% 이내{'\n'}
-              3. <Text style={{ color: '#fff' }}>몰래 담기:</Text> 외인/기관 중 한 곳이라도 {settingBuyStreak}일 이상 연속 매수
-            </Text>
-          </View>
-
+          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: 매집 {settingAccumStreak}일 / 매수 {settingBuyStreak}일)</Text>
           {loading && analyzedStocks.length === 0 ? (
             <ActivityIndicator size="large" color="#3182f6" style={{ marginTop: 20 }} />
           ) : (
@@ -2161,7 +2156,7 @@ function MainApp() {
                 const isMyStock = myStocks.some(ms => ms.code === s.code);
                 const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
                 const isHidden = s.isHiddenAccumulation;
-                // 나의 관심종목 중 연속수급이 들어오거나, 시장 전체에서 '히든 매집' 포착된 종목
+                // [v5.3.9] 내 관심종목의 연속 수급 또는 '시장 전체' 히든 매집 포착된 경우 모두 노출
                 return (isMyStock && hasStreak) || isHidden;
               })
                 .map(s => {
