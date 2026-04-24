@@ -404,6 +404,78 @@
             text-align: left;
             border: 1px solid rgba(240, 68, 82, 0.1);
         }
+
+        /* App Pattern List Style */
+        .pattern-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .pattern-block {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s ease;
+        }
+
+        .pattern-block:hover {
+            transform: scale(1.02);
+        }
+
+        .pattern-icon {
+            font-size: 24px;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .pattern-info {
+            flex: 1;
+        }
+
+        .pattern-title {
+            display: block;
+            font-size: 1.05rem;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .pattern-sub {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+            font-weight: 500;
+        }
+
+        /* Specific Colors from Screenshot */
+        .pattern-red { border-left: 5px solid #f04452; background: rgba(240, 68, 82, 0.08); }
+        .pattern-red .pattern-title { color: #ff6b6b; }
+        
+        .pattern-orange { border-left: 5px solid #fcc419; background: rgba(252, 196, 25, 0.08); }
+        .pattern-orange .pattern-title { color: #fcc419; }
+
+        .pattern-green { border-left: 5px solid #51cf66; background: rgba(81, 207, 102, 0.08); }
+        .pattern-green .pattern-title { color: #51cf66; }
+
+        .pattern-blue { border-left: 5px solid #3182f6; background: rgba(49, 130, 246, 0.08); }
+        .pattern-blue .pattern-title { color: #74c0fc; }
+
+        .pattern-purple { border-left: 5px solid #ae3ec9; background: rgba(174, 62, 201, 0.08); }
+        .pattern-purple .pattern-title { color: #da77f2; }
+
+        .pattern-gray { border-left: 5px solid #868e96; background: rgba(134, 142, 150, 0.08); }
+        .pattern-gray .pattern-title { color: #adb5bd; }
+
     </style>
 </head>
 
@@ -465,10 +537,55 @@
                 <div class="card-title">📊 6대 핵심 수급 패턴</div>
                 <p class="card-desc">세력의 발자취를 6가지 프리미엄 필터로 추적합니다.</p>
                 
-                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                    <div class="pattern-tag" style="background: rgba(240, 68, 82, 0.15); color: #ff6b6b;"><i data-lucide="flame" style="width: 14px;"></i>동반 쌍끌이 : 외인/기관 합공 패턴</div>
-                    <div class="pattern-tag" style="background: rgba(49, 130, 246, 0.15); color: #74c0fc;"><i data-lucide="trending-up" style="width: 14px;"></i>변곡점 발생 : 추세 반전 지점 포착</div>
-                    <div class="pattern-tag" style="background: rgba(81, 207, 102, 0.15); color: #b2f2bb;"><i data-lucide="eye-off" style="width: 14px;"></i>히든 매집 : 은밀한 물량 확보 구간</div>
+                <div class="pattern-list">
+                    <!-- 1. 동반 쌍끌이 -->
+                    <div class="pattern-block pattern-red">
+                        <div class="pattern-icon">🔥</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">동반 쌍끌이</span>
+                            <span class="pattern-sub">외인/기관 합공 필승 패턴</span>
+                        </div>
+                    </div>
+                    <!-- 2. 변곡점 발생 -->
+                    <div class="pattern-block pattern-orange">
+                        <div class="pattern-icon">✨</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">변곡점 발생</span>
+                            <span class="pattern-sub">추세가 상방으로 꺾인 지점</span>
+                        </div>
+                    </div>
+                    <!-- 3. 히든 매집 -->
+                    <div class="pattern-block pattern-green">
+                        <div class="pattern-icon">🤫</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">히든 매집</span>
+                            <span class="pattern-sub">조용히 물량을 확보 중인 구간</span>
+                        </div>
+                    </div>
+                    <!-- 4. 기관 주도 -->
+                    <div class="pattern-block pattern-blue">
+                        <div class="pattern-icon">🏦</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">기관 주도</span>
+                            <span class="pattern-sub">국내 기관이 강력히 지지 중</span>
+                        </div>
+                    </div>
+                    <!-- 5. 외인 주도 -->
+                    <div class="pattern-block pattern-purple">
+                        <div class="pattern-icon">🌎</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">외인 주도</span>
+                            <span class="pattern-sub">글로벌 자금이 싹쓸이 중</span>
+                        </div>
+                    </div>
+                    <!-- 6. 동반 이탈 -->
+                    <div class="pattern-block pattern-gray">
+                        <div class="pattern-icon">❄️</div>
+                        <div class="pattern-info">
+                            <span class="pattern-title">동반 이탈</span>
+                            <span class="pattern-sub">세력이 떠나는 자리 (진입 금지)</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div style="margin-top: 30px; font-size: 0.8rem; opacity: 0.7;">
