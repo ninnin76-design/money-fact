@@ -17,16 +17,14 @@
     <style>
         :root {
             --primary: #fcc419;
-            /* Gold */
             --blue: #3182f6;
-            /* Toss Blue */
             --red: #f04452;
-            /* Aggressive Red */
+            --green: #00c471;
             --dark-bg: #0b1219;
             --card-bg: #16202b;
             --text-main: #ffffff;
             --text-sub: #adb5bd;
-            --radius: 20px;
+            --radius: 24px;
         }
 
         * {
@@ -35,14 +33,16 @@
             box-sizing: border-box;
             -webkit-font-smoothing: antialiased;
             word-break: keep-all;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Pretendard', sans-serif;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
             background-color: var(--dark-bg);
             color: var(--text-main);
             line-height: 1.6;
             overflow-x: hidden;
+            letter-spacing: -0.3px;
         }
 
         .container {
@@ -50,106 +50,106 @@
             max-width: 500px;
             margin: 0 auto;
             min-height: 100vh;
-            padding-bottom: 140px;
-            /* 고정 푸터 버튼 공간을 위한 최소한의 여백으로 축소 */
+            padding-bottom: 120px;
             position: relative;
-            background-color: var(--dark-bg);
         }
 
         /* Hero Section */
         .hero {
-            padding: 50px 24px;
+            padding: 60px 24px 40px;
             text-align: center;
-            background: radial-gradient(circle at top, #1c2b3a 0%, var(--dark-bg) 70%);
-            position: relative;
+            background: radial-gradient(circle at top, rgba(49, 130, 246, 0.1) 0%, var(--dark-bg) 80%);
         }
 
         .hero h1 {
             font-family: 'Jua', sans-serif;
-            font-size: clamp(2.5rem, 8vw, 3.5rem);
-            margin-bottom: 10px;
+            font-size: clamp(2.8rem, 10vw, 3.8rem);
+            margin-bottom: 12px;
             background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 10px 20px rgba(252, 196, 25, 0.2);
+            text-shadow: 0 10px 30px rgba(252, 196, 25, 0.3);
         }
 
         .hero p {
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             color: var(--text-sub);
-            font-weight: 500;
+            font-weight: 600;
             margin-bottom: 30px;
+            opacity: 0.9;
         }
 
         .hero-mockup {
-            width: 90%;
+            width: 85%;
             margin: 0 auto;
-            border-radius: 24px;
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+            border-radius: 28px;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
             animation: float 4s ease-in-out infinite;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-15px);
-            }
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
         }
 
         /* Main Content */
         .content {
-            padding: 0 20px;
+            padding: 0 18px;
         }
 
         .section-header {
-            margin: 40px 0 20px;
+            margin: 48px 0 20px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            padding-left: 4px;
         }
 
         .section-header i {
             color: var(--primary);
+            width: 26px;
+            height: 26px;
         }
 
         .section-header h2 {
-            font-size: 1.5rem;
+            font-size: 1.55rem;
             font-weight: 800;
+            letter-spacing: -0.5px;
         }
 
         /* Card System */
         .card {
             background: var(--card-bg);
             border-radius: var(--radius);
-            padding: 24px;
-            margin-bottom: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: transform 0.2s;
+            padding: 28px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .card:hover {
-            border-color: rgba(252, 196, 25, 0.3);
+        .card:active {
+            transform: scale(0.98);
+            background: rgba(22, 32, 43, 0.8);
         }
 
         .card-title {
-            font-size: 1.25rem;
+            font-size: 1.3rem;
             font-weight: 800;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            color: #fff;
         }
 
         .card-desc {
             color: var(--text-sub);
-            font-size: 0.95rem;
-            margin-bottom: 16px;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            line-height: 1.6;
         }
 
         /* Visual Elements */
@@ -498,15 +498,15 @@
     </div> <!-- End of container -->
 
     <div class="footer-cta" id="download-cta">
-        <a href="https://github.com/ninnin76-design/money-fact/raw/main/docs/moneyfact-v5.5.0.apk"
-            class="btn btn-primary" id="download-btn" download
-            style="background: linear-gradient(135deg, var(--primary) 0%, #d9a400 100%); color: #000; text-decoration: none; padding: 16px; border-radius: 50px; display: block; text-align: center; font-weight: 900; box-shadow: 0 10px 20px rgba(252, 196, 25, 0.3);">
-            Money Fact 설치하기
-            <span style="display: block; font-size: 10px; opacity: 0.7;">v5.5.0 최신버전 (상세보기 데이터 증발 방지 및 최적화
-                완료)</span>
-        </a>
-        <p class="version-info" style="text-align: center; color: #888; font-size: 11px; margin-top: 8px;">최신 업데이트:
-            2026.04.24 (v5.5.0)</p>
+        <div style="background: rgba(11, 18, 25, 0.95); backdrop-filter: blur(10px); padding: 16px 20px 24px; border-top: 1px solid rgba(255,255,255,0.05);">
+            <a href="https://github.com/ninnin76-design/money-fact/raw/main/docs/moneyfact-v5.5.0.apk"
+                class="btn-download" id="download-btn" download
+                style="background: var(--gold-gradient); color: #000; text-decoration: none; padding: 18px; border-radius: 20px; display: block; text-align: center; font-weight: 900; font-size: 1.15rem; box-shadow: 0 12px 30px rgba(252, 196, 25, 0.4); transition: transform 0.2s;">
+                Money Fact 설치하기 (v5.5.0)
+                <span style="display: block; font-size: 10px; opacity: 0.8; margin-top: 4px; font-weight: 700;">상세보기 최적화 및 수급 로직 강화 완료</span>
+            </a>
+            <p style="text-align: center; color: #666; font-size: 11px; margin-top: 12px; font-weight: 500;">최신 업데이트: 2026.04.24</p>
+        </div>
     </div>
 
     <script>
@@ -516,7 +516,8 @@
         // Scroll Reveal Animation
         const sections = document.querySelectorAll('.reveal');
         const observerOptions = {
-            threshold: 0.1
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
         };
 
         const observer = new IntersectionObserver((entries) => {
@@ -531,15 +532,25 @@
             observer.observe(section);
         });
 
-        // Pulsing effect for the download button
-        setInterval(() => {
-            const btn = document.getElementById('download-btn');
-            btn.style.boxShadow = '0 15px 45px rgba(252, 196, 25, 0.6)';
-            setTimeout(() => {
-                btn.style.boxShadow = '0 15px 35px rgba(252, 196, 25, 0.4)';
-            }, 500);
-        }, 2000);
+        // Soft Pulse effect for the download button
+        const btn = document.getElementById('download-btn');
+        let scale = 1;
+        let growing = true;
+        
+        function pulse() {
+            if (growing) {
+                scale += 0.003;
+                if (scale >= 1.03) growing = false;
+            } else {
+                scale -= 0.003;
+                if (scale <= 1) growing = true;
+            }
+            btn.style.transform = `scale(${scale})`;
+            requestAnimationFrame(pulse);
+        }
+        pulse();
     </script>
 </body>
+</html>
 
 </html>
