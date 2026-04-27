@@ -340,10 +340,10 @@ if (Platform.OS !== 'web') {
       // 사용자 설정값(민감도) 한 번만 읽기
       const buyLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_BUY_STREAK);
       const sellLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
-      const accumLimitRaw = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
+      // [v5.6.0] accumLimit는 5일 고정 (서버 기준 동일)
       const buyLimit = parseInt(buyLimitRaw) || 3;
       const sellLimit = parseInt(sellLimitRaw) || 3;
-      const accumLimit = parseInt(accumLimitRaw) || 5;
+      const accumLimit = 5;
 
       // [v5.3.3] 4대 패턴 분석 함수 (관심종목 + 시장감시 종목 공용)
       const analyzeAndNotify = async (stock, isWatchList = false) => {
@@ -496,9 +496,9 @@ function MainApp() {
     }
   };
   const [tickerItems, setTickerItems] = useState([
-    "[v5.4.0] ⭐ 별표(관심종목) 등록 시 매집 종목이 사라지던 현상을 완벽하게 해결했습니다!",
-    "🚀 머니팩트 엔진 고도화: 한 번 포착된 보물 종목은 끝까지 추적합니다.",
-    "💡 장중 미세 변동에도 '나의 매집 종목' 지위를 유지하는 스마트 로직 적용!"
+    "[v5.5.3] 🎯 기본 설정 확정: 매수 3일, 매도 5일, 매집 5일로 변경되었습니다.",
+    "🛡️ 상세보기 후 종목 증발 방지 로직이 완벽하게 가동 중입니다.",
+    "🚀 설정 변경 시 리스트 즉시 갱신 기능을 지금 바로 확인해보세요!"
   ]);
   const [syncKey, setSyncKey] = useState('');
   const [searchModal, setSearchModal] = useState(false);
@@ -531,10 +531,11 @@ function MainApp() {
   const addStockDebounceTimer = useRef(null);
   const pendingStocksRef = useRef([]);
 
-  // [코다리 부장 터치] 감지 민감도 설정 (기본값 모두 5일)
+  // [코다리 부장 터치] 감지 민감도 설정 (v5.6.0)
   const [settingBuyStreak, setSettingBuyStreak] = useState(3);
-  const [settingSellStreak, setSettingSellStreak] = useState(3);
-  const [settingAccumStreak, setSettingAccumStreak] = useState(5);
+  const [settingSellStreak, setSettingSellStreak] = useState(5);
+  // [v5.6.0] 매집포착기준(횡보일수)은 서버 기준과 동일하게 5일 고정 (사용자 변경 불가)
+  const settingAccumStreak = 5;
 
   // Sample Sectors
   const [sectors, setSectors] = useState([
@@ -810,8 +811,7 @@ function MainApp() {
     setSettingBuyStreak(buySet ? parseInt(buySet) : 3);
     const sellSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_SELL_STREAK);
     setSettingSellStreak(sellSet ? parseInt(sellSet) : 3);
-    const accumSet = await AsyncStorage.getItem(STORAGE_KEYS.SETTING_ACCUM_STREAK);
-    setSettingAccumStreak(accumSet ? parseInt(accumSet) : 5);
+    // [v5.6.0] settingAccumStreak는 5일 고정이므로 AsyncStorage에서 읽지 않음
 
     setIsMarketOpen(StockService.isMarketOpen());
 
@@ -952,7 +952,7 @@ function MainApp() {
     } catch (e) { }
   };
 
-  const refreshData = async (targetStocks, silent = false, retryCount = 0, isInitial = false) => {
+  const refreshData = async (targetStocks, silent = false, retryCount = 0, isInitial = false, forceReanalyze = false) => {
     // [v4.0.11] 하이패스 로직 고도화: 사용자가 종목을 추가할 경우(targetStocks), 기존 루프와 별개로 즉시 분석을 수행합니다.
     const isPriority = !!targetStocks && !isInitial;
 
@@ -1109,7 +1109,8 @@ function MainApp() {
                       iStreak: is,
                       sentiment: (item.sentiment !== undefined) ? item.sentiment : (isBuy ? (50 + streak * 10) : (50 - streak * 10)),
                       vwap: item.vwap || 0,
-                      isHiddenAccumulation: (item.isHiddenAccumulation && (Math.abs(fs) >= settingBuyStreak || Math.abs(is) >= settingBuyStreak)) || false
+                      // [v5.6.0] 서버의 횡보+매집 판정을 그대로 전달. 매수기준 필터링은 대시보드에서 처리
+                      isHiddenAccumulation: item.isHiddenAccumulation || false
                     });
                   }
                 });
@@ -1158,7 +1159,8 @@ function MainApp() {
                       iStreak: item.iStreak || 0,
                       sentiment: item.sentiment || 50,
                       vwap: item.vwap || 0,
-                      isHiddenAccumulation: (item.isHiddenAccumulation && ((item.fStreak || 0) >= settingBuyStreak || (item.iStreak || 0) >= settingBuyStreak)) || false
+                      // [v5.6.0] 서버의 횡보+매집 판정을 그대로 전달. 매수기준 필터링은 대시보드에서 처리
+                      isHiddenAccumulation: item.isHiddenAccumulation || false
                     });
                   } else {
                     const existing = snapshotStocks.find(s => s.code === code);
@@ -1375,13 +1377,14 @@ function MainApp() {
         const existingData = results.find(r => r.code === stock.code);
         const isDataInvalid = !existingData || existingData.price === 0 || existingData.isWaiting;
 
-        // [v5.3.8] 서버 스냅샷 데이터 활용 최적화 고도화
-        // 단, 관심종목(isMyStockItem)은 유저의 설정값(5일 등)에 따른 정밀 재검증이 필요하므로 스킵하지 않습니다.
-        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid && !isMyStockItem) {
+        // [v5.5.0] 서버 스냅샷 데이터 활용 최적화 고도화
+        // 단, 관심종목(isMyStockItem)이나 히든 매집 후보(existingData.isHiddenAccumulation)는 
+        // 유저의 설정값(예: 6일/10일 등)에 따른 정밀 재검증이 필요하므로 스킵하지 않고 직접 분석합니다.
+        const isHiddenCandidate = existingData && existingData.isHiddenAccumulation;
+        if (snapshotExistingCodes.has(stock.code) && !isDataInvalid && !isMyStockItem && !isHiddenCandidate) {
           if (!isUserAction && !forceFetch) {
             continue;
           }
-          // [v5.3.9] 초기 실행(isInitial)이고 스냅샷에 데이터가 있다면, 굳이 개별 API를 다시 쏘지 않고 스냅샷을 신뢰합니다.
           if (isInitial) {
             continue;
           }
@@ -1391,7 +1394,8 @@ function MainApp() {
         const prev = analyzedStocksRef.current.find(s => s.code === stock.code);
         const existingIdx = results.findIndex(r => r.code === stock.code);
 
-        if (!isUserAction && !forceFetch && prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
+        // [v5.5.3] forceReanalyze가 true인 경우(설정 변경 등)에는 캐시를 무시하고 무조건 다시 분석합니다.
+        if (!isUserAction && !forceFetch && !forceReanalyze && prev && (prev.fStreak !== 0 || prev.iStreak !== 0 || prev.price > 0)) {
           const updated = { ...prev, isWaiting: false, noData: false };
           if (existingIdx >= 0) results[existingIdx] = updated;
           else results.push(updated);
@@ -1410,13 +1414,7 @@ function MainApp() {
           if (data && data.length > 0) {
             const analysis = StockService.analyzeSupply(data);
             const vwap = StockService.calculateVWAP(data, settingBuyStreak);
-            let finalHidden = StockService.checkHiddenAccumulation(data, settingAccumStreak, settingBuyStreak);
-            if (!finalHidden) {
-              const prevData = existingIdx >= 0 ? results[existingIdx] : null;
-              if (prevData && prevData.isHiddenAccumulation) {
-                finalHidden = true; // [v5.3.10] 한 번 포착된 히든 매집 종목은 장중 미세 변동으로 인한 탈락을 방지하기 위해 오늘 내 지위를 유지합니다.
-              }
-            }
+            const finalHidden = StockService.checkHiddenAccumulation(data, settingAccumStreak, settingBuyStreak);
             const netBuy = StockService.getNetBuyAmount(data, 1, 'ALL');
             const pnsnBuy = StockService.getNetBuyAmount(data, 1, 'PNSN');
             const ivtgBuy = StockService.getNetBuyAmount(data, 1, 'IVTG');
@@ -1431,8 +1429,8 @@ function MainApp() {
             }
 
             // 종목코드로만 등록한 종목의 이름 자동 보정
-            let stockName = stock.name;
-            if (stock.name.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm) {
+            let stockName = stock.name || '';
+            if (typeof stockName === 'string' && stockName.startsWith('종목(') && livePrice && livePrice.hts_kor_isnm && typeof livePrice.hts_kor_isnm === 'string') {
               stockName = livePrice.hts_kor_isnm.trim();
               const idx = myStocks.findIndex(s => s.code === stock.code);
               if (idx >= 0) {
@@ -1471,7 +1469,7 @@ function MainApp() {
               if (analysis.fStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🚀 ${stockName}: 외인 ${analysis.fStreak}일 연속 매집 중!`);
               if (analysis.iStreak >= settingBuyStreak) aggregatedTickerTexts.push(`🏛️ ${stockName}: 기관 ${analysis.iStreak}일 연속 러브콜!`);
               if (vwap > 0 && currentPrice < vwap * 0.97) aggregatedTickerTexts.push(`💎 ${stockName}: 세력평단 대비 저평가 구간 진입!`);
-              if (hidden) aggregatedTickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
+              if (finalHidden) aggregatedTickerTexts.push(`🤫 ${stockName}: 수상한 매집 정황 포착!`);
             }
           } else {
             // [v4.3.0] 서버 프록시에서도 데이터를 못 가져온 경우
@@ -1774,15 +1772,23 @@ function MainApp() {
       const updated = [...myStocks, stock];
       setMyStocks(updated);
       StorageService.saveMyStocks(updated);
-      // [v4.0.16] 즐겨찾기도 디바운싱 적용: 연속 즐겨찾기 추가 시 한꺼번에 분석
-      pendingStocksRef.current.push(stock);
-      if (addStockDebounceTimer.current) clearTimeout(addStockDebounceTimer.current);
-      addStockDebounceTimer.current = setTimeout(() => {
-        const stocksToRefresh = [...pendingStocksRef.current];
-        pendingStocksRef.current = [];
-        console.log(`[v4.0.16] 즐겨찾기 디바운싱: ${stocksToRefresh.length}개 종목 일괄 분석`);
-        refreshData(updated, true);
-      }, 800);
+
+      // [v5.3.11] 최적화: 이미 데이터가 있는 종목(히든매집 등)은 즉시 분석 리스트에만 반영하고 서버 재요청을 생략
+      const existing = analyzedStocks.find(s => s.code === stock.code);
+      if (existing && !existing.isWaiting && existing.price > 0) {
+        setAnalyzedStocks(prev => prev.map(s => s.code === stock.code ? { ...s, isWaiting: false } : s));
+        console.log(`[v5.3.11] ${stock.name} 이미 데이터 존재하여 서버 재요청 생략`);
+      } else {
+        // 데이터가 없는 경우에만 디바운싱 분석 수행
+        pendingStocksRef.current.push(stock);
+        if (addStockDebounceTimer.current) clearTimeout(addStockDebounceTimer.current);
+        addStockDebounceTimer.current = setTimeout(() => {
+          const stocksToRefresh = [...pendingStocksRef.current];
+          pendingStocksRef.current = [];
+          console.log(`[v5.3.11] 즐겨찾기 디바운싱: ${stocksToRefresh.length}개 종목 일괄 분석`);
+          refreshData(updated, true);
+        }, 800);
+      }
     }
   };
 
@@ -1872,10 +1878,7 @@ function MainApp() {
             setSettingSellStreak(sellStreak);
             await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, sellStreak.toString());
           }
-          if (accumStreak) {
-            setSettingAccumStreak(accumStreak);
-            await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, accumStreak.toString());
-          }
+          // [v5.6.0] accumStreak는 5일 고정이므로 복원 불필요
         }
 
         await AsyncStorage.setItem(STORAGE_KEYS.SYNC_NICKNAME, syncKey);
@@ -1894,16 +1897,16 @@ function MainApp() {
     try {
       if (settingBuyStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_BUY_STREAK, settingBuyStreak.toString());
       if (settingSellStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_SELL_STREAK, settingSellStreak.toString());
-      if (settingAccumStreak) await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, settingAccumStreak.toString());
+      // [v5.6.0] settingAccumStreak는 5일 고정이므로 저장 불필요
 
-      // 실시간 수급 데이터 다시 분석하도록 유도
-      refreshData(myStocks);
-      // 서버 푸시 설정도 즉시 갱신
+      // [v5.6.0] 설정 저장만 하고 즉시 재분석하지 않습니다.
+      // 다음 스냅샷 가져올 때 변경된 설정이 자연스럽게 반영됩니다.
+      // 서버 푸시 설정은 즉시 갱신 (알림 기준 동기화)
       if (typeof registerForServerPush === 'function') {
         registerForServerPush();
       }
 
-      Alert.alert('성공', '민감도 설정이 안전하게 저장되었습니다.');
+      Alert.alert('성공', '설정이 저장되었습니다. 다음 데이터 갱신 시 반영됩니다.');
     } catch (e) {
       Alert.alert('오류', '저장 중 문제가 발생했습니다.');
     }
@@ -1950,7 +1953,15 @@ function MainApp() {
         }));
         if (existing.history && existing.history.length > 0) setSelectedStockHistory(existing.history);
       }
-      setAnalyzedStocks(prev => prev.map(s => s.code === targetStock.code ? { ...s, isWaiting: false } : s));
+      // [v5.3.11] 중요: 상세 조회 실패가 메인 리스트를 '에러(타임아웃)' 상태로 만들지 않도록 함
+      // setAnalyzedStocks(prev => prev.map(s => s.code === targetStock.code ? { ...s, isWaiting: false } : s));
+      setAnalyzedStocks(prev => prev.map(s => {
+        if (s.code === targetStock.code) {
+          // 에러 상태(error: true)라면 기존 데이터를 보존하면서 waiting만 해제
+          return { ...s, isWaiting: false, error: false };
+        }
+        return s;
+      }));
     };
 
     try {
@@ -1979,10 +1990,11 @@ function MainApp() {
           const idx = prev.findIndex(s => s.code === stock.code);
           if (idx < 0) return prev;
           const existing = prev[idx];
-          // [증발 방지] 기존 매집 정보 유지
-          const finalHidden = existing.isHiddenAccumulation || isHidden;
-          const finalF = Math.max(existing.fStreak || 0, analysis.fStreak || 0);
-          const finalI = Math.max(existing.iStreak || 0, analysis.iStreak || 0);
+          // [v5.5.3] 증발 방지 로직: 상세 조회 분석 결과가 일시적으로 기준미달이 되더라도, 
+          // 이미 리스트에 노출되었던 종목이 사라지지 않도록 기존 매집/연속성 수치 중 최댓값을 유지합니다.
+          const finalHidden = isHidden || existing.isHiddenAccumulation;
+          const finalF = Math.max(analysis.fStreak, existing.fStreak || 0);
+          const finalI = Math.max(analysis.iStreak, existing.iStreak || 0);
 
           const next = [...prev];
           next[idx] = {
@@ -2147,7 +2159,7 @@ function MainApp() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>나의 매집 의심 종목 (기준: 매집 {settingAccumStreak}일 / 매수 {settingBuyStreak}일)</Text>
+          <Text style={styles.sectionTitle}>나의 매집 의심 종목</Text>
           {loading && analyzedStocks.length === 0 ? (
             <ActivityIndicator size="large" color="#3182f6" style={{ marginTop: 20 }} />
           ) : (
@@ -2156,8 +2168,13 @@ function MainApp() {
                 const isMyStock = myStocks.some(ms => ms.code === s.code);
                 const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
                 const isHidden = s.isHiddenAccumulation;
-                // [v5.3.9] 내 관심종목의 연속 수급 또는 '시장 전체' 히든 매집 포착된 경우 모두 노출
-                return (isMyStock && hasStreak) || isHidden;
+
+                // [v5.5.3] 내 관심종목이거나 '시장 전체' 히든 매집인 경우 노출하되,
+                // 히든 매집 종목이라도 최소한 사용자가 설정한 '매수 포착 기준(settingBuyStreak)'은 만족해야 리스트에 표시합니다.
+                // 이를 통해 5일 설정을 했는데 3일짜리가 섞여 나오는 현상을 완벽 차단합니다.
+                const meetsMinimumStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
+
+                return (isMyStock && hasStreak) || (isHidden && meetsMinimumStreak);
               })
                 .map(s => {
                   const isMyStock = myStocks.some(ms => ms.code === s.code);
@@ -2177,7 +2194,8 @@ function MainApp() {
                 const isMyStock = myStocks.some(ms => ms.code === s.code);
                 const hasStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
                 const isHidden = s.isHiddenAccumulation;
-                return (isMyStock && hasStreak) || isHidden;
+                const meetsMinimumStreak = s.fStreak >= settingBuyStreak || s.iStreak >= settingBuyStreak;
+                return (isMyStock && hasStreak) || (isHidden && meetsMinimumStreak);
               }).length === 0
                 && <Text style={styles.emptyText}>현재 포착된 매집 의심 종목이 없습니다.</Text>}
             </>
@@ -2201,9 +2219,6 @@ function MainApp() {
           <MarketStatusHeader />
           <Text style={styles.sectionTitle}>
             {isMarketOpen ? "실시간 수급 연속 매매" : `${lastUpdate && lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/) ? `${parseInt(lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/)[1], 10)}.${parseInt(lastUpdate.match(/(\d{1,2})\s*\.\s*(\d{1,2})\b/)[2], 10)}` : '당일'} 최종 수급 매매 TOP`}
-            <Text style={{ fontSize: 13, color: '#888', fontWeight: 'normal' }}>
-              {` (기준: ${tradingType === 'BUY' ? settingBuyStreak : settingSellStreak}일↑)`}
-            </Text>
           </Text>
 
           <View style={styles.mainFilterRow}>
@@ -2500,31 +2515,11 @@ function MainApp() {
 
               <View style={[styles.sensitivityRow, { marginTop: 12 }]}>
                 <View style={{ flex: 1, flexShrink: 1, marginRight: 8 }}>
-                  <Text style={styles.sensitivityLabel} numberOfLines={1}>🤫 매집 포착 기준</Text>
-                  <Text style={styles.sensitivityDesc}>{settingAccumStreak}일 이상 매집 정황 시 알림</Text>
+                  <Text style={styles.sensitivityLabel} numberOfLines={1}>🤫 매집 포착 기준 (횡보)</Text>
+                  <Text style={styles.sensitivityDesc}>5일 이상 주가 횡보 시 매집 정황 감지</Text>
                 </View>
-                <View style={styles.stepperContainer}>
-                  <TouchableOpacity
-                    onPress={async () => {
-                      const next = Math.max(2, settingAccumStreak - 1);
-                      setSettingAccumStreak(next);
-                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
-                    }}
-                    style={styles.stepperBtn}
-                  >
-                    <Text style={styles.stepperBtnText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.stepperValue}>{settingAccumStreak}</Text>
-                  <TouchableOpacity
-                    onPress={async () => {
-                      const next = Math.min(30, settingAccumStreak + 1);
-                      setSettingAccumStreak(next);
-                      await AsyncStorage.setItem(STORAGE_KEYS.SETTING_ACCUM_STREAK, next.toString());
-                    }}
-                    style={styles.stepperBtn}
-                  >
-                    <Text style={styles.stepperBtnText}>+</Text>
-                  </TouchableOpacity>
+                <View style={[styles.stepperContainer, { backgroundColor: 'rgba(49, 130, 246, 0.1)', borderWidth: 1, borderColor: 'rgba(49, 130, 246, 0.3)', width: 80, justifyContent: 'center' }]}>
+                  <Text style={[styles.stepperValue, { color: '#3182f6', width: '100%' }]}>5일</Text>
                 </View>
               </View>
 
@@ -2545,8 +2540,8 @@ function MainApp() {
           {/* Version Info (Moved up to fill the gap) */}
 
           <View style={[styles.footerInfo, { borderTopColor: '#3182f6', borderTopWidth: 1, paddingTop: 10 }]}>
-            <Text style={styles.headerTitle}>Money Fact [v5.3.5] | © 2026 Developed by Antigravity</Text>
-            <Text style={styles.footerVersion}>v5.3.5 Build 135 Copyright 2026 Money Fact. All rights reserved.</Text>
+            <Text style={styles.headerTitle}>Money Fact [v5.5.0] | © 2026 Developed by Antigravity</Text>
+            <Text style={styles.footerVersion}>v5.5.0 Build 137 Copyright 2026 Money Fact. All rights reserved.</Text>
           </View>
           <View style={{ height: 100 }} />
         </ScrollView >
@@ -2559,7 +2554,7 @@ function MainApp() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1219" />
       <View style={{ marginTop: insets.top, backgroundColor: '#0b1219', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.3.5</Text></Text>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 }}>Money Fact <Text style={{ color: '#3182f6', fontSize: 14 }}>V5.5.0</Text></Text>
         <View style={{ flexDirection: 'row' }}>
           <TouchableOpacity
             onPress={() => {

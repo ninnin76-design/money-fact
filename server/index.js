@@ -1689,10 +1689,10 @@ app.get('/api/sync/load', async (req, res) => {
 
     if (!data) return res.status(404).json({ error: 'No data found' });
     console.log(`[Sync] Loaded data for key: ${syncKey}`);
-    
+
     // 유저님의 요구사항: 어떤 이름으로든 저장된 종목 데이터를 찾아 관심종목으로 전달합니다.
     const stocks = Array.isArray(data) ? data : (data.stocks || (data.watchlist && data.watchlist.favorites) || []);
-    
+
     const settings = data.settings || {};
     const watchlist = data.watchlist || null;
     res.json({ stocks, settings, watchlist, version: data.version || 1, updatedAt: data.updatedAt });
