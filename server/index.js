@@ -117,6 +117,7 @@ const MARKET_WATCH_STOCKS = [
     { name: '삼성바이오로직스', code: '207940', sector: '바이오 및 헬스케어' }, { name: '셀트리온', code: '068270', sector: '바이오 및 헬스케어' },
     { name: '현대차', code: '005380', sector: '자동차 및 전자부품' }, { name: '기아', code: '000270', sector: '자동차 및 전자부품' },
     { name: 'KB금융', code: '105560', sector: '기타(금융)' }, { name: '신한지주', code: '055550', sector: '기타(금융)' },
+    { name: '하나금융지주', code: '086790', sector: '기타(금융)' }, { name: '삼성생명', code: '032830', sector: '기타(금융)' }, { name: '메리츠금융지주', code: '138040', sector: '기타(금융)' },
     { name: 'NAVER', code: '035420', sector: '엔터 및 플랫폼' }, { name: '카카오', code: '035720', sector: '엔터 및 플랫폼' },
     { name: '레인보우로보틱스', code: '277810', sector: '로봇 및 에너지' },
     { name: 'SK바이오사이언스', code: '302440', sector: '바이오 및 헬스케어' }

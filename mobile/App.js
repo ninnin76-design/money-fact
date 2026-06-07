@@ -705,6 +705,8 @@ function MainApp() {
 
     // [v5.1.0] 포그라운드 알림 수신 리스너 (init 밖으로 분리하여 의도치 않은 메모리 누수 방지)
     let subscription;
+    let responseSubscription;
+
     if (Platform.OS !== 'web') {
       subscription = Notifications.addNotificationReceivedListener(async notification => {
         const content = notification.request?.content;
@@ -751,11 +753,37 @@ function MainApp() {
           });
         }
       });
+
+      // [v5.7.0] 푸시 알림 클릭 시 상세페이지 즉시 이동 (Deep Linking)
+      responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+        const data = response.notification.request.content.data;
+        if (data && data.stockCode) {
+          const stockInfo = { 
+            name: data.stockName || '종목', 
+            code: data.stockCode, 
+            price: 0 
+          };
+          // 기존 모달 닫기 및 상세페이지 호출
+          setInboxModal(false);
+          setDetailModal(false); 
+          setTimeout(() => handleOpenDetail(stockInfo), 100);
+        }
+      });
+
+      // 앱 최초 실행 시 알림 클릭으로 시작되었는지 체크
+      Notifications.getLastNotificationResponseAsync().then(response => {
+        if (response?.notification.request.content.data?.stockCode) {
+          const data = response.notification.request.content.data;
+          const stockInfo = { name: data.stockName || '종목', code: data.stockCode, price: 0 };
+          setTimeout(() => handleOpenDetail(stockInfo), 800);
+        }
+      });
     }
 
     // 컴포넌트 언마운트 시 리스너 완벽 정리 (메모리 누수 방지)
     return () => {
       if (subscription) subscription.remove();
+      if (responseSubscription) responseSubscription.remove();
     };
   }, []);
 
